@@ -1,0 +1,77 @@
+.card {
+  width: 280px;
+  border-radius: 20px;
+  background: var(--color-white);
+  border: 1px solid var(--color-light-gray);
+  box-shadow: 0 20px 45px rgba(36, 36, 36, 0.08);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  border-color: var(--color-dusty-rose);
+  box-shadow: 0 26px 55px rgba(36, 36, 36, 0.12);
+}
+
+.imageWrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--color-light-gray);
+}
+
+.image {
+  object-fit: cover;
+}
+
+.badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  backdrop-filter: blur(4px);
+}
+
+.info {
+  padding: 1rem 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.brand {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-charcoal);
+}
+
+.name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.price {
+  margin: 0.35rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.perDay {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--color-charcoal);
+  margin-left: 0.2rem;
+}
+
+@media (max-width: 640px) {
+  .card {
+    width: 100%;
+    max-width: 320px;
+  }
+}

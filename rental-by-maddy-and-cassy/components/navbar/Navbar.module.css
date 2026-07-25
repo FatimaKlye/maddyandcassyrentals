@@ -1,0 +1,132 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  background: rgba(247, 247, 245, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--color-light-gray);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.brandIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-dusty-rose), var(--color-primary));
+  border: 1px solid var(--color-light-gray);
+  color: var(--color-white);
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.link {
+  color: var(--color-charcoal);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.link:hover {
+  color: var(--color-primary);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-shrink: 0;
+}
+
+.signIn {
+  color: var(--color-charcoal);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.signIn:hover {
+  color: var(--color-primary);
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.cta:hover {
+  background: var(--color-primary-hover);
+  box-shadow: 0 6px 20px rgba(154, 89, 101, 0.28);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 860px) {
+  .links {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .signIn {
+    display: none;
+  }
+
+  .brandName {
+    font-size: 0.9rem;
+  }
+
+  .inner {
+    padding: 0.85rem 1rem;
+  }
+
+  .cta {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8rem;
+  }
+}

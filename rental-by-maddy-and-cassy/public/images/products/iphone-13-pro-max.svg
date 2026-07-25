@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="g8" x1="0" y1="0" x2="800" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2d2cf"/>
+      <stop offset="1" stop-color="#d7a5a5"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#g8)"/>
+  
+    <g transform="translate(400,300)">
+      <rect x="-90" y="-160" width="180" height="320" rx="34" fill="rgba(255,255,255,0.92)" stroke="#9a5965" stroke-width="4"/>
+      <rect x="-72" y="-136" width="144" height="248" rx="10" fill="#242424" opacity="0.85"/>
+      <rect x="-24" y="-152" width="48" height="10" rx="5" fill="#9a5965" opacity="0.6"/>
+      <circle cx="0" cy="132" r="3" fill="#9a5965" opacity="0.6"/>
+      <circle cx="46" cy="-100" r="9" fill="#d7a5a5" opacity="0.9"/>
+      <circle cx="46" cy="-100" r="4" fill="#242424"/>
+    </g>
+  <text x="400" y="520" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" fill="#242424">iPhone 13 Pro Max</text>
+  <text x="400" y="556" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="500" fill="#555555">Phones</text>
+</svg>

@@ -1,0 +1,140 @@
+.card {
+  border-radius: 24px;
+  background: var(--color-white);
+  border: 1px solid var(--color-light-gray);
+  box-shadow: 0 16px 36px rgba(36, 36, 36, 0.06);
+  overflow: hidden;
+}
+
+.tabList {
+  display: flex;
+  border-bottom: 1px solid var(--color-light-gray);
+  overflow-x: auto;
+}
+
+.tab {
+  flex: 1;
+  min-width: max-content;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.tab:hover {
+  color: var(--color-primary);
+}
+
+.tabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background: var(--color-blush);
+}
+
+.panel {
+  padding: 1.75rem;
+}
+
+.specGrid {
+  margin: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.specRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--color-light-gray);
+}
+
+.specRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.specKey {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.specValue {
+  margin: 0;
+  color: var(--color-charcoal);
+}
+
+.includedList {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  color: var(--color-charcoal);
+}
+
+.reviewSummary {
+  margin: 0 0 1.2rem;
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+}
+
+.reviewList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.reviewItem {
+  padding: 1rem;
+  border-radius: 16px;
+  background: var(--color-background);
+  border: 1px solid var(--color-light-gray);
+}
+
+.reviewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.reviewAuthor {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.reviewRating {
+  font-weight: 600;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+}
+
+.reviewComment {
+  margin: 0 0 0.4rem;
+  color: var(--color-charcoal);
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.reviewDate {
+  font-size: 0.78rem;
+  color: var(--color-charcoal);
+  opacity: 0.8;
+}
+
+@media (max-width: 640px) {
+  .specRow {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+}

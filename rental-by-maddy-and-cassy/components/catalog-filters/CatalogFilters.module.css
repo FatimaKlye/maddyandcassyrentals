@@ -1,0 +1,143 @@
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.categoryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.categoryPill {
+  padding: 0.55rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-light-gray);
+  background: var(--color-white);
+  color: var(--color-charcoal);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.categoryPill:hover {
+  border-color: var(--color-dusty-rose);
+  color: var(--color-primary);
+}
+
+.categoryPillActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+.categoryPillActive:hover {
+  color: var(--color-white);
+}
+
+.controlsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.searchField {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.9rem;
+  color: var(--color-charcoal);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.65rem 0.9rem 0.65rem 2.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-light-gray);
+  background: var(--color-white);
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.searchInput:focus {
+  border-color: var(--color-dusty-rose);
+  box-shadow: 0 0 0 3px rgba(215, 165, 165, 0.25);
+}
+
+.selectField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-charcoal);
+  font-weight: 500;
+}
+
+.selectLabel {
+  white-space: nowrap;
+}
+
+.select {
+  padding: 0.6rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-light-gray);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.select:focus {
+  border-color: var(--color-dusty-rose);
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-charcoal);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.resultCount {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-charcoal);
+}
+
+@media (max-width: 640px) {
+  .controlsRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .selectField,
+  .checkboxField {
+    justify-content: space-between;
+  }
+}

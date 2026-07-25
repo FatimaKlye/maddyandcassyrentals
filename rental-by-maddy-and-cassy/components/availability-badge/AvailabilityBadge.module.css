@@ -1,0 +1,63 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.levelAvailable {
+  color: var(--color-status-green);
+  background: var(--color-status-green-bg);
+  border-color: var(--color-status-green-border);
+}
+
+.levelLimited {
+  color: var(--color-status-yellow);
+  background: var(--color-status-yellow-bg);
+  border-color: var(--color-status-yellow-border);
+}
+
+.levelFull {
+  color: var(--color-status-red);
+  background: var(--color-status-red-bg);
+  border-color: var(--color-status-red-border);
+}
+
+.detailed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.detailLine {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-charcoal);
+}
+
+.fullyBookedMessage {
+  margin: 0.3rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+  color: var(--color-status-red);
+}
+
+.fullyBookedLine {
+  display: block;
+}

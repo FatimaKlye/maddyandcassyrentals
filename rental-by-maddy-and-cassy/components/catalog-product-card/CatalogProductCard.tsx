@@ -1,0 +1,98 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import type { Product } from "@/types/product";
+import type { UnitCounts } from "@/lib/availability";
+import { isFullyBooked } from "@/lib/availability";
+import HeartIcon from "@/components/icons/HeartIcon";
+import AvailabilityBadge from "@/components/availability-badge/AvailabilityBadge";
+import styles from "./CatalogProductCard.module.css";
+
+interface CatalogProductCardProps {
+  product: Product;
+  units: UnitCounts;
+  isFavorite: boolean;
+  onToggleFavorite: (productId: string) => void;
+  ctaLabel?: string;
+}
+
+export default function CatalogProductCard({
+  product,
+  units,
+  isFavorite,
+  onToggleFavorite,
+  ctaLabel = "Reserve Now",
+}: CatalogProductCardProps) {
+  const detailsHref = `/catalog/${product.id}`;
+  const fullyBooked = isFullyBooked(units.availableUnits);
+
+  return (
+    <article className={styles.card}>
+      <Link
+        href={detailsHref}
+        className={styles.imageLink}
+        aria-label={`View details for ${product.name}`}
+      >
+        <div className={styles.imageWrapper}>
+          <Image
+            src={product.image}
+            alt={`${product.name} available for rent`}
+            fill
+            sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 280px"
+            className={styles.image}
+          />
+          {product.badge ? <span className={styles.productBadge}>{product.badge}</span> : null}
+        </div>
+      </Link>
+
+      <button
+        type="button"
+        className={`${styles.favoriteButton} ${isFavorite ? styles.favoriteActive : ""}`}
+        onClick={() => onToggleFavorite(product.id)}
+        aria-pressed={isFavorite}
+        aria-label={isFavorite ? `Remove ${product.name} from favorites` : `Add ${product.name} to favorites`}
+      >
+        <HeartIcon size={17} filled={isFavorite} />
+      </button>
+
+      <div className={styles.info}>
+        <p className={styles.category}>{product.category}</p>
+        <Link href={detailsHref} className={styles.nameLink}>
+          <h3 className={styles.name}>{product.name}</h3>
+        </Link>
+        <p className={styles.brand}>{product.brand}</p>
+        <p className={styles.price}>
+          {product.currency}
+          {product.pricePerDay.toLocaleString()}
+          <span className={styles.perDay}>/day</span>
+        </p>
+        <p className={styles.rating}>
+          {product.rating.toFixed(1)} ★ <span className={styles.reviewCount}>({product.reviewCount})</span>
+        </p>
+
+        <AvailabilityBadge
+          totalUnits={units.totalUnits}
+          availableUnits={units.availableUnits}
+          className={styles.availabilityBadge}
+        />
+
+        <div className={styles.actions}>
+          <Link href={detailsHref} className={styles.detailsButton}>
+            View Details
+          </Link>
+          <Link
+            href={`${detailsHref}#reserve`}
+            className={`${styles.reserveButton} ${fullyBooked ? styles.reserveDisabled : ""}`}
+            aria-disabled={fullyBooked}
+            onClick={(event) => {
+              if (fullyBooked) event.preventDefault();
+            }}
+          >
+            {fullyBooked ? "Fully Booked" : ctaLabel}
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}

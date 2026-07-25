@@ -1,0 +1,107 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.mainImageWrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid var(--color-light-gray);
+  box-shadow: 0 20px 45px rgba(36, 36, 36, 0.08);
+  background: var(--color-light-gray);
+}
+
+.mainImage {
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.spinMode .mainImage {
+  animation: gallerySpin 6s linear infinite;
+}
+
+@keyframes gallerySpin {
+  0% {
+    transform: scale(1.05) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    transform: scale(1.05) rotate(0deg);
+  }
+}
+
+.productBadge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.viewToggle {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--color-light-gray);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.viewToggle:hover {
+  background: var(--color-white);
+}
+
+.viewToggleActive {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-color: var(--color-primary);
+}
+
+.thumbnailRow {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.thumbnail {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid var(--color-light-gray);
+  background: var(--color-light-gray);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.thumbnail:hover {
+  border-color: var(--color-dusty-rose);
+}
+
+.thumbnailActive {
+  border-color: var(--color-primary);
+}
+
+.thumbnailImage {
+  object-fit: cover;
+}

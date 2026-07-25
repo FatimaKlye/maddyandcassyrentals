@@ -1,0 +1,156 @@
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-charcoal);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.backLink:hover {
+  color: var(--color-primary);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 480px) 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.left {
+  position: sticky;
+  top: 1.5rem;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.category {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.name {
+  margin: 0.3rem 0 0;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.rating {
+  margin: 0.3rem 0 0;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+}
+
+.reviewCount {
+  font-weight: 400;
+  color: var(--color-charcoal);
+}
+
+.description {
+  margin: 1rem 0 0;
+  color: var(--color-charcoal);
+  line-height: 1.7;
+  font-size: 0.98rem;
+  max-width: 560px;
+}
+
+.infoCards {
+  margin-top: 1.4rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
+}
+
+.infoCard {
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  background: var(--color-white);
+  border: 1px solid var(--color-light-gray);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.infoCardLabel {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-charcoal);
+}
+
+.infoCardValue {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.perDay {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--color-charcoal);
+  margin-left: 0.2rem;
+}
+
+.actionsRow {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+}
+
+.reserveCard {
+  margin-top: 1.2rem;
+  padding: 1.5rem;
+  border-radius: 20px;
+  background: var(--color-blush);
+  border: 1px solid var(--color-dusty-rose);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.reserveHeading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .left {
+    position: static;
+  }
+
+  .infoCards {
+    grid-template-columns: 1fr;
+  }
+}
