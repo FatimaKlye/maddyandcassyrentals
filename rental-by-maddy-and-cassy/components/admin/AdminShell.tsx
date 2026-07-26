@@ -1,8 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import CameraIcon from "@/components/icons/CameraIcon";
 import RequireAdmin from "@/components/route-guards/RequireAdmin";
 import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/src/services/authService";
@@ -35,8 +35,15 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <div className={styles.shell}>
         <aside className={styles.sidebar}>
           <div className={styles.brand}>
-            <span className={styles.brandIcon} aria-hidden="true">
-              <CameraIcon size={18} />
+            <span className={styles.brandIcon}>
+              <Image
+                src="/images/maddy-cassy-rentals-logo.png"
+                alt=""
+                width={42}
+                height={42}
+                className={styles.logoImage}
+                priority
+              />
             </span>
             <div>
               <strong>Rental Admin</strong>

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import CameraIcon from "@/components/icons/CameraIcon";
 import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/src/services/authService";
 import styles from "./Navbar.module.css";
@@ -37,8 +37,15 @@ export default function Navbar() {
     <header className={styles.navbar}>
       <div className={styles.inner}>
         <Link href="/" className={styles.brand} aria-label="Rental by Maddy & Cassy home">
-          <span className={styles.brandIcon} aria-hidden="true">
-            <CameraIcon size={18} />
+          <span className={styles.brandIcon}>
+            <Image
+              src="/images/maddy-cassy-rentals-logo.png"
+              alt=""
+              width={44}
+              height={44}
+              className={styles.logoImage}
+              priority
+            />
           </span>
           <span className={styles.brandName}>Rental by Maddy &amp; Cassy</span>
         </Link>

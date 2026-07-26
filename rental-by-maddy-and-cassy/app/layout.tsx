@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   title: "Rental by Maddy & Cassy",
   description:
     "Premium camera and iPhone rentals in Metro Manila. Quality equipment, simple booking, transparent pricing.",
+  icons: {
+    icon: "/images/maddy-cassy-rentals-icon.png",
+    apple: "/images/maddy-cassy-rentals-icon.png",
+  },
 };
 
 export default function RootLayout({
