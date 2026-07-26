@@ -240,6 +240,11 @@ export default function StepReview({
         </p>
       ) : null}
 
+      <div className={styles.confirmCallout}>
+        Are you sure you want to save these details and submit this booking
+        request for review?
+      </div>
+
       <div className={styles.footer}>
         <button
           type="button"
@@ -263,7 +268,7 @@ export default function StepReview({
         >
           {submitting
             ? "Submitting Booking Request..."
-            : "Submit Booking Request"}
+            : "Confirm & Submit Booking"}
         </button>
       </div>
     </div>

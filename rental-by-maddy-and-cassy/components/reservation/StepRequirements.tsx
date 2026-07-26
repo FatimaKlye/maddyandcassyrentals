@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { RequirementsDraft } from "@/src/types/reservationDraft";
 import FileUploadField from "@/components/file-upload/FileUploadField";
 import formStyles from "@/components/ui/Form.module.css";
@@ -14,6 +15,21 @@ interface StepRequirementsProps {
 }
 
 const ACCEPTED_ID_EXAMPLES = "Passport, National ID, Driver's License, or School ID";
+
+function isPlatformUrl(value: string, domains: string[]): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      domains.some(
+        (domain) =>
+          url.hostname === domain || url.hostname.endsWith(`.${domain}`),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
 
 export default function StepRequirements({
   requirements,
@@ -32,12 +48,23 @@ export default function StepRequirements({
     if (!requirements.idOneFile) nextErrors.push("Please upload your first valid ID.");
     if (!requirements.idTwoFile) nextErrors.push("Please upload your second valid ID.");
     if (!requirements.selfieFile) nextErrors.push("Please upload a selfie holding a valid ID.");
-    if (!requirements.facebookLink.trim()) nextErrors.push("Your active Facebook profile link is required.");
-    if (!requirements.instagramLink.trim()) nextErrors.push("Your active Instagram profile link is required.");
+    if (!isPlatformUrl(requirements.facebookLink.trim(), ["facebook.com", "fb.com"])) {
+      nextErrors.push("Enter a valid active Facebook profile link.");
+    }
+    if (!isPlatformUrl(requirements.instagramLink.trim(), ["instagram.com"])) {
+      nextErrors.push("Enter a valid active Instagram profile link.");
+    }
     if (!requirements.emergencyContact.fullName.trim()) nextErrors.push("Emergency contact full name is required.");
     if (!requirements.emergencyContact.relationship.trim()) nextErrors.push("Emergency contact relationship is required.");
     if (!requirements.emergencyContact.phone.trim()) nextErrors.push("Emergency contact phone number is required.");
-    if (!requirements.emergencyContact.facebookLink.trim()) nextErrors.push("Emergency contact Facebook link is required.");
+    if (
+      !isPlatformUrl(
+        requirements.emergencyContact.facebookLink.trim(),
+        ["facebook.com", "fb.com"],
+      )
+    ) {
+      nextErrors.push("Enter the emergency contact's valid Facebook link.");
+    }
     if (!requirements.emergencyContact.idFile) nextErrors.push("Emergency contact's government-issued ID is required.");
 
     setErrors(nextErrors);
@@ -166,6 +193,20 @@ export default function StepRequirements({
         value={requirements.emergencyContact.idFile}
         onChange={(file) => updateEmergencyContact({ idFile: file })}
       />
+
+      <div className={styles.privacyNotice}>
+        <strong>Privacy notice</strong>
+        <p>
+          These details and documents are collected for identity verification,
+          fraud prevention, booking administration, rental agreements, and
+          rental-related incidents. Private files are limited to you and active
+          administrators. Read the complete{" "}
+          <Link href="/privacy" target="_blank" rel="noopener noreferrer">
+            Privacy Notice
+          </Link>
+          .
+        </p>
+      </div>
 
       {errors.length > 0 ? (
         <ul className={formStyles.errorText} role="alert">

@@ -110,6 +110,7 @@ export interface AgreementAcknowledgements {
   understoodRentalRules: boolean;
   authorizedESignature: boolean;
   readPrivacyNotice: boolean;
+  emergencyContactAuthorized: boolean;
 }
 
 export interface AgreementSignature {

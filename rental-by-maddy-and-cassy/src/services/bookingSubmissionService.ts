@@ -88,14 +88,46 @@ export async function submitBooking(
     throw new Error("Missing rental details.");
   }
 
+  const { customerInfo } = draft;
+  if (
+    !customerInfo.fullName.trim() ||
+    !customerInfo.email.trim() ||
+    !customerInfo.phone.trim() ||
+    !customerInfo.address.trim() ||
+    !customerInfo.facebookLink.trim() ||
+    !customerInfo.instagramLink.trim()
+  ) {
+    throw new Error("Missing required customer information.");
+  }
+
   const { requirements } = draft;
   if (
     !requirements.idOneFile ||
     !requirements.idTwoFile ||
     !requirements.selfieFile ||
+    !requirements.facebookLink.trim() ||
+    !requirements.instagramLink.trim() ||
+    !requirements.emergencyContact.fullName.trim() ||
+    !requirements.emergencyContact.relationship.trim() ||
+    !requirements.emergencyContact.phone.trim() ||
+    !requirements.emergencyContact.facebookLink.trim() ||
     !requirements.emergencyContact.idFile
   ) {
-    throw new Error("Missing required documents.");
+    throw new Error("Missing required rental information or documents.");
+  }
+
+  const { agreement } = draft;
+  if (
+    !agreement.infoAccurate ||
+    !agreement.agreedToTerms ||
+    !agreement.understoodRentalRules ||
+    !agreement.authorizedESignature ||
+    !agreement.readPrivacyNotice ||
+    !agreement.emergencyContactAuthorized ||
+    !agreement.typedFullName.trim() ||
+    !agreement.signatureDataUrl
+  ) {
+    throw new Error("Complete and sign the rental agreement before submitting.");
   }
 
   const dayCount = getDayCount(draft.startDate, draft.endDate);
@@ -166,6 +198,7 @@ export async function submitBooking(
       understoodRentalRules: draft.agreement.understoodRentalRules,
       authorizedESignature: draft.agreement.authorizedESignature,
       readPrivacyNotice: draft.agreement.readPrivacyNotice,
+      emergencyContactAuthorized: draft.agreement.emergencyContactAuthorized,
     },
     signature: {
       method: draft.agreement.signatureMethod,

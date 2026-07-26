@@ -25,11 +25,13 @@ export interface RegisterOptions {
 export async function registerWithEmail(
   email: string,
   password: string,
-  displayName: string,
+  displayName = "",
   options: RegisterOptions = {}
 ): Promise<User> {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
-  await updateProfile(credential.user, { displayName });
+  if (displayName) {
+    await updateProfile(credential.user, { displayName });
+  }
 
   await setDoc(doc(db, "users", credential.user.uid), {
     uid: credential.user.uid,

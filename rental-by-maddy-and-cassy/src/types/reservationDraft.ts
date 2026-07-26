@@ -34,6 +34,7 @@ export interface AgreementDraft {
   understoodRentalRules: boolean;
   authorizedESignature: boolean;
   readPrivacyNotice: boolean;
+  emergencyContactAuthorized: boolean;
   signatureMethod: SignatureMethod;
   signatureDataUrl: string | null;
   signatureFile: File | null;
@@ -84,6 +85,7 @@ export function createEmptyDraft(): ReservationDraft {
       understoodRentalRules: false,
       authorizedESignature: false,
       readPrivacyNotice: false,
+      emergencyContactAuthorized: false,
       signatureMethod: "drawn",
       signatureDataUrl: null,
       signatureFile: null,

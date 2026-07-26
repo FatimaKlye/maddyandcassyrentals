@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { ReactNode } from "react";
 import type { AgreementDraft } from "@/src/types/reservationDraft";
 import AgreementDocument, { type AgreementDocumentData } from "./AgreementDocument";
 import SignaturePad from "@/components/signature-pad/SignaturePad";
@@ -14,7 +16,7 @@ interface StepAgreementProps {
   onContinue: () => void;
 }
 
-const CONFIRMATIONS: Array<{ key: keyof AgreementDraft; label: string }> = [
+const CONFIRMATIONS: Array<{ key: keyof AgreementDraft; label: ReactNode }> = [
   {
     key: "infoAccurate",
     label: "I confirm that the information and documents I submitted are accurate.",
@@ -34,7 +36,25 @@ const CONFIRMATIONS: Array<{ key: keyof AgreementDraft; label: string }> = [
   },
   {
     key: "readPrivacyNotice",
-    label: "I have read and understood the Privacy Notice.",
+    label: (
+      <>
+        I have read and understood the{" "}
+        <Link
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.inlineLink}
+        >
+          Privacy Notice
+        </Link>
+        .
+      </>
+    ),
+  },
+  {
+    key: "emergencyContactAuthorized",
+    label:
+      "I confirm that my emergency contact authorized me to provide their information and ID for this rental request.",
   },
 ];
 

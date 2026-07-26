@@ -137,11 +137,37 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
           </div>
           <div>
             <dt>Facebook</dt>
-            <dd>{account.facebookLink || "Not provided"}</dd>
+            <dd>
+              {account.facebookLink ? (
+                <a
+                  href={account.facebookLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.externalLink}
+                >
+                  Open Facebook profile
+                </a>
+              ) : (
+                "Not provided"
+              )}
+            </dd>
           </div>
           <div>
             <dt>Instagram</dt>
-            <dd>{account.instagramLink || "Not provided"}</dd>
+            <dd>
+              {account.instagramLink ? (
+                <a
+                  href={account.instagramLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.externalLink}
+                >
+                  Open Instagram profile
+                </a>
+              ) : (
+                "Not provided"
+              )}
+            </dd>
           </div>
           <div>
             <dt>Registered</dt>

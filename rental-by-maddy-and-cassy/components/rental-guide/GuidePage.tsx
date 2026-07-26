@@ -16,6 +16,7 @@ interface GuidePageProps {
   sections: GuideSection[];
   layout?: "grid" | "stack";
   notice?: string;
+  showRelated?: boolean;
 }
 
 const guideLinks = [
@@ -32,6 +33,7 @@ export default function GuidePage({
   sections,
   layout = "grid",
   notice,
+  showRelated = true,
 }: GuidePageProps) {
   return (
     <main className={styles.main}>
@@ -80,16 +82,18 @@ export default function GuidePage({
         ))}
       </section>
 
-      <nav className={styles.related} aria-label="Rental guide pages">
-        <p>Continue through the rental guide</p>
-        <div>
-          {guideLinks.map((item) => (
-            <Link key={item.href} href={item.href}>
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </nav>
+      {showRelated ? (
+        <nav className={styles.related} aria-label="Rental guide pages">
+          <p>Continue through the rental guide</p>
+          <div>
+            {guideLinks.map((item) => (
+              <Link key={item.href} href={item.href}>
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      ) : null}
     </main>
   );
 }

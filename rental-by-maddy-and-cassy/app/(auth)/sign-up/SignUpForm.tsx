@@ -13,7 +13,6 @@ import styles from "../auth.module.css";
 
 const schema = z
   .object({
-    displayName: z.string().min(2, "Enter your full name"),
     email: z.string().min(1, "Email is required").email("Enter a valid email address"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
@@ -27,7 +26,7 @@ type FormValues = z.infer<typeof schema>;
 
 function getCustomerRedirect(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/admin")) {
-    return "/account/bookings";
+    return "/catalog";
   }
   return value;
 }
@@ -50,11 +49,11 @@ export default function SignUpForm() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await registerWithEmail(values.email, values.password, values.displayName);
+      await registerWithEmail(values.email, values.password);
       router.replace(redirectTo);
     } catch {
       setFormError(
-        "We couldn't create your account. That email may already be in use, or your password may be too weak."
+        "We couldn't create your account. That email may already be in use, or your password may be too weak.",
       );
       setSubmitting(false);
     }
@@ -62,33 +61,15 @@ export default function SignUpForm() {
 
   return (
     <div className={styles.card}>
-      <p className={styles.eyebrow}>Get started</p>
+      <p className={styles.eyebrow}>Customer account</p>
       <h1 className={styles.heading}>Create Account</h1>
       <p className={styles.subheading}>
-        Create an account to reserve gear and track your bookings.
+        Create your login now. Your identity and rental requirements are
+        collected only when you reserve an item.
       </p>
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
         {formError ? <p className={styles.formError}>{formError}</p> : null}
-
-        <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="displayName">
-            Full name<span className={formStyles.required}>*</span>
-          </label>
-          <input
-            id="displayName"
-            type="text"
-            autoComplete="name"
-            className={`${formStyles.input} ${errors.displayName ? formStyles.inputError : ""}`}
-            aria-invalid={!!errors.displayName}
-            {...register("displayName")}
-          />
-          {errors.displayName ? (
-            <p className={formStyles.errorText} role="alert">
-              {errors.displayName.message}
-            </p>
-          ) : null}
-        </div>
 
         <div className={formStyles.field}>
           <label className={formStyles.label} htmlFor="email">
@@ -159,7 +140,7 @@ export default function SignUpForm() {
       <p className={styles.footer}>
         Already have an account?{" "}
         <Link
-          href={`/sign-in${redirectTo !== "/account/bookings" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`}
+          href={`/sign-in${redirectTo !== "/catalog" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`}
           className={styles.footerLink}
         >
           Sign in
