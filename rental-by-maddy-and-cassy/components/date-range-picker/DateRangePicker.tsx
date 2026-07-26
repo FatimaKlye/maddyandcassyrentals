@@ -37,9 +37,16 @@ export default function DateRangePicker({
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(startDate ?? new Date()));
   const today = startOfDay(new Date());
 
-  function isDisabled(day: Date): boolean {
-    if (isBefore(day, today)) return true;
+  function isPast(day: Date): boolean {
+    return isBefore(day, today);
+  }
+
+  function isBooked(day: Date): boolean {
     return disabledDateKeys.has(toDateKey(day));
+  }
+
+  function isDisabled(day: Date): boolean {
+    return isPast(day) || isBooked(day);
   }
 
   function handleDayClick(day: Date) {
@@ -112,11 +119,20 @@ export default function DateRangePicker({
           <span key={`blank-${index}`} className={styles.blank} aria-hidden="true" />
         ))}
         {daysInMonth.map((day) => {
-          const disabled = isDisabled(day);
+          const past = isPast(day);
+          const booked = !past && isBooked(day);
+          const disabled = past || booked;
           const isStart = startDate ? isSameDay(day, startDate) : false;
           const isEnd = endDate ? isSameDay(day, endDate) : false;
+          const selected = isStart || isEnd;
           const inRange =
             startDate && endDate ? isWithinInterval(day, { start: startDate, end: endDate }) : false;
+
+          let statusLabel = "";
+          if (selected) statusLabel = "";
+          else if (past) statusLabel = ", past date";
+          else if (booked) statusLabel = ", already booked";
+          else statusLabel = ", available";
 
           return (
             <button
@@ -124,14 +140,16 @@ export default function DateRangePicker({
               type="button"
               role="gridcell"
               disabled={disabled}
-              aria-current={isStart || isEnd ? "date" : undefined}
-              aria-label={`${format(day, "MMMM d, yyyy")}${disabled ? ", unavailable" : ""}`}
+              aria-current={selected ? "date" : undefined}
+              aria-label={`${format(day, "MMMM d, yyyy")}${statusLabel}`}
               className={[
                 styles.day,
                 !isSameMonth(day, visibleMonth) ? styles.outsideMonth : "",
-                disabled ? styles.dayDisabled : "",
-                isStart || isEnd ? styles.dayEdge : "",
-                inRange && !isStart && !isEnd ? styles.dayInRange : "",
+                !selected && past ? styles.dayPast : "",
+                !selected && booked ? styles.dayBooked : "",
+                !selected && !disabled ? styles.dayAvailable : "",
+                selected ? styles.dayEdge : "",
+                inRange && !selected ? styles.dayInRange : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -144,8 +162,10 @@ export default function DateRangePicker({
       </div>
 
       <p className={styles.legend}>
-        <span className={styles.legendSwatch} data-variant="disabled" /> Unavailable
+        <span className={styles.legendSwatch} data-variant="available" /> Available
+        <span className={styles.legendSwatch} data-variant="booked" /> Booked
         <span className={styles.legendSwatch} data-variant="selected" /> Selected
+        <span className={styles.legendSwatch} data-variant="disabled" /> Past
       </p>
     </div>
   );

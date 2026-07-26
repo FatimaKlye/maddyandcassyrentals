@@ -84,24 +84,37 @@
   color: var(--color-light-gray);
 }
 
-.dayDisabled {
+.dayAvailable {
+  background: var(--color-calendar-available-bg);
+  color: var(--color-calendar-available);
+}
+
+.dayPast {
   color: var(--color-light-gray);
   text-decoration: line-through;
   cursor: not-allowed;
 }
 
+.dayBooked {
+  background: var(--color-calendar-booked-bg);
+  color: var(--color-calendar-booked);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
 .dayInRange {
-  background: var(--color-blush);
+  background: var(--color-calendar-available-bg);
+  color: var(--color-calendar-selected);
 }
 
 .dayEdge {
-  background: var(--color-primary);
+  background: var(--color-calendar-selected);
   color: var(--color-white);
   font-weight: 600;
 }
 
 .dayEdge:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--color-calendar-selected-hover);
 }
 
 .legend {
@@ -126,10 +139,18 @@
   margin-left: 0;
 }
 
+.legendSwatch[data-variant="available"] {
+  background: var(--color-calendar-available);
+}
+
+.legendSwatch[data-variant="booked"] {
+  background: var(--color-calendar-booked);
+}
+
 .legendSwatch[data-variant="disabled"] {
   background: var(--color-light-gray);
 }
 
 .legendSwatch[data-variant="selected"] {
-  background: var(--color-primary);
+  background: var(--color-calendar-selected);
 }
