@@ -102,11 +102,6 @@
   cursor: not-allowed;
 }
 
-.dayInRange {
-  background: var(--color-calendar-available-bg);
-  color: var(--color-calendar-selected);
-}
-
 .dayEdge {
   background: var(--color-calendar-selected);
   color: var(--color-white);
@@ -115,6 +110,12 @@
 
 .dayEdge:hover:not(:disabled) {
   background: var(--color-calendar-selected-hover);
+}
+
+.errorMessage {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-calendar-booked);
 }
 
 .legend {
