@@ -43,7 +43,7 @@ export default function AdminUsersList() {
   }, []);
 
   const adminIds = useMemo(
-    () => new Set((data?.admins ?? []).filter((admin) => admin.active).map((admin) => admin.id)),
+    () => new Set((data?.admins ?? []).map((admin) => admin.id)),
     [data]
   );
 

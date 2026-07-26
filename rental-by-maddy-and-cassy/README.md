@@ -20,6 +20,19 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Firebase Admin access
+
+Server-side operations such as deleting a customer account require Firebase
+Admin credentials. Configure one of these in the local or hosting environment:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON` containing the service-account JSON as a
+  single environment-variable value.
+- `GOOGLE_APPLICATION_CREDENTIALS` containing the absolute path to a local
+  service-account JSON file.
+
+Never commit a service-account key. The existing `.gitignore` excludes common
+Firebase service-account filenames.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

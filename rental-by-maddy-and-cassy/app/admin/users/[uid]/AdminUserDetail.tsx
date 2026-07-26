@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getAdminProfile } from "@/src/services/adminService";
 import { getBookingsForUser } from "@/src/services/bookingService";
-import { getUserProfile } from "@/src/services/userService";
+import {
+  deleteCustomerAccountAsAdmin,
+  getUserProfile,
+} from "@/src/services/userService";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/components/ui/ToastProvider";
 import type { Booking, UserProfile } from "@/src/types/firebase";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
@@ -12,6 +19,7 @@ import styles from "./userDetail.module.css";
 interface UserDetailData {
   account: UserProfile;
   bookings: Booking[];
+  isAdministrator: boolean;
 }
 
 function formatDate(value: Booking["createdAt"] | UserProfile["createdAt"]): string {
@@ -23,20 +31,26 @@ function formatDate(value: Booking["createdAt"] | UserProfile["createdAt"]): str
 }
 
 export default function AdminUserDetail({ uid }: { uid: string }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { showToast } = useToast();
   const [data, setData] = useState<UserDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [confirmationText, setConfirmationText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    Promise.all([getUserProfile(uid), getBookingsForUser(uid)])
-      .then(([account, bookings]) => {
+    Promise.all([getUserProfile(uid), getBookingsForUser(uid), getAdminProfile(uid)])
+      .then(([account, bookings, administrator]) => {
         if (!active) return;
         if (!account) {
           setError("This user account does not exist.");
           return;
         }
-        setData({ account, bookings });
+        setData({ account, bookings, isAdministrator: administrator !== null });
       })
       .catch(() => {
         if (active) setError("This account could not be loaded. Please try again.");
@@ -46,6 +60,26 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
       active = false;
     };
   }, [uid]);
+
+  async function handleDeleteAccount() {
+    if (!user || confirmationText !== "DELETE") return;
+
+    setDeleting(true);
+    try {
+      const idToken = await user.getIdToken();
+      await deleteCustomerAccountAsAdmin(uid, idToken);
+      showToast("The customer account has been deleted.", "success");
+      router.replace("/admin/users");
+      router.refresh();
+    } catch (deleteError) {
+      const message =
+        deleteError instanceof Error
+          ? deleteError.message
+          : "The customer account could not be deleted.";
+      showToast(message, "error");
+      setDeleting(false);
+    }
+  }
 
   if (error) {
     return (
@@ -66,7 +100,7 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
     );
   }
 
-  const { account, bookings } = data;
+  const { account, bookings, isAdministrator } = data;
 
   return (
     <div className={styles.page}>
@@ -79,7 +113,9 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
           {account.displayName?.charAt(0).toUpperCase() || "C"}
         </span>
         <div>
-          <p className={styles.eyebrow}>CUSTOMER ACCOUNT</p>
+          <p className={styles.eyebrow}>
+            {isAdministrator ? "ADMINISTRATOR ACCOUNT" : "CUSTOMER ACCOUNT"}
+          </p>
           <h1>{account.displayName || "Unnamed account"}</h1>
           <p>{account.email}</p>
         </div>
@@ -158,6 +194,69 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
         ) : (
           <p className={styles.empty}>This customer has no booking history yet.</p>
         )}
+      </section>
+
+      <section
+        className={`${styles.dangerZone} ${isAdministrator ? styles.protectedZone : ""}`}
+        aria-labelledby="account-removal-heading"
+      >
+        <div>
+          <h2 id="account-removal-heading">
+            {isAdministrator ? "Protected Administrator Account" : "Delete Customer Account"}
+          </h2>
+          <p>
+            {isAdministrator
+              ? "Administrator accounts cannot be deleted from customer account management."
+              : "Permanently removes this customer's Firebase login, profile, and notifications. Existing booking and rental history is retained for business records."}
+          </p>
+        </div>
+
+        {!isAdministrator && !confirmationOpen ? (
+          <button
+            type="button"
+            className={styles.deleteButton}
+            onClick={() => setConfirmationOpen(true)}
+          >
+            Delete Account
+          </button>
+        ) : null}
+
+        {!isAdministrator && confirmationOpen ? (
+          <div className={styles.confirmation} role="alertdialog" aria-modal="true">
+            <p>
+              This action cannot be undone. Type <strong>DELETE</strong> to confirm.
+            </p>
+            <label htmlFor="delete-account-confirmation">Confirmation</label>
+            <input
+              id="delete-account-confirmation"
+              value={confirmationText}
+              onChange={(event) => setConfirmationText(event.target.value)}
+              autoComplete="off"
+              disabled={deleting}
+            />
+            <div className={styles.confirmationActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => {
+                  setConfirmationOpen(false);
+                  setConfirmationText("");
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.confirmDeleteButton}
+                onClick={handleDeleteAccount}
+                disabled={confirmationText !== "DELETE" || deleting}
+              >
+                {deleting ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

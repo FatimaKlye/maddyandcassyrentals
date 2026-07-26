@@ -15,7 +15,8 @@
 
 .profileHeader,
 .details,
-.bookings {
+.bookings,
+.dangerZone {
   border: 1px solid var(--color-light-gray);
   border-radius: 18px;
   background: var(--color-white);
@@ -85,7 +86,8 @@
 }
 
 .details,
-.bookings {
+.bookings,
+.dangerZone {
   margin-top: 1rem;
 }
 
@@ -198,6 +200,118 @@
   justify-content: center;
 }
 
+.dangerZone {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.4rem;
+  border-color: var(--color-status-red-border);
+}
+
+.dangerZone h2 {
+  margin: 0;
+  color: var(--color-status-red);
+  font-size: 1.05rem;
+}
+
+.dangerZone p {
+  max-width: 720px;
+  margin: 0.45rem 0 0;
+  color: var(--color-charcoal);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.protectedZone {
+  border-color: var(--color-light-gray);
+  background: var(--color-background);
+}
+
+.protectedZone h2 {
+  color: var(--color-text-primary);
+}
+
+.deleteButton,
+.confirmDeleteButton,
+.cancelButton {
+  flex-shrink: 0;
+  padding: 0.7rem 0.95rem;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deleteButton,
+.confirmDeleteButton {
+  border: 1px solid var(--color-status-red);
+  background: var(--color-status-red);
+  color: var(--color-white);
+}
+
+.deleteButton:hover,
+.confirmDeleteButton:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.confirmation {
+  width: min(420px, 100%);
+  padding: 1rem;
+  border: 1px solid var(--color-status-red-border);
+  border-radius: 14px;
+  background: var(--color-status-red-bg);
+}
+
+.confirmation p {
+  margin-top: 0;
+}
+
+.confirmation label {
+  display: block;
+  margin: 0.85rem 0 0.35rem;
+  color: var(--color-text-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.confirmation input {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-status-red-border);
+  border-radius: 9px;
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.confirmation input:focus {
+  border-color: var(--color-status-red);
+  box-shadow: 0 0 0 3px rgba(180, 66, 66, 0.14);
+}
+
+.confirmationActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.cancelButton {
+  border: 1px solid var(--color-light-gray);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+}
+
+.confirmDeleteButton:disabled,
+.cancelButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 @media (max-width: 650px) {
   .profileHeader {
     align-items: flex-start;
@@ -210,5 +324,14 @@
 
   .details dl {
     grid-template-columns: 1fr;
+  }
+
+  .dangerZone {
+    flex-direction: column;
+  }
+
+  .deleteButton,
+  .confirmation {
+    width: 100%;
   }
 }

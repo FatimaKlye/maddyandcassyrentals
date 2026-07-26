@@ -59,3 +59,27 @@ export async function setUserRole(uid: string, role: UserProfile["role"]): Promi
     updatedAt: serverTimestamp(),
   });
 }
+
+export async function deleteCustomerAccountAsAdmin(
+  uid: string,
+  idToken: string,
+): Promise<void> {
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  });
+
+  if (response.ok) return;
+
+  let message = "The customer account could not be deleted.";
+  try {
+    const body = (await response.json()) as { error?: unknown };
+    if (typeof body.error === "string") message = body.error;
+  } catch {
+    // Keep the safe fallback when the server does not return JSON.
+  }
+
+  throw new Error(message);
+}
