@@ -26,12 +26,12 @@ export default function Navbar() {
     router.push("/");
   }
 
-  const accountHref = isAdmin ? "/admin" : "/account/bookings";
-  const accountLabel = isAdmin
-    ? "Admin Account"
-    : profile?.displayName
-      ? `Hi, ${profile.displayName.split(" ")[0]}`
-      : "My Bookings";
+  const displayName = profile?.displayName ?? user?.displayName ?? "Account";
+  const firstName = displayName.split(" ")[0];
+  const accountHomeHref = isAdmin ? "/admin" : "/account/bookings";
+  const accountHomeLabel = isAdmin ? "Admin Dashboard" : "My Bookings";
+  const profileHref = isAdmin ? "/admin/profile" : "/account/profile";
+  const profileLabel = isAdmin ? "Admin Profile" : "My Profile";
 
   return (
     <header className={styles.navbar}>
@@ -54,12 +54,24 @@ export default function Navbar() {
         <div className={styles.actions}>
           {user ? (
             <>
-              <Link href={accountHref} className={styles.accountLink}>
-                {accountLabel}
+              <Link href={accountHomeHref} className={styles.accountLink}>
+                {accountHomeLabel}
               </Link>
-              <button type="button" className={styles.textButton} onClick={handleSignOut}>
-                Sign Out
-              </button>
+              <details className={styles.profileMenu}>
+                <summary className={styles.profileTrigger}>Hi, {firstName}</summary>
+                <div className={styles.profileDropdown}>
+                  <Link href={profileHref} className={styles.profileMenuLink}>
+                    {profileLabel}
+                  </Link>
+                  <button
+                    type="button"
+                    className={styles.profileMenuButton}
+                    onClick={handleSignOut}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </details>
             </>
           ) : (
             <>
@@ -106,11 +118,18 @@ export default function Navbar() {
             {user ? (
               <>
                 <Link
-                  href={accountHref}
+                  href={accountHomeHref}
                   className={styles.mobileAccountLink}
                   onClick={() => setMenuOpen(false)}
                 >
-                  {accountLabel}
+                  {accountHomeLabel}
+                </Link>
+                <Link
+                  href={profileHref}
+                  className={styles.mobileAccountLink}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {profileLabel}
                 </Link>
                 <button type="button" className={styles.mobileTextButton} onClick={handleSignOut}>
                   Sign Out

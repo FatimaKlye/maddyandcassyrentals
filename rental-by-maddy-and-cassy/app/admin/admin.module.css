@@ -1,86 +1,180 @@
-.main {
-  min-height: calc(100vh - 67px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1.25rem;
+.page {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.card {
-  width: 100%;
-  max-width: 680px;
-  padding: 2.5rem;
-  border: 1px solid var(--color-light-gray);
-  border-radius: 24px;
-  background: var(--color-white);
-  box-shadow: 0 14px 42px rgba(36, 36, 36, 0.06);
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.6rem;
 }
 
 .eyebrow {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.35rem;
   color: var(--color-primary);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
 
-.heading {
-  margin: 0 0 0.75rem;
-  font-size: clamp(1.8rem, 4vw, 2.5rem);
-  letter-spacing: -0.02em;
-}
-
-.description {
+.pageHeader h1 {
   margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  letter-spacing: -0.025em;
+}
+
+.pageHeader p:not(.eyebrow) {
+  margin: 0.45rem 0 0;
   color: var(--color-charcoal);
-  line-height: 1.7;
+  font-size: 0.92rem;
 }
 
-.actions {
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.metricCard,
+.panel {
+  border: 1px solid var(--color-light-gray);
+  border-radius: 18px;
+  background: var(--color-white);
+  box-shadow: 0 10px 28px rgba(36, 36, 36, 0.04);
+}
+
+.metricCard {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.85rem;
-  margin-top: 1.75rem;
+  min-height: 150px;
+  padding: 1.25rem;
+  flex-direction: column;
 }
 
-.primaryAction,
-.secondaryAction {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.75rem 1.25rem;
-  border-radius: 999px;
-  font-size: 0.9rem;
+.metricCard > span {
+  color: var(--color-charcoal);
+  font-size: 0.82rem;
   font-weight: 600;
+}
+
+.metricCard strong {
+  margin: 0.45rem 0;
+  color: var(--color-text-primary);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.metricCard a,
+.metricCard small {
+  margin-top: auto;
+  color: var(--color-charcoal);
+  font-size: 0.74rem;
   text-decoration: none;
 }
 
-.primaryAction {
-  background: var(--color-primary);
-  color: var(--color-white);
-}
-
-.secondaryAction {
-  border: 1px solid var(--color-light-gray);
-  background: var(--color-white);
-  color: var(--color-text-primary);
-}
-
-.primaryAction:hover {
-  background: var(--color-primary-hover);
-}
-
-.secondaryAction:hover {
-  border-color: var(--color-dusty-rose);
+.metricCard a {
   color: var(--color-primary);
+  font-weight: 600;
+}
+
+.panel {
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.35rem;
+  border-bottom: 1px solid var(--color-light-gray);
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.panelHeader p {
+  margin: 0.3rem 0 0;
+  color: var(--color-charcoal);
+  font-size: 0.8rem;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--color-light-gray);
+  font-size: 0.8rem;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table th {
+  background: var(--color-background);
+  color: var(--color-charcoal);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: rgba(242, 210, 207, 0.18);
+}
+
+.loading {
+  display: flex;
+  min-height: 360px;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty {
+  margin: 0;
+  padding: 2rem 1.35rem;
+  color: var(--color-charcoal);
+}
+
+.error {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-status-red-border);
+  border-radius: 12px;
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 1100px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
-  .card {
-    padding: 2rem 1.4rem;
+  .metrics {
+    grid-template-columns: 1fr;
   }
 
-  .actions {
-    flex-direction: column;
+  .metricCard {
+    min-height: 125px;
   }
 }

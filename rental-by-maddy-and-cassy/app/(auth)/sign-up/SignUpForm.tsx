@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { registerWithEmail } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
+import PasswordInput from "@/components/ui/PasswordInput";
 import styles from "../auth.module.css";
 
 const schema = z
@@ -112,9 +113,8 @@ export default function SignUpForm() {
           <label className={formStyles.label} htmlFor="password">
             Password<span className={formStyles.required}>*</span>
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="new-password"
             className={`${formStyles.input} ${errors.password ? formStyles.inputError : ""}`}
             aria-invalid={!!errors.password}
@@ -131,9 +131,8 @@ export default function SignUpForm() {
           <label className={formStyles.label} htmlFor="confirmPassword">
             Confirm password<span className={formStyles.required}>*</span>
           </label>
-          <input
+          <PasswordInput
             id="confirmPassword"
-            type="password"
             autoComplete="new-password"
             className={`${formStyles.input} ${errors.confirmPassword ? formStyles.inputError : ""}`}
             aria-invalid={!!errors.confirmPassword}

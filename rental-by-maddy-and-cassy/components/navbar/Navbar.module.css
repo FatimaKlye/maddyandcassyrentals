@@ -73,8 +73,7 @@
   flex-shrink: 0;
 }
 
-.accountLink,
-.textButton {
+.accountLink {
   color: var(--color-charcoal);
   text-decoration: none;
   font-size: 0.9rem;
@@ -87,8 +86,76 @@
   padding: 0;
 }
 
-.accountLink:hover,
-.textButton:hover {
+.accountLink:hover {
+  color: var(--color-primary);
+}
+
+.profileMenu {
+  position: relative;
+}
+
+.profileTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.profileTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.profileTrigger::after {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+.profileMenu[open] .profileTrigger::after {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.profileDropdown {
+  position: absolute;
+  top: calc(100% + 0.8rem);
+  right: 0;
+  display: flex;
+  min-width: 170px;
+  padding: 0.45rem;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 14px;
+  background: var(--color-white);
+  box-shadow: 0 14px 36px rgba(36, 36, 36, 0.12);
+  flex-direction: column;
+}
+
+.profileMenuLink,
+.profileMenuButton {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-charcoal);
+  font-size: 0.86rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.profileMenuLink:hover,
+.profileMenuButton:hover {
+  background: var(--color-blush);
   color: var(--color-primary);
 }
 
@@ -177,7 +244,8 @@
 
   .mobileActions {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    flex-direction: column;
     gap: 0.75rem;
     padding-top: 0.9rem;
     border-top: 1px solid var(--color-light-gray);

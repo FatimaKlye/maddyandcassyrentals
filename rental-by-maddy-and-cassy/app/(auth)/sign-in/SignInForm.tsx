@@ -9,6 +9,7 @@ import { z } from "zod";
 import { isActiveAdmin } from "@/src/services/adminService";
 import { loginWithEmail, logout } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
+import PasswordInput from "@/components/ui/PasswordInput";
 import styles from "../auth.module.css";
 
 const schema = z.object({
@@ -92,9 +93,8 @@ export default function SignInForm() {
           <label className={formStyles.label} htmlFor="password">
             Password<span className={formStyles.required}>*</span>
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             className={`${formStyles.input} ${errors.password ? formStyles.inputError : ""}`}
             aria-invalid={!!errors.password}
