@@ -1,6 +1,30 @@
+import Link from "next/link";
 import Navbar from "@/components/navbar/Navbar";
 import Hero from "@/components/hero/Hero";
 import styles from "./page.module.css";
+
+const rentalGuides = [
+  {
+    href: "/how-to-book",
+    label: "How to Book",
+    description: "Follow the booking process from choosing dates to receiving your rental.",
+  },
+  {
+    href: "/rental-requirements",
+    label: "Rental Requirements",
+    description: "Prepare the IDs, profiles, contact details, and agreement needed to rent.",
+  },
+  {
+    href: "/terms",
+    label: "Terms & Conditions",
+    description: "Review deposits, schedules, item care, cancellations, and rental policies.",
+  },
+  {
+    href: "/faq",
+    label: "FAQs",
+    description: "Find quick answers about reservations, payments, extensions, and returns.",
+  },
+] as const;
 
 export default function Home() {
   return (
@@ -37,6 +61,29 @@ export default function Home() {
               <h3>Follow your booking</h3>
               <p>Check your account for approval, pickup or delivery details, and status updates.</p>
             </article>
+          </div>
+        </section>
+
+        <section className={styles.guideSection} aria-labelledby="rental-guide-heading">
+          <div className={styles.guideIntro}>
+            <p className={styles.eyebrow}>BEFORE YOU RENT</p>
+            <h2 id="rental-guide-heading" className={styles.heading}>
+              Everything you need for a smooth rental.
+            </h2>
+            <p className={styles.description}>
+              Read the booking steps, prepare your requirements, and review the
+              rental policies before sending your request.
+            </p>
+          </div>
+
+          <div className={styles.guideGrid}>
+            {rentalGuides.map((guide) => (
+              <Link key={guide.href} href={guide.href} className={styles.guideCard}>
+                <span>{guide.label}</span>
+                <p>{guide.description}</p>
+                <strong aria-hidden="true">Read guide →</strong>
+              </Link>
+            ))}
           </div>
         </section>
       </main>

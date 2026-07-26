@@ -61,6 +61,8 @@
 }
 
 .link {
+  position: relative;
+  padding: 0.45rem 0;
   color: var(--color-charcoal);
   text-decoration: none;
   font-size: 0.9rem;
@@ -69,6 +71,109 @@
 }
 
 .link:hover {
+  color: var(--color-primary);
+}
+
+.link::after,
+.guideTrigger::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  content: "";
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.link:hover::after,
+.linkActive::after {
+  transform: scaleX(1);
+}
+
+.linkActive {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.guideMenu {
+  position: relative;
+}
+
+.guideTrigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0;
+  color: var(--color-charcoal);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+  transition: color 0.2s ease;
+}
+
+.guideTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.guideTrigger::before {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  order: 2;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+.guideMenu[open] .guideTrigger::before {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.guideTrigger:hover,
+.guideMenu[open] .guideTrigger {
+  color: var(--color-primary);
+}
+
+.guideTrigger:hover::after,
+.guideMenu[open] .guideTrigger::after {
+  transform: scaleX(1);
+}
+
+.guideDropdown {
+  position: absolute;
+  top: calc(100% + 0.7rem);
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  min-width: 220px;
+  padding: 0.45rem;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 14px;
+  background: var(--color-white);
+  box-shadow: 0 14px 36px rgba(36, 36, 36, 0.12);
+  flex-direction: column;
+  transform: translateX(-50%);
+}
+
+.guideMenuLink {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  color: var(--color-charcoal);
+  font-size: 0.84rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.guideMenuLink:hover,
+.guideMenuLinkActive {
+  background: var(--color-blush);
   color: var(--color-primary);
 }
 
@@ -190,7 +295,7 @@
   display: none;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1080px) {
   .links,
   .actions {
     display: none;
@@ -239,6 +344,7 @@
   .mobileTextButton {
     padding: 0.7rem 0.75rem;
     border: none;
+    border-radius: 12px;
     background: none;
     color: var(--color-charcoal);
     font-size: 0.9rem;
@@ -255,6 +361,42 @@
     gap: 0.75rem;
     padding-top: 0.9rem;
     border-top: 1px solid var(--color-light-gray);
+  }
+
+  .mobileGuide {
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--color-light-gray);
+  }
+
+  .mobileGuide p {
+    margin: 0 0 0.55rem;
+    color: var(--color-primary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .mobileGuide > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+  }
+
+  .mobileGuideLink {
+    padding: 0.65rem 0.7rem;
+    border-radius: 10px;
+    color: var(--color-charcoal);
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .mobileGuideLink:hover,
+  .mobileGuideLinkActive,
+  .mobileLinkActive {
+    background: var(--color-blush);
+    color: var(--color-primary);
   }
 
   .mobileAccountLink,

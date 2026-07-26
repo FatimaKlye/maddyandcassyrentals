@@ -28,6 +28,19 @@ function draftFromProfile(profile: UserProfile): ProfileDraft {
   };
 }
 
+function isValidProfileUrl(value: string, allowedDomains: string[]): boolean {
+  try {
+    const url = new URL(value);
+    const usesWebProtocol = url.protocol === "http:" || url.protocol === "https:";
+    const matchesPlatform = allowedDomains.some(
+      (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`),
+    );
+    return usesWebProtocol && matchesPlatform;
+  } catch {
+    return false;
+  }
+}
+
 export default function CustomerProfileForm() {
   const { user, profile, refreshProfile } = useAuth();
 
@@ -74,6 +87,26 @@ function CustomerProfileEditor({
 
     if (draft.displayName.trim().length < 2) {
       showToast("Please enter your full name.", "error");
+      return;
+    }
+
+    if (!draft.phoneNumber.trim()) {
+      showToast("Phone number is required.", "error");
+      return;
+    }
+
+    if (!draft.fullAddress.trim()) {
+      showToast("Full address is required.", "error");
+      return;
+    }
+
+    if (!isValidProfileUrl(draft.facebookLink.trim(), ["facebook.com", "fb.com"])) {
+      showToast("Enter a valid Facebook profile link.", "error");
+      return;
+    }
+
+    if (!isValidProfileUrl(draft.instagramLink.trim(), ["instagram.com"])) {
+      showToast("Enter a valid Instagram profile link.", "error");
       return;
     }
 
@@ -124,6 +157,7 @@ function CustomerProfileEditor({
               value={draft.displayName}
               onChange={(event) => updateDraft("displayName", event.target.value)}
               autoComplete="name"
+              required
             />
           </div>
 
@@ -142,7 +176,7 @@ function CustomerProfileEditor({
 
         <div className={formStyles.field}>
           <label className={formStyles.label} htmlFor="profile-phone">
-            Phone number
+            Phone number<span className={formStyles.required}>*</span>
           </label>
           <input
             id="profile-phone"
@@ -150,12 +184,13 @@ function CustomerProfileEditor({
             value={draft.phoneNumber}
             onChange={(event) => updateDraft("phoneNumber", event.target.value)}
             autoComplete="tel"
+            required
           />
         </div>
 
         <div className={formStyles.field}>
           <label className={formStyles.label} htmlFor="profile-address">
-            Full address
+            Full address<span className={formStyles.required}>*</span>
           </label>
           <textarea
             id="profile-address"
@@ -163,13 +198,14 @@ function CustomerProfileEditor({
             value={draft.fullAddress}
             onChange={(event) => updateDraft("fullAddress", event.target.value)}
             autoComplete="street-address"
+            required
           />
         </div>
 
         <div className={formStyles.row}>
           <div className={formStyles.field}>
             <label className={formStyles.label} htmlFor="profile-facebook">
-              Facebook profile link
+              Facebook profile link<span className={formStyles.required}>*</span>
             </label>
             <input
               id="profile-facebook"
@@ -178,12 +214,13 @@ function CustomerProfileEditor({
               value={draft.facebookLink}
               onChange={(event) => updateDraft("facebookLink", event.target.value)}
               placeholder="https://facebook.com/..."
+              required
             />
           </div>
 
           <div className={formStyles.field}>
             <label className={formStyles.label} htmlFor="profile-instagram">
-              Instagram profile link
+              Instagram profile link<span className={formStyles.required}>*</span>
             </label>
             <input
               id="profile-instagram"
@@ -192,6 +229,7 @@ function CustomerProfileEditor({
               value={draft.instagramLink}
               onChange={(event) => updateDraft("instagramLink", event.target.value)}
               placeholder="https://instagram.com/..."
+              required
             />
           </div>
         </div>

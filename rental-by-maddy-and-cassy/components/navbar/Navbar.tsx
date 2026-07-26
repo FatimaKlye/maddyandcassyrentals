@@ -1,24 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/src/services/authService";
 import styles from "./Navbar.module.css";
 
-const navigationLinks = [
+const primaryLinks = [
   { href: "/", label: "Home" },
   { href: "/catalog", label: "Browse" },
   { href: "/#about", label: "About" },
   { href: "/contact", label: "Contact" },
 ];
 
+const guideLinks = [
+  { href: "/how-to-book", label: "How to Book" },
+  { href: "/rental-requirements", label: "Rental Requirements" },
+  { href: "/terms", label: "Terms & Conditions" },
+  { href: "/faq", label: "FAQs" },
+];
+
+function subscribeToHash(callback: () => void) {
+  window.addEventListener("hashchange", callback);
+  return () => window.removeEventListener("hashchange", callback);
+}
+
+function getHashSnapshot() {
+  return window.location.hash;
+}
+
+function getServerHashSnapshot() {
+  return "";
+}
+
 export default function Navbar() {
   const { user, profile, isAdmin } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const hash = useSyncExternalStore(subscribeToHash, getHashSnapshot, getServerHashSnapshot);
 
   async function handleSignOut() {
     await logout();
@@ -32,6 +54,14 @@ export default function Navbar() {
   const accountHomeLabel = isAdmin ? "Admin Dashboard" : "My Bookings";
   const profileHref = isAdmin ? "/admin/profile" : "/account/profile";
   const profileLabel = isAdmin ? "Admin Profile" : "My Profile";
+  const guideActive = guideLinks.some((item) => pathname === item.href);
+
+  function isPrimaryLinkActive(href: string): boolean {
+    if (href === "/") return pathname === "/" && hash !== "#about";
+    if (href === "/#about") return pathname === "/" && hash === "#about";
+    if (href === "/catalog") return pathname.startsWith("/catalog");
+    return pathname === href;
+  }
 
   return (
     <header className={styles.navbar}>
@@ -51,11 +81,58 @@ export default function Navbar() {
         </Link>
 
         <nav className={styles.links} aria-label="Primary navigation">
-          {navigationLinks.map((item) => (
-            <Link key={item.href} href={item.href} className={styles.link}>
-              {item.label}
-            </Link>
-          ))}
+          {primaryLinks.slice(0, 2).map((item) => {
+            const active = isPrimaryLinkActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${styles.link} ${active ? styles.linkActive : ""}`}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+
+          <details className={styles.guideMenu}>
+            <summary
+              className={`${styles.guideTrigger} ${guideActive ? styles.linkActive : ""}`}
+            >
+              Rental Guide
+            </summary>
+            <div className={styles.guideDropdown}>
+              {guideLinks.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`${styles.guideMenuLink} ${
+                      active ? styles.guideMenuLinkActive : ""
+                    }`}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </details>
+
+          {primaryLinks.slice(2).map((item) => {
+            const active = isPrimaryLinkActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${styles.link} ${active ? styles.linkActive : ""}`}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className={styles.actions}>
@@ -109,16 +186,44 @@ export default function Navbar() {
       {menuOpen ? (
         <div id="mobile-navigation" className={styles.mobileMenu}>
           <nav className={styles.mobileLinks} aria-label="Mobile navigation">
-            {navigationLinks.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={styles.mobileLink}
-                onClick={() => setMenuOpen(false)}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {primaryLinks.map((item) => {
+              const active = isPrimaryLinkActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`${styles.mobileLink} ${
+                    active ? styles.mobileLinkActive : ""
+                  }`}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <nav className={styles.mobileGuide} aria-label="Rental guide navigation">
+            <p>Rental Guide</p>
+            <div>
+              {guideLinks.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`${styles.mobileGuideLink} ${
+                      active ? styles.mobileGuideLinkActive : ""
+                    }`}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
 
           <div className={styles.mobileActions}>
