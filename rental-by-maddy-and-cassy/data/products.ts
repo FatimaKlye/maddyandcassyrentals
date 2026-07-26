@@ -1,5 +1,11 @@
 import type { Product, ProductReview } from "@/types/product";
 
+// Seed-only shape: Firestore-specific fields (status/isActive/createdAt/updatedAt)
+// are added by scripts/seedProducts.ts when writing these into `products/{id}`.
+// Runtime UI code should read products from Firestore via `src/services/productService.ts`,
+// not from this file.
+export type SeedProduct = Omit<Product, "status" | "isActive" | "createdAt" | "updatedAt">;
+
 const phoneIncluded: string[] = [
   "Original charger & USB-C cable",
   "Protective case",
@@ -18,7 +24,7 @@ function reviews(entries: Omit<ProductReview, "id">[], productId: string): Produ
   return entries.map((entry, index) => ({ id: `${productId}-review-${index + 1}`, ...entry }));
 }
 
-export const products: Product[] = [
+export const products: SeedProduct[] = [
   // Phones
   {
     id: "iphone-17-pro-max",
@@ -28,7 +34,6 @@ export const products: Product[] = [
     description:
       "The latest flagship iPhone with the biggest display, pro camera system, and all-day battery life. Perfect for travel vlogging and high-end content creation.",
     pricePerDay: 2000,
-    depositAmount: 6000,
     currency: "₱",
     image: "/images/products/iphone-17-pro-max.svg",
     badge: "New",
@@ -63,7 +68,6 @@ export const products: Product[] = [
     description:
       "Compact pro power with a titanium build, advanced camera system, and blazing performance for creators on the move.",
     pricePerDay: 1700,
-    depositAmount: 5000,
     currency: "₱",
     image: "/images/products/iphone-17-pro.svg",
     badge: "New",
@@ -97,7 +101,6 @@ export const products: Product[] = [
     description:
       "A large-screen pro iPhone with a versatile triple-camera setup, ideal for photography, filming, and everyday productivity.",
     pricePerDay: 1500,
-    depositAmount: 4500,
     currency: "₱",
     image: "/images/products/iphone-16-pro-max.svg",
     totalUnits: 6,
@@ -131,7 +134,6 @@ export const products: Product[] = [
     description:
       "Pro-grade cameras and performance in a comfortable size, great for shoots, events, and daily use.",
     pricePerDay: 1300,
-    depositAmount: 4000,
     currency: "₱",
     image: "/images/products/iphone-16-pro.svg",
     totalUnits: 6,
@@ -164,7 +166,6 @@ export const products: Product[] = [
     description:
       "A reliable, well-rounded iPhone with a great camera and smooth performance for everyday rental needs.",
     pricePerDay: 1000,
-    depositAmount: 3000,
     currency: "₱",
     image: "/images/products/iphone-16.svg",
     totalUnits: 8,
@@ -197,7 +198,6 @@ export const products: Product[] = [
     description:
       "Titanium design with a powerful zoom camera system, well suited for events, travel, and professional shoots.",
     pricePerDay: 1200,
-    depositAmount: 3600,
     currency: "₱",
     image: "/images/products/iphone-15-pro-max.svg",
     totalUnits: 6,
@@ -230,7 +230,6 @@ export const products: Product[] = [
     description:
       "A dependable everyday iPhone with Dynamic Island and a sharp main camera, great value for short rentals.",
     pricePerDay: 700,
-    depositAmount: 2100,
     currency: "₱",
     image: "/images/products/iphone-15.svg",
     totalUnits: 8,
@@ -263,7 +262,6 @@ export const products: Product[] = [
     description:
       "A spacious display and Pro camera system with Always-On Display, ideal for content and business use.",
     pricePerDay: 900,
-    depositAmount: 2700,
     currency: "₱",
     image: "/images/products/iphone-14-pro-max.svg",
     totalUnits: 5,
@@ -296,7 +294,6 @@ export const products: Product[] = [
     description:
       "Large display and excellent low-light camera performance, a strong budget-friendly pro option.",
     pricePerDay: 800,
-    depositAmount: 2400,
     currency: "₱",
     image: "/images/products/iphone-13-pro-max.svg",
     totalUnits: 5,
@@ -329,7 +326,6 @@ export const products: Product[] = [
     description:
       "Compact pro camera system with ProRAW support, a solid choice for everyday rentals.",
     pricePerDay: 600,
-    depositAmount: 1800,
     currency: "₱",
     image: "/images/products/iphone-13-pro.svg",
     totalUnits: 6,
@@ -362,7 +358,6 @@ export const products: Product[] = [
     description:
       "An affordable, dependable iPhone perfect for calls, basic photography, and short-term backup use.",
     pricePerDay: 350,
-    depositAmount: 1000,
     currency: "₱",
     image: "/images/products/iphone-xr.svg",
     totalUnits: 10,
@@ -397,7 +392,6 @@ export const products: Product[] = [
     description:
       "A rugged action camera built for adventure, with stabilized 4K footage that thrives in extreme conditions.",
     pricePerDay: 500,
-    depositAmount: 1500,
     currency: "₱",
     image: "/images/products/dji-osmo-action-6.svg",
     badge: "Popular",
@@ -431,7 +425,6 @@ export const products: Product[] = [
     description:
       "A pocket-sized gimbal camera with a rotating touchscreen, perfect for smooth handheld vlogging.",
     pricePerDay: 450,
-    depositAmount: 1350,
     currency: "₱",
     image: "/images/products/dji-osmo-pocket-3.svg",
     totalUnits: 4,
@@ -464,7 +457,6 @@ export const products: Product[] = [
     description:
       "A dual-lens 360° camera that captures immersive footage and reframes shots after filming.",
     pricePerDay: 500,
-    depositAmount: 1500,
     currency: "₱",
     image: "/images/products/insta360-x5.svg",
     totalUnits: 4,
@@ -497,7 +489,6 @@ export const products: Product[] = [
     description:
       "A creator favorite compact camera with a bright lens and flip screen, ideal for vlogging and livestreaming.",
     pricePerDay: 600,
-    depositAmount: 1800,
     currency: "₱",
     image: "/images/products/canon-g7x-mark-iii.svg",
     totalUnits: 5,
@@ -530,7 +521,6 @@ export const products: Product[] = [
     description:
       "A mirrorless camera with signature Fujifilm color science, great for photography with a classic look.",
     pricePerDay: 500,
-    depositAmount: 1500,
     currency: "₱",
     image: "/images/products/fujifilm-xt100.svg",
     totalUnits: 4,
@@ -563,7 +553,6 @@ export const products: Product[] = [
     description:
       "An ultra-compact mirrorless camera that's light on the hands and easy to carry for casual shoots.",
     pricePerDay: 350,
-    depositAmount: 1000,
     currency: "₱",
     image: "/images/products/samsung-nx-mini.svg",
     totalUnits: 5,
@@ -590,6 +579,6 @@ export const products: Product[] = [
   },
 ];
 
-export function getProductById(id: string): Product | undefined {
+export function getProductById(id: string): SeedProduct | undefined {
   return products.find((product) => product.id === id);
 }

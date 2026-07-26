@@ -141,6 +141,12 @@
   color: var(--color-text-primary);
 }
 
+.estimateNote {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-charcoal);
+}
+
 @media (max-width: 860px) {
   .layout {
     grid-template-columns: 1fr;

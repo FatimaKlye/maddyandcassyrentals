@@ -7,18 +7,30 @@ import {
   getDocs,
   query,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/src/lib/firebase/config";
-import type { Product } from "@/src/types/firebase";
+import type { Product } from "@/types/product";
 
 const PRODUCTS_COLLECTION = "products";
 
+function serializeTimestamps(data: DocumentData): DocumentData {
+  const result: DocumentData = { ...data };
+  for (const key of ["createdAt", "updatedAt"]) {
+    const value = result[key];
+    if (value instanceof Timestamp) {
+      result[key] = value.toDate().toISOString();
+    }
+  }
+  return result;
+}
+
 function mapProduct(snapshot: QueryDocumentSnapshot<DocumentData>): Product {
-  return { id: snapshot.id, ...snapshot.data() } as Product;
+  return { id: snapshot.id, ...serializeTimestamps(snapshot.data()) } as Product;
 }
 
 export async function getActiveProducts(): Promise<Product[]> {
@@ -33,7 +45,7 @@ export async function getActiveProducts(): Promise<Product[]> {
 export async function getProductById(productId: string): Promise<Product | null> {
   const snapshot = await getDoc(doc(db, PRODUCTS_COLLECTION, productId));
   if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() } as Product;
+  return { id: snapshot.id, ...serializeTimestamps(snapshot.data()) } as Product;
 }
 
 export async function getAllProducts(): Promise<Product[]> {

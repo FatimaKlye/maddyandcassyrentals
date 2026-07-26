@@ -2,9 +2,12 @@ import Link from "next/link";
 import ProductShowcase from "@/components/product-showcase/ProductShowcase";
 import Stats from "@/components/stats/Stats";
 import CalendarIcon from "@/components/icons/CalendarIcon";
+import { getActiveProducts } from "@/src/services/productService";
 import styles from "./Hero.module.css";
 
-export default function Hero() {
+export default async function Hero() {
+  const products = await getActiveProducts();
+
   return (
     <section id="top" className={styles.hero} aria-label="Introduction">
       <div className={styles.backgroundGlow} aria-hidden="true" />
@@ -39,7 +42,7 @@ export default function Hero() {
           <Stats />
         </div>
 
-        <ProductShowcase />
+        <ProductShowcase products={products.slice(0, 2)} />
       </div>
     </section>
   );

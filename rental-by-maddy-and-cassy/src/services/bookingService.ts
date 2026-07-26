@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -27,7 +28,7 @@ export async function createBooking(
 ): Promise<string> {
   const docRef = await addDoc(collection(db, BOOKINGS_COLLECTION), {
     ...booking,
-    status: booking.status ?? "pending",
+    status: booking.status ?? "submitted",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -43,7 +44,8 @@ export async function getBookingById(bookingId: string): Promise<Booking | null>
 export async function getBookingsForUser(userId: string): Promise<Booking[]> {
   const bookingsQuery = query(
     collection(db, BOOKINGS_COLLECTION),
-    where("userId", "==", userId)
+    where("userId", "==", userId),
+    orderBy("createdAt", "desc")
   );
   const snapshot = await getDocs(bookingsQuery);
   return snapshot.docs.map(mapBooking);

@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
-import { isFullyBooked } from "@/lib/availability";
-import { submitReservation } from "@/src/services/inventoryService";
-import RentalDurationSelector from "@/components/rental-duration-selector/RentalDurationSelector";
-import QuickEstimate from "@/components/quick-estimate/QuickEstimate";
+import { getFullyBookedMessage, isFullyBooked } from "@/lib/availability";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./ReserveAction.module.css";
 
 interface ReserveActionProps {
@@ -15,63 +13,47 @@ interface ReserveActionProps {
 }
 
 export default function ReserveAction({ product, units }: ReserveActionProps) {
-  const [days, setDays] = useState(1);
-  const [status, setStatus] = useState<"idle" | "submitting" | "confirmed" | "error">("idle");
+  const router = useRouter();
+  const { user, loading } = useAuth();
   const fullyBooked = isFullyBooked(units.availableUnits);
 
-  async function handleReserve() {
-    setStatus("submitting");
-    try {
-      await submitReservation({
-        productId: product.id,
-        days,
-        totalPrice: product.pricePerDay * days + product.depositAmount,
-        currency: product.currency,
-      });
-      setStatus("confirmed");
-    } catch {
-      setStatus("error");
+  function handleReserve() {
+    const reservePath = `/catalog/${product.id}/reserve`;
+    if (user) {
+      router.push(reservePath);
+    } else {
+      router.push(`/sign-in?redirect=${encodeURIComponent(reservePath)}`);
     }
   }
 
   return (
     <div id="reserve" className={styles.wrapper}>
-      <RentalDurationSelector days={days} onChange={setDays} disabled={fullyBooked} />
-
-      <QuickEstimate
-        pricePerDay={product.pricePerDay}
-        depositAmount={product.depositAmount}
-        currency={product.currency}
-        days={days}
-      />
-
       <button
         type="button"
         className={styles.reserveButton}
-        disabled={fullyBooked || status === "submitting"}
+        disabled={fullyBooked || loading}
         onClick={handleReserve}
       >
-        {fullyBooked
-          ? "Fully Booked"
-          : status === "submitting"
-            ? "Submitting..."
-            : "Reserve Now"}
+        {fullyBooked ? "Fully Booked" : "Reserve Now"}
       </button>
 
-      {status === "confirmed" ? (
-        <p className={styles.confirmation} role="status">
-          Reservation request received for {product.name}. We&apos;ll reach out
-          to confirm your dates and payment details shortly.
-        </p>
-      ) : status === "error" ? (
-        <p className={styles.error} role="alert">
-          We couldn&apos;t complete your reservation — the last unit may have
-          just been taken. Please refresh and try again.
+      {fullyBooked ? (
+        <p className={styles.error} role="status">
+          <strong>FULLY BOOKED</strong>
+          <br />
+          {getFullyBookedMessage(units.totalUnits)
+            .split("\n")
+            .map((line) => (
+              <span key={line}>
+                {line}
+                <br />
+              </span>
+            ))}
         </p>
       ) : (
         <p className={styles.hint}>
-          No payment required to request a reservation — we&apos;ll confirm
-          availability and next steps with you directly.
+          You&apos;ll choose your dates, provide your details, and sign a rental agreement
+          before your request is submitted for review.
         </p>
       )}
     </div>

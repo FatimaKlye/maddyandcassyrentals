@@ -2,19 +2,12 @@ import styles from "./QuickEstimate.module.css";
 
 interface QuickEstimateProps {
   pricePerDay: number;
-  depositAmount: number;
   currency: string;
   days: number;
 }
 
-export default function QuickEstimate({
-  pricePerDay,
-  depositAmount,
-  currency,
-  days,
-}: QuickEstimateProps) {
-  const subtotal = pricePerDay * days;
-  const total = subtotal + depositAmount;
+export default function QuickEstimate({ pricePerDay, currency, days }: QuickEstimateProps) {
+  const estimatedRentalAmount = pricePerDay * days;
 
   return (
     <div className={styles.wrapper}>
@@ -27,21 +20,14 @@ export default function QuickEstimate({
           </dt>
           <dd>
             {currency}
-            {subtotal.toLocaleString()}
-          </dd>
-        </div>
-        <div className={styles.row}>
-          <dt>Refundable deposit</dt>
-          <dd>
-            {currency}
-            {depositAmount.toLocaleString()}
+            {estimatedRentalAmount.toLocaleString()}
           </dd>
         </div>
         <div className={`${styles.row} ${styles.totalRow}`}>
-          <dt>Total amount</dt>
+          <dt>Estimated rental amount</dt>
           <dd>
             {currency}
-            {total.toLocaleString()}
+            {estimatedRentalAmount.toLocaleString()}
           </dd>
         </div>
       </dl>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { products } from "@/data/products";
+import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
 import CatalogFilters, {
   type CategoryFilter,
@@ -12,19 +12,23 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useInventoryMap } from "@/hooks/useInventory";
 import styles from "./catalog.module.css";
 
-const DEFAULTS_BY_PRODUCT_ID: Record<string, UnitCounts> = Object.fromEntries(
-  products.map((product) => [
-    product.id,
-    {
-      totalUnits: product.totalUnits,
-      availableUnits: product.availableUnits,
-      reservedUnits: product.reservedUnits,
-      rentedUnits: product.rentedUnits,
-    },
-  ])
-);
+interface CatalogViewProps {
+  products: Product[];
+}
 
-export default function CatalogView() {
+export default function CatalogView({ products }: CatalogViewProps) {
+  const DEFAULTS_BY_PRODUCT_ID: Record<string, UnitCounts> = Object.fromEntries(
+    products.map((product) => [
+      product.id,
+      {
+        totalUnits: product.totalUnits,
+        availableUnits: product.availableUnits,
+        reservedUnits: product.reservedUnits,
+        rentedUnits: product.rentedUnits,
+      },
+    ])
+  );
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("All");
   const [sort, setSort] = useState<SortOption>("featured");
@@ -56,7 +60,7 @@ export default function CatalogView() {
     }
 
     return sorted;
-  }, [search, category, sort, availableOnly, unitsByProductId]);
+  }, [products, search, category, sort, availableOnly, unitsByProductId]);
 
   return (
     <section className={styles.catalog}>

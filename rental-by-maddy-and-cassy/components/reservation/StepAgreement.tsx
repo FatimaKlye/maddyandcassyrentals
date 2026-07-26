@@ -1,0 +1,117 @@
+"use client";
+
+import type { AgreementDraft } from "@/src/types/reservationDraft";
+import AgreementDocument, { type AgreementDocumentData } from "./AgreementDocument";
+import SignaturePad from "@/components/signature-pad/SignaturePad";
+import formStyles from "@/components/ui/Form.module.css";
+import styles from "./StepShared.module.css";
+
+interface StepAgreementProps {
+  agreementData: AgreementDocumentData;
+  agreement: AgreementDraft;
+  onUpdate: (patch: Partial<AgreementDraft>) => void;
+  onBack: () => void;
+  onContinue: () => void;
+}
+
+const CONFIRMATIONS: Array<{ key: keyof AgreementDraft; label: string }> = [
+  {
+    key: "infoAccurate",
+    label: "I confirm that the information and documents I submitted are accurate.",
+  },
+  {
+    key: "agreedToTerms",
+    label: "I have read and agree to the Rental Terms and Conditions.",
+  },
+  {
+    key: "understoodRentalRules",
+    label:
+      "I understand the rules regarding the rental period, item care, late returns, damage, loss, and missing accessories.",
+  },
+  {
+    key: "authorizedESignature",
+    label: "I authorize the use of my electronic signature for this Rental Agreement.",
+  },
+  {
+    key: "readPrivacyNotice",
+    label: "I have read and understood the Privacy Notice.",
+  },
+];
+
+export default function StepAgreement({
+  agreementData,
+  agreement,
+  onUpdate,
+  onBack,
+  onContinue,
+}: StepAgreementProps) {
+  const allChecked = CONFIRMATIONS.every((item) => Boolean(agreement[item.key]));
+  const hasSignature =
+    agreement.signatureMethod === "drawn"
+      ? !!agreement.signatureDataUrl
+      : !!agreement.signatureDataUrl;
+  const canContinue = allChecked && hasSignature && agreement.typedFullName.trim().length > 1;
+
+  return (
+    <div className={styles.wrapper}>
+      <h2 className={styles.heading}>Rental Agreement &amp; Terms</h2>
+      <p className={styles.subheading}>
+        Please review the agreement below carefully before signing.
+      </p>
+
+      <AgreementDocument data={agreementData} />
+
+      <div className={styles.confirmationsList}>
+        {CONFIRMATIONS.map((item) => (
+          <label key={item.key} className={formStyles.checkboxField}>
+            <input
+              type="checkbox"
+              checked={Boolean(agreement[item.key])}
+              onChange={(event) => onUpdate({ [item.key]: event.target.checked } as Partial<AgreementDraft>)}
+            />
+            {item.label}
+          </label>
+        ))}
+      </div>
+
+      <h3 className={styles.sectionHeading}>Electronic Signature</h3>
+
+      <SignaturePad
+        method={agreement.signatureMethod}
+        signatureDataUrl={agreement.signatureDataUrl}
+        onMethodChange={(signatureMethod) => onUpdate({ signatureMethod })}
+        onSignatureChange={(signatureDataUrl) => onUpdate({ signatureDataUrl })}
+      />
+
+      <div className={formStyles.field}>
+        <label className={formStyles.label} htmlFor="typedFullName">
+          Type your full name to sign<span className={formStyles.required}>*</span>
+        </label>
+        <input
+          id="typedFullName"
+          className={formStyles.input}
+          value={agreement.typedFullName}
+          onChange={(event) => onUpdate({ typedFullName: event.target.value })}
+          placeholder="Your full legal name"
+        />
+        <p className={formStyles.helpText}>
+          Signed on {new Date().toLocaleString()} — this timestamp is recorded at submission.
+        </p>
+      </div>
+
+      <div className={styles.footer}>
+        <button type="button" className={formStyles.secondaryButton} onClick={onBack}>
+          Back
+        </button>
+        <button
+          type="button"
+          className={formStyles.primaryButton}
+          disabled={!canContinue}
+          onClick={onContinue}
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}

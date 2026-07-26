@@ -1,8 +1,12 @@
+import type { Product } from "@/types/product";
 import ProductCard from "@/components/product-card/ProductCard";
-import { products } from "@/data/products";
 import styles from "./ProductShowcase.module.css";
 
-export default function ProductShowcase() {
+interface ProductShowcaseProps {
+  products: Product[];
+}
+
+export default function ProductShowcase({ products }: ProductShowcaseProps) {
   const [firstProduct, secondProduct] = products;
 
   return (

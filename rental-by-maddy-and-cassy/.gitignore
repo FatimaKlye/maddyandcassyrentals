@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# firebase admin credentials — never commit service-account keys or emulator data
+serviceAccountKey.json
+*serviceAccountKey*.json
+*service-account*.json
+firebase-adminsdk-*.json
+.emulator-data/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+storage-debug.log

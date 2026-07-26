@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
@@ -10,6 +11,8 @@ import AvailabilityBadge from "@/components/availability-badge/AvailabilityBadge
 import ImageGallery from "@/components/image-gallery/ImageGallery";
 import ProductTabs from "@/components/product-tabs/ProductTabs";
 import SimilarProducts from "@/components/similar-products/SimilarProducts";
+import RentalDurationSelector from "@/components/rental-duration-selector/RentalDurationSelector";
+import QuickEstimate from "@/components/quick-estimate/QuickEstimate";
 import { useInventoryMap } from "@/hooks/useInventory";
 import styles from "./details.module.css";
 
@@ -22,6 +25,8 @@ export default function ProductDetailsClient({
   product,
   similarProducts,
 }: ProductDetailsClientProps) {
+  const [estimateDays, setEstimateDays] = useState(1);
+
   const defaultsById: Record<string, UnitCounts> = {
     [product.id]: {
       totalUnits: product.totalUnits,
@@ -83,13 +88,6 @@ export default function ProductDetailsClient({
               </p>
             </div>
             <div className={styles.infoCard}>
-              <p className={styles.infoCardLabel}>Refundable Deposit</p>
-              <p className={styles.infoCardValue}>
-                {product.currency}
-                {product.depositAmount.toLocaleString()}
-              </p>
-            </div>
-            <div className={styles.infoCard}>
               <p className={styles.infoCardLabel}>Availability Status</p>
               <AvailabilityBadge
                 totalUnits={units.totalUnits}
@@ -105,6 +103,16 @@ export default function ProductDetailsClient({
 
           <div className={styles.reserveCard}>
             <h2 className={styles.reserveHeading}>Ready to rent this?</h2>
+            <RentalDurationSelector days={estimateDays} onChange={setEstimateDays} />
+            <QuickEstimate
+              pricePerDay={product.pricePerDay}
+              currency={product.currency}
+              days={estimateDays}
+            />
+            <p className={styles.estimateNote}>
+              This is a non-binding estimate. You&apos;ll choose your exact rental dates in the
+              next step.
+            </p>
             <ReserveAction product={product} units={units} />
           </div>
         </div>

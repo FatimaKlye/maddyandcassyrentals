@@ -27,7 +27,12 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 export async function updateUserProfile(
   uid: string,
-  updates: Partial<Pick<UserProfile, "displayName" | "phoneNumber" | "photoURL">>
+  updates: Partial<
+    Pick<
+      UserProfile,
+      "displayName" | "phoneNumber" | "photoURL" | "fullAddress" | "facebookLink" | "instagramLink"
+    >
+  >
 ): Promise<void> {
   await updateDoc(doc(db, USERS_COLLECTION, uid), {
     ...updates,

@@ -1,25 +1,23 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/navbar/Navbar";
-import { getProductById, products } from "@/data/products";
+import { getActiveProducts, getProductById } from "@/src/services/productService";
 import ProductDetailsClient from "./ProductDetailsClient";
 import styles from "./details.module.css";
 
+export const revalidate = 60;
+
 interface ProductDetailsPageProps {
   params: Promise<{ id: string }>;
-}
-
-export function generateStaticParams() {
-  return products.map((product) => ({ id: product.id }));
 }
 
 export async function generateMetadata({
   params,
 }: ProductDetailsPageProps): Promise<Metadata> {
   const { id } = await params;
-  const product = getProductById(id);
+  const product = await getProductById(id);
 
-  if (!product) {
+  if (!product || !product.isActive) {
     return { title: "Product Not Found | Rental by Maddy & Cassy" };
   }
 
@@ -31,13 +29,14 @@ export async function generateMetadata({
 
 export default async function ProductDetailsPage({ params }: ProductDetailsPageProps) {
   const { id } = await params;
-  const product = getProductById(id);
+  const product = await getProductById(id);
 
-  if (!product) {
+  if (!product || !product.isActive) {
     notFound();
   }
 
-  const similarProducts = products.filter(
+  const allProducts = await getActiveProducts();
+  const similarProducts = allProducts.filter(
     (item) => item.category === product.category && item.id !== product.id
   );
 

@@ -80,6 +80,10 @@
   font-weight: 500;
   transition: color 0.2s ease;
   white-space: nowrap;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
 }
 
 .signIn:hover {

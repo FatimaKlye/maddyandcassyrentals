@@ -3,112 +3,364 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // =========================================================
+    // Shared authorization functions
+    // =========================================================
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
 
-    function isAdmin() {
-      return isSignedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    function isActiveAdmin() {
+      return isSignedIn()
+        && exists(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.active == true;
     }
 
-    // ---- users ----
+    function ownsBooking(bookingId) {
+      return isSignedIn()
+        && exists(
+          /databases/$(database)/documents/bookings/$(bookingId)
+        )
+        && get(
+          /databases/$(database)/documents/bookings/$(bookingId)
+        ).data.userId == request.auth.uid;
+    }
+
+    // =========================================================
+    // Administrator accounts
+    // =========================================================
+
+    match /admins/{uid} {
+      allow read: if isOwner(uid) || isActiveAdmin();
+
+      // Admin records must be created through the Admin SDK
+      // or another trusted server-only operation.
+      allow create, update, delete: if false;
+    }
+
+    // =========================================================
+    // Customer accounts
+    // =========================================================
+
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) &&
-        request.resource.data.role == 'customer';
-      allow update: if (isOwner(userId) &&
-          request.resource.data.role == resource.data.role) ||
-        isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isOwner(userId) || isActiveAdmin();
+
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'customer'
+        && request.resource.data.accountStatus == 'active';
+
+      allow update: if isActiveAdmin()
+        || (
+          isOwner(userId)
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.accountStatus
+            == resource.data.accountStatus
+        );
+
+      allow delete: if isActiveAdmin();
+
+      // ---------------------------------------------------------
+      // Customer notifications
+      // ---------------------------------------------------------
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId) || isActiveAdmin();
+
+        // Notifications are created by trusted server operations
+        // or authorized administrators.
+        allow create: if isActiveAdmin();
+
+        // Customers may only mark their own notifications as read.
+        allow update: if isActiveAdmin()
+          || (
+            isOwner(userId)
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'isRead',
+                'readAt'
+              ])
+          );
+
+        allow delete: if isActiveAdmin();
+      }
     }
 
-    // ---- products ----
+    // =========================================================
+    // Product catalog
+    // =========================================================
+
     match /products/{productId} {
-      allow read: if resource.data.isActive == true || isAdmin();
-      allow write: if isAdmin();
+      allow read: if resource.data.isActive == true
+        || isActiveAdmin();
+
+      allow create, update, delete: if isActiveAdmin();
     }
 
-    // ---- bookings ----
-    // Reservation requests are anonymous for now (no auth UI exists yet),
-    // so creation only validates shape rather than requiring a signed-in owner.
-    match /bookings/{bookingId} {
-      allow read: if isAdmin() ||
-        (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if request.resource.data.status == 'pending' &&
-        request.resource.data.productId is string &&
-        request.resource.data.days is int &&
-        request.resource.data.totalPrice is number;
-      allow update: if isAdmin() ||
-        (isSignedIn() && resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == resource.data.userId);
-      allow delete: if isAdmin();
-    }
+    // =========================================================
+    // Public inventory totals
+    // =========================================================
 
-    // ---- inventory ----
-    // Per-product real-time unit counts. Publicly readable so the catalog and
-    // product pages can show live availability without requiring sign-in.
+    /*
+     * This collection may contain public totals such as:
+     *
+     * totalUnits
+     * availableUnits
+     * reservedUnits
+     * rentedUnits
+     * bookedDateCounts
+     *
+     * It must not contain customer names, user IDs,
+     * contact information, or private booking documents.
+     */
+
     match /inventory/{productId} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasOnly(
-        ['totalUnits', 'availableUnits', 'reservedUnits', 'rentedUnits', 'updatedAt']
-      );
-      allow update: if request.resource.data.totalUnits == resource.data.totalUnits &&
-        request.resource.data.availableUnits +
-          request.resource.data.reservedUnits +
-          request.resource.data.rentedUnits == resource.data.totalUnits;
-      allow delete: if isAdmin();
+
+      // Only administrators may modify public inventory totals
+      // through the Firebase client SDK.
+      //
+      // Trusted Firebase Admin SDK routes bypass these rules.
+      allow create, update, delete: if isActiveAdmin();
     }
 
-    // ---- payments ----
-    match /payments/{paymentId} {
-      allow read: if isSignedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() &&
-        request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+    // =========================================================
+    // Physical inventory units and availability calendars
+    // =========================================================
+
+    match /inventoryUnits/{unitId} {
+      /*
+       * Signed-in customers may read unit information only for
+       * availability checking.
+       *
+       * These documents must not contain customer-sensitive data.
+       */
+      allow read: if isSignedIn() || isActiveAdmin();
+
+      // Customers must never directly modify physical units.
+      allow create, update, delete: if isActiveAdmin();
+
+      match /calendar/{dateKey} {
+        /*
+         * Explicit nested rule required for calendar documents.
+         *
+         * This allows signed-in users to check whether a date
+         * document exists. It also allows reading a missing
+         * document without trying to access resource.data.
+         */
+        allow read: if isSignedIn() || isActiveAdmin();
+
+        /*
+         * Customers cannot create, change, or delete calendar
+         * locks directly.
+         *
+         * The secure Next.js booking Route Handler must perform
+         * calendar locking through the Firebase Admin SDK.
+         */
+        allow create, update, delete: if isActiveAdmin();
+      }
     }
 
-    // ---- reviews ----
+    // =========================================================
+    // Booking requests
+    // =========================================================
+
+    match /bookings/{bookingId} {
+      allow read: if isActiveAdmin()
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      /*
+       * New bookings must be created by the secure Next.js
+       * Route Handler using the Firebase Admin SDK.
+       *
+       * This prevents customers from creating bookings without
+       * atomic availability checking and calendar locking.
+       */
+      allow create: if isActiveAdmin();
+
+      /*
+       * Customers may only resubmit limited booking corrections.
+       * Administrators may perform full booking updates.
+       */
+      allow update: if isActiveAdmin()
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && resource.data.status == 'correction_required'
+          && request.resource.data.status == 'submitted'
+          && request.resource.data.productId
+            == resource.data.productId
+          && request.resource.data.startDate
+            == resource.data.startDate
+          && request.resource.data.endDate
+            == resource.data.endDate
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'status',
+              'customerLocation',
+              'fulfillmentMethod',
+              'customerNotes',
+              'updatedAt',
+              'resubmittedAt'
+            ])
+        );
+
+      allow delete: if isActiveAdmin();
+
+      // ---------------------------------------------------------
+      // Rental requirements
+      // ---------------------------------------------------------
+
+      match /requirements/main {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+
+        allow create: if ownsBooking(bookingId)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'submitted';
+
+        allow update: if isActiveAdmin()
+          || (
+            ownsBooking(bookingId)
+            && resource.data.userId == request.auth.uid
+            && request.resource.data.userId
+              == resource.data.userId
+            && resource.data.status
+              == 'correction_required'
+            && request.resource.data.status == 'submitted'
+          );
+
+        allow delete: if isActiveAdmin();
+      }
+
+      // ---------------------------------------------------------
+      // Rental agreement and signatures
+      // ---------------------------------------------------------
+
+      match /agreement/main {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+
+        allow create: if ownsBooking(bookingId)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.status
+            == 'submitted_for_review';
+
+        allow update: if isActiveAdmin()
+          || (
+            ownsBooking(bookingId)
+            && resource.data.userId == request.auth.uid
+            && request.resource.data.userId
+              == resource.data.userId
+            && resource.data.status in [
+              'awaiting_customer_signature',
+              'correction_required'
+            ]
+            && request.resource.data.status
+              == 'submitted_for_review'
+            && request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'customerSignaturePath',
+                'customerTypedName',
+                'customerSignedAt',
+                'status',
+                'updatedAt'
+              ])
+          );
+
+        allow delete: if isActiveAdmin();
+      }
+
+      // ---------------------------------------------------------
+      // Booking status history
+      // ---------------------------------------------------------
+
+      match /statusHistory/{historyId} {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+
+        /*
+         * Status history is written only by administrators or
+         * trusted Firebase Admin SDK server operations.
+         */
+        allow create, update, delete: if isActiveAdmin();
+      }
+
+      // ---------------------------------------------------------
+      // Final customer documents
+      // ---------------------------------------------------------
+
+      match /documents/{documentId} {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+
+        /*
+         * Final Rental Agreements, Booking Confirmations, and
+         * pickup or delivery instructions are published by an
+         * administrator or trusted server operation.
+         */
+        allow create, update, delete: if isActiveAdmin();
+      }
+    }
+
+    // =========================================================
+    // Customer reviews
+    // =========================================================
+
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isSignedIn() &&
-        request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() ||
-        (isSignedIn() && resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == resource.data.userId);
-      allow delete: if isAdmin() ||
-        (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow read: if resource.data.status == 'approved'
+        || isActiveAdmin()
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && exists(
+          /databases/$(database)/documents/bookings/$(request.resource.data.bookingId)
+        )
+        && get(
+          /databases/$(database)/documents/bookings/$(request.resource.data.bookingId)
+        ).data.userId == request.auth.uid
+        && get(
+          /databases/$(database)/documents/bookings/$(request.resource.data.bookingId)
+        ).data.status == 'completed'
+        && get(
+          /databases/$(database)/documents/bookings/$(request.resource.data.bookingId)
+        ).data.productId
+          == request.resource.data.productId;
+
+      allow update, delete: if isActiveAdmin();
     }
 
-    // ---- customerDocuments ----
-    match /customerDocuments/{documentId} {
-      allow read: if isSignedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() &&
-        request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
-    }
+    // =========================================================
+    // Public website content
+    // =========================================================
 
-    // ---- notifications ----
-    match /notifications/{notificationId} {
-      allow read: if isSignedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin() ||
-        (isSignedIn() && resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == resource.data.userId);
-      allow create, delete: if isAdmin();
-    }
+    match /websiteContent/{contentId} {
+      allow read: if resource.data.isPublished == true
+        || isActiveAdmin();
 
-    // ---- settings ----
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow create, update, delete: if isActiveAdmin();
     }
   }
 }

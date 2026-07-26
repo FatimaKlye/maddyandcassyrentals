@@ -1,0 +1,103 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-light-gray);
+  background: var(--color-white);
+  color: var(--color-charcoal);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.tab:hover {
+  border-color: var(--color-dusty-rose);
+}
+
+.tabActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+.canvasWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.canvas {
+  width: 100%;
+  height: 180px;
+  border: 1.5px dashed var(--color-light-gray);
+  border-radius: 14px;
+  background: var(--color-white);
+  touch-action: none;
+}
+
+.clearButton {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clearButton:hover {
+  text-decoration: underline;
+}
+
+.uploadWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.uploadDropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 140px;
+  border: 1.5px dashed var(--color-light-gray);
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-align: center;
+  padding: 1rem;
+}
+
+.uploadDropzone:hover {
+  border-color: var(--color-dusty-rose);
+  background: var(--color-blush);
+}
+
+.uploadPreview img {
+  max-height: 140px;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 14px;
+  padding: 0.5rem;
+  background: var(--color-white);
+}
