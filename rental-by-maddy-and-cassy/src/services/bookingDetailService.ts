@@ -1,5 +1,14 @@
-import { doc, getDoc, getDocs, collection, updateDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
-import { ref, uploadBytes } from "firebase/storage";
+import {
+  doc,
+  getDoc,
+  getDocs,
+  collection,
+  serverTimestamp,
+  query,
+  orderBy,
+  writeBatch,
+} from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/src/lib/firebase/config";
 import type { Booking, RequirementsDoc, AgreementDoc, StatusHistoryEntry, BookingDocument } from "@/src/types/booking";
 
@@ -19,7 +28,7 @@ export async function getBookingDetails(bookingId: string): Promise<BookingDetai
     await Promise.all([
       getDoc(doc(db, "bookings", bookingId, "requirements", "main")),
       getDoc(doc(db, "bookings", bookingId, "agreement", "main")),
-      getDocs(query(collection(db, "bookings", bookingId, "statusHistory"), orderBy("changedAt", "asc"))),
+      getDocs(query(collection(db, "bookings", bookingId, "statusHistory"), orderBy("createdAt", "asc"))),
       getDocs(collection(db, "bookings", bookingId, "documents")),
     ]);
 
@@ -40,35 +49,56 @@ export async function getBookingDetails(bookingId: string): Promise<BookingDetai
   };
 }
 
+export async function getBookingFileUrl(storagePath: string): Promise<string> {
+  return getDownloadURL(ref(storage, storagePath));
+}
+
 /**
  * Resubmits a booking after the customer has addressed a correction request.
  * Only valid while the booking's status is "correction_required" — enforced
  * by firestore.rules, which also pins every other field to its prior value.
  */
-export async function resubmitBooking(bookingId: string): Promise<void> {
-  await updateDoc(doc(db, "bookings", bookingId), {
-    status: "submitted",
-    updatedAt: serverTimestamp(),
-  });
-}
-
 type RequirementFileField =
   | "idOneStoragePath"
   | "idTwoStoragePath"
   | "selfieWithIdStoragePath";
 
-export async function replaceRequirementFile(
+export async function resubmitBookingCorrections(
   userId: string,
   bookingId: string,
-  field: RequirementFileField,
-  file: File
+  replacementFiles: Partial<Record<RequirementFileField, File>>,
 ): Promise<void> {
-  const extension = file.name.split(".").pop() ?? "jpg";
-  const path = `private/users/${userId}/bookings/${bookingId}/requirements/${field}-${Date.now()}.${extension}`;
-  await uploadBytes(ref(storage, path), file);
-
-  await updateDoc(doc(db, "bookings", bookingId, "requirements", "main"), {
-    [field]: path,
+  const requirementUpdates: Record<string, unknown> = {
+    status: "submitted",
     updatedAt: serverTimestamp(),
+  };
+
+  for (const [field, file] of Object.entries(replacementFiles)) {
+    if (!file) continue;
+    const extension = file.name.split(".").pop() ?? "jpg";
+    const path = `private/users/${userId}/bookings/${bookingId}/requirements/${field}-${Date.now()}.${extension}`;
+    await uploadBytes(ref(storage, path), file);
+    requirementUpdates[field] = path;
+  }
+
+  const bookingRef = doc(db, "bookings", bookingId);
+  const requirementsRef = doc(db, "bookings", bookingId, "requirements", "main");
+  const agreementRef = doc(db, "bookings", bookingId, "agreement", "main");
+  const agreementSnapshot = await getDoc(agreementRef);
+  const batch = writeBatch(db);
+
+  batch.update(requirementsRef, requirementUpdates);
+  if (agreementSnapshot.exists()) {
+    batch.update(agreementRef, {
+      status: "submitted_for_review",
+      updatedAt: serverTimestamp(),
+    });
+  }
+  batch.update(bookingRef, {
+    status: "submitted",
+    updatedAt: serverTimestamp(),
+    resubmittedAt: serverTimestamp(),
   });
+
+  await batch.commit();
 }

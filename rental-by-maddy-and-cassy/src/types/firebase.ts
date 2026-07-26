@@ -6,6 +6,7 @@ export type {
   BookingStatus,
   FulfillmentMethod,
   BookingProductSnapshot,
+  BookingCustomerSnapshot,
   RequirementsStatus,
   AgreementStatus,
   RequirementsDoc,

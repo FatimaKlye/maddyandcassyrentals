@@ -104,6 +104,19 @@
   font-size: 0.8rem;
 }
 
+.panelHeader > a,
+.table td > a {
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.panelHeader > a:hover,
+.table td > a:hover {
+  text-decoration: underline;
+}
+
 .tableWrapper {
   overflow-x: auto;
 }

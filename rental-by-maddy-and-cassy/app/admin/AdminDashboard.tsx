@@ -99,7 +99,7 @@ export default function AdminDashboard() {
             <article className={styles.metricCard}>
               <span>Active Bookings</span>
               <strong>{activeBookings}</strong>
-              <small>Currently open requests and rentals</small>
+              <Link href="/admin/bookings">Manage open bookings</Link>
             </article>
             <article className={styles.metricCard}>
               <span>Catalog Products</span>
@@ -119,6 +119,7 @@ export default function AdminDashboard() {
                 <h2 id="recent-bookings-heading">Recent Booking Activity</h2>
                 <p>Latest booking requests across all customer accounts.</p>
               </div>
+              <Link href="/admin/bookings">View all bookings</Link>
             </div>
 
             {recentBookings.length ? (
@@ -136,7 +137,11 @@ export default function AdminDashboard() {
                   <tbody>
                     {recentBookings.map((booking) => (
                       <tr key={booking.id}>
-                        <td>{booking.bookingRef}</td>
+                        <td>
+                          <Link href={`/admin/bookings/${booking.id}`}>
+                            {booking.bookingRef}
+                          </Link>
+                        </td>
                         <td>{usersById.get(booking.userId)?.displayName ?? "Customer"}</td>
                         <td>{booking.productSnapshot.name}</td>
                         <td>

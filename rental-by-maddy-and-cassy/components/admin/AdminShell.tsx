@@ -10,6 +10,7 @@ import styles from "./AdminShell.module.css";
 
 const adminLinks = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/users", label: "User Accounts" },
   { href: "/admin/profile", label: "Admin Profile" },
 ];

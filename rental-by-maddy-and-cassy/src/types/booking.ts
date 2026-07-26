@@ -24,6 +24,15 @@ export interface BookingProductSnapshot {
   included: string[];
 }
 
+export interface BookingCustomerSnapshot {
+  fullName: string;
+  email: string;
+  phone: string;
+  address: string;
+  facebookLink: string;
+  instagramLink: string;
+}
+
 export type RequirementsStatus =
   | "not_submitted"
   | "submitted"
@@ -44,6 +53,7 @@ export interface Booking {
   bookingRef: string;
   userId: string;
   productId: string;
+  customerSnapshot?: BookingCustomerSnapshot;
   // The specific physical unit locked for this booking's date range, set
   // once the reservation transaction succeeds — see
   // src/services/reservationService.ts. Null until assigned.
@@ -143,10 +153,12 @@ export interface AgreementDoc {
 
 export interface StatusHistoryEntry {
   id: string;
-  status: BookingStatus;
-  changedAt: Timestamp;
+  previousStatus: BookingStatus | null;
+  newStatus: BookingStatus;
   changedBy: "customer" | "admin" | "system";
-  note?: string;
+  changedByUserId?: string;
+  message?: string;
+  createdAt: Timestamp;
 }
 
 export type BookingDocumentType =

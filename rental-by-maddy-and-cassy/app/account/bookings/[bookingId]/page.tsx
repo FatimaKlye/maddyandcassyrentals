@@ -5,8 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getBookingDetails,
-  replaceRequirementFile,
-  resubmitBooking,
+  resubmitBookingCorrections,
   type BookingDetails,
 } from "@/src/services/bookingDetailService";
 import BookingSummaryCard from "@/components/booking-summary/BookingSummaryCard";
@@ -87,17 +86,7 @@ function BookingDetailContent() {
   async function handleResubmit() {
     setResubmitting(true);
     try {
-      for (const [field, file] of Object.entries(replacementFiles)) {
-        if (file) {
-          await replaceRequirementFile(
-            uid,
-            booking.id,
-            field as "idOneStoragePath" | "idTwoStoragePath" | "selfieWithIdStoragePath",
-            file
-          );
-        }
-      }
-      await resubmitBooking(booking.id);
+      await resubmitBookingCorrections(uid, booking.id, replacementFiles);
       await loadDetails();
       setReplacementFiles({});
     } finally {

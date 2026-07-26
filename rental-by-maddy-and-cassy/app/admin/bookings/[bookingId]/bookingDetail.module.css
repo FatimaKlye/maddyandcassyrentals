@@ -1,0 +1,482 @@
+.page {
+  display: flex;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.backLink {
+  width: fit-content;
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--color-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  letter-spacing: -0.03em;
+}
+
+.header p:not(.eyebrow) {
+  margin: 0.4rem 0 0;
+  color: var(--color-charcoal);
+  font-size: 0.9rem;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.exportButton,
+.applyButton,
+.signatureButton {
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--color-primary);
+  border-radius: 11px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exportButton {
+  background: var(--color-white);
+  color: var(--color-primary);
+}
+
+.exportButton:disabled,
+.applyButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.actionPanel,
+.section,
+.statusGrid article {
+  border: 1px solid var(--color-light-gray);
+  border-radius: 18px;
+  background: var(--color-white);
+  box-shadow: 0 10px 28px rgba(36, 36, 36, 0.04);
+}
+
+.actionPanel {
+  display: grid;
+  padding: 1.25rem;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 1.3rem;
+}
+
+.actionPanel h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.actionPanel p {
+  margin: 0.35rem 0 0;
+  color: var(--color-charcoal);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.actionControls {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(260px, 1fr) auto;
+  align-items: end;
+  gap: 0.7rem;
+}
+
+.actionControls label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.actionControls label > span {
+  color: var(--color-charcoal);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.actionControls select,
+.actionControls textarea {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.actionControls select {
+  min-height: 42px;
+}
+
+.actionControls textarea {
+  resize: vertical;
+}
+
+.actionControls select:focus,
+.actionControls textarea:focus {
+  border-color: var(--color-dusty-rose);
+  box-shadow: 0 0 0 3px rgba(215, 165, 165, 0.2);
+}
+
+.dangerButton {
+  border-color: var(--color-status-red);
+  background: var(--color-status-red);
+}
+
+.terminalNotice {
+  align-self: center;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--color-background);
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.statusGrid article {
+  display: flex;
+  min-height: 105px;
+  padding: 1rem;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.statusGrid span {
+  color: var(--color-charcoal);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.statusGrid strong {
+  margin-top: 0.35rem;
+  color: var(--color-text-primary);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.section {
+  overflow: hidden;
+}
+
+.sectionHeader {
+  display: flex;
+  min-height: 68px;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--color-light-gray);
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sectionHeader > div {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.sectionHeader p {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--color-blush);
+  color: var(--color-primary);
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.sectionHeader a,
+.detailGrid a {
+  color: var(--color-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.sectionHeader a:hover,
+.detailGrid a:hover {
+  text-decoration: underline;
+}
+
+.detailGrid {
+  display: grid;
+  margin: 0;
+  padding: 1.15rem 1.2rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.detailGrid > div {
+  min-width: 0;
+  padding: 0.85rem;
+  border-radius: 12px;
+  background: var(--color-background);
+}
+
+.wideDetail {
+  grid-column: span 2;
+}
+
+.detailGrid dt {
+  margin-bottom: 0.3rem;
+  color: var(--color-charcoal);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.detailGrid dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.documents {
+  display: grid;
+  padding: 0 1.2rem 1.2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.documents button {
+  display: flex;
+  padding: 0.9rem;
+  border: 1px solid var(--color-dusty-rose);
+  border-radius: 12px;
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.documents button:hover {
+  background: var(--color-blush);
+}
+
+.documents span {
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.documents strong {
+  color: var(--color-primary);
+  font-size: 0.68rem;
+}
+
+.confirmationGrid {
+  display: grid;
+  padding: 0 1.2rem 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.confirmationGrid span {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-status-green-border);
+  border-radius: 10px;
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.signatureButton {
+  margin: 0 1.2rem 1.2rem;
+  width: fit-content;
+}
+
+.timeline {
+  margin: 0;
+  padding: 1.2rem;
+  list-style: none;
+}
+
+.timeline li {
+  display: grid;
+  position: relative;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 0.7rem;
+  padding-bottom: 1rem;
+}
+
+.timeline li:last-child {
+  padding-bottom: 0;
+}
+
+.timeline li::before {
+  position: absolute;
+  top: 12px;
+  bottom: -2px;
+  left: 5px;
+  width: 1px;
+  background: var(--color-dusty-rose);
+  content: "";
+}
+
+.timeline li:last-child::before {
+  display: none;
+}
+
+.timeline li > span {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid var(--color-white);
+  border-radius: 999px;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-dusty-rose);
+}
+
+.timeline strong {
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+}
+
+.timeline p {
+  margin: 0.25rem 0;
+  color: var(--color-charcoal);
+  font-size: 0.78rem;
+}
+
+.timeline small {
+  color: var(--color-charcoal);
+  font-size: 0.68rem;
+}
+
+.empty {
+  margin: 0;
+  padding: 1.5rem 1.2rem;
+  color: var(--color-charcoal);
+  font-size: 0.82rem;
+}
+
+.loading {
+  display: flex;
+  min-height: 65vh;
+  align-items: center;
+  justify-content: center;
+}
+
+.error {
+  padding: 1rem;
+  border: 1px solid var(--color-status-red-border);
+  border-radius: 12px;
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1050px) {
+  .actionPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .actionControls {
+    grid-template-columns: minmax(170px, 0.6fr) minmax(240px, 1fr);
+  }
+
+  .applyButton {
+    width: fit-content;
+  }
+
+  .statusGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .documents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .actionControls,
+  .detailGrid,
+  .confirmationGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .wideDetail {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .statusGrid,
+  .documents {
+    grid-template-columns: 1fr;
+  }
+
+  .headerActions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .exportButton {
+    width: 100%;
+  }
+}

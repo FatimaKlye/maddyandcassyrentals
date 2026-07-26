@@ -48,6 +48,14 @@ async function callSubmitBookingApi(input: {
   dayCount: number;
   fulfillmentMethod: string;
   customerLocation: string;
+  customerSnapshot: {
+    fullName: string;
+    email: string;
+    phone: string;
+    address: string;
+    facebookLink: string;
+    instagramLink: string;
+  };
 }): Promise<{ bookingId: string; bookingNumber: string }> {
   if (!auth.currentUser) {
     throw new Error("You must be signed in to submit a booking.");
@@ -139,6 +147,14 @@ export async function submitBooking(
     dayCount,
     fulfillmentMethod: draft.fulfillmentMethod,
     customerLocation: draft.customerLocation,
+    customerSnapshot: {
+      fullName: customerInfo.fullName.trim(),
+      email: customerInfo.email.trim(),
+      phone: customerInfo.phone.trim(),
+      address: customerInfo.address.trim(),
+      facebookLink: customerInfo.facebookLink.trim(),
+      instagramLink: customerInfo.instagramLink.trim(),
+    },
   });
 
   const requirementsPath = `private/users/${userId}/bookings/${bookingId}/requirements`;
@@ -154,6 +170,12 @@ export async function submitBooking(
   ]);
 
   const batch = writeBatch(db);
+
+  batch.update(doc(db, "bookings", bookingId), {
+    requirementsStatus: "submitted",
+    agreementStatus: "submitted_for_review",
+    updatedAt: serverTimestamp(),
+  });
 
   batch.set(doc(db, "bookings", bookingId, "requirements", "main"), {
     bookingId,

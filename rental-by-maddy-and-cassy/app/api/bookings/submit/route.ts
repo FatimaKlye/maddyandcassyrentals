@@ -21,6 +21,16 @@ type SubmitBookingBody = {
   dayCount?: unknown;
   fulfillmentMethod?: unknown;
   customerLocation?: unknown;
+  customerSnapshot?: unknown;
+};
+
+type CustomerSnapshot = {
+  fullName: string;
+  email: string;
+  phone: string;
+  address: string;
+  facebookLink: string;
+  instagramLink: string;
 };
 
 type BookingResult = {
@@ -208,6 +218,27 @@ function validateDayCount(
   return value;
 }
 
+function validateCustomerSnapshot(value: unknown): CustomerSnapshot {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new BookingApiError(
+      "invalid-request",
+      "Customer information is required.",
+      400,
+    );
+  }
+
+  const input = value as Record<string, unknown>;
+
+  return {
+    fullName: getRequiredString(input.fullName, "Full name", 150),
+    email: getRequiredString(input.email, "Email address", 254),
+    phone: getRequiredString(input.phone, "Phone number", 50),
+    address: getRequiredString(input.address, "Address", 500),
+    facebookLink: getRequiredString(input.facebookLink, "Facebook profile", 500),
+    instagramLink: getRequiredString(input.instagramLink, "Instagram profile", 500),
+  };
+}
+
 function generateBookingNumber(
   bookingId: string,
   startDateKey: string,
@@ -391,6 +422,21 @@ export async function POST(
       "Customer location",
       500,
     );
+
+    const customerSnapshot = validateCustomerSnapshot(
+      body.customerSnapshot,
+    );
+
+    if (
+      decodedToken.email &&
+      customerSnapshot.email.toLowerCase() !== decodedToken.email.toLowerCase()
+    ) {
+      throw new BookingApiError(
+        "invalid-request",
+        "The booking email must match the signed-in account.",
+        400,
+      );
+    }
 
     const result = await adminDb.runTransaction<BookingResult>(
       async (transaction) => {
@@ -590,6 +636,7 @@ export async function POST(
 
           userId: uid,
           productId,
+          customerSnapshot,
           productSnapshot,
           assignedUnitId: selectedUnit.id,
 

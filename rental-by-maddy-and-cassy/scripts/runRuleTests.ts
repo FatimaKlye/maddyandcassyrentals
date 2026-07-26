@@ -116,8 +116,8 @@ async function main() {
     );
   });
 
-  await check("Customer can create their own booking", async () => {
-    await assertSucceeds(
+  await check("Customer cannot bypass the secure booking API", async () => {
+    await assertFails(
       setDoc(doc(alice.firestore(), "bookings", "alice-new-booking"), {
         userId: "alice-uid",
         assignedUnitId: null,
