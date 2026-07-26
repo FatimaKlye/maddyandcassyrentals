@@ -42,7 +42,7 @@ export default function StepRentalDetails({
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingCalendar(true);
-    getFullyBookedDateKeys(product.id, units.totalUnits).then((keys) => {
+    getFullyBookedDateKeys(product.id).then((keys) => {
       if (!cancelled) {
         setDisabledDateKeys(keys);
         setLoadingCalendar(false);
@@ -83,7 +83,6 @@ export default function StepRentalDetails({
     setChecking(true);
     const stillAvailable = await isRangeAvailable(
       product.id,
-      units.totalUnits,
       draft.startDate,
       draft.endDate
     );
@@ -93,7 +92,7 @@ export default function StepRentalDetails({
       setError(
         "One or more of your selected dates were just booked by someone else. Please choose different dates."
       );
-      const keys = await getFullyBookedDateKeys(product.id, units.totalUnits);
+      const keys = await getFullyBookedDateKeys(product.id);
       setDisabledDateKeys(keys);
       onUpdate({ startDate: null, endDate: null });
       return;

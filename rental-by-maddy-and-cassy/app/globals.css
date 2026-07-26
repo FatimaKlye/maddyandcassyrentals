@@ -23,6 +23,13 @@
   --color-status-red-bg: rgba(242, 210, 207, 0.95);
   --color-status-red-border: rgba(154, 89, 101, 0.25);
 
+  --color-calendar-available: #2f7a4d;
+  --color-calendar-available-bg: rgba(47, 122, 77, 0.12);
+  --color-calendar-booked: #c0392b;
+  --color-calendar-booked-bg: rgba(192, 57, 43, 0.12);
+  --color-calendar-selected: #145a32;
+  --color-calendar-selected-hover: #0e4527;
+
   color-scheme: light;
 }
 
