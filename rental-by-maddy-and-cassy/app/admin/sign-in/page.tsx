@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Navbar from "@/components/navbar/Navbar";
-import SignInForm from "./SignInForm";
-import styles from "../auth.module.css";
+import AdminSignInForm from "./AdminSignInForm";
+import styles from "../../(auth)/auth.module.css";
 
 export const metadata: Metadata = {
-  title: "Customer Sign In | Rental by Maddy & Cassy",
-  description: "Customer sign in for rental reservations and booking updates.",
+  title: "Admin Login | Rental by Maddy & Cassy",
+  description: "Secure administrator access for rental operations.",
 };
 
-export default function SignInPage() {
+export default function AdminSignInPage() {
   return (
     <div>
       <Navbar />
       <main className={styles.main}>
         <Suspense fallback={null}>
-          <SignInForm />
+          <AdminSignInForm />
         </Suspense>
       </main>
     </div>

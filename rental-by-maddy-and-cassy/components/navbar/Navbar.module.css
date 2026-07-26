@@ -73,7 +73,8 @@
   flex-shrink: 0;
 }
 
-.signIn {
+.accountLink,
+.textButton {
   color: var(--color-charcoal);
   text-decoration: none;
   font-size: 0.9rem;
@@ -86,41 +87,122 @@
   padding: 0;
 }
 
-.signIn:hover {
+.accountLink:hover,
+.textButton:hover {
   color: var(--color-primary);
 }
 
-.cta {
+.adminLink {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
-  padding: 0.6rem 1.2rem;
+  padding: 0.55rem 1rem;
   border-radius: 999px;
-  background: var(--color-primary);
-  color: var(--color-white);
+  border: 1px solid var(--color-dusty-rose);
+  background: var(--color-white);
+  color: var(--color-primary);
   font-size: 0.85rem;
   font-weight: 600;
   text-decoration: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
-.cta:hover {
-  background: var(--color-primary-hover);
-  box-shadow: 0 6px 20px rgba(154, 89, 101, 0.28);
-  transform: translateY(-1px);
+.adminLink:hover {
+  border-color: var(--color-primary);
+  background: var(--color-blush);
+}
+
+.menuButton,
+.mobileMenu {
+  display: none;
 }
 
 @media (max-width: 860px) {
-  .links {
+  .links,
+  .actions {
     display: none;
+  }
+
+  .menuButton {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--color-light-gray);
+    border-radius: 999px;
+    background: var(--color-white);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+  }
+
+  .menuButton span {
+    width: 16px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--color-text-primary);
+  }
+
+  .mobileMenu {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 1.5rem 1.25rem;
+    border-top: 1px solid var(--color-light-gray);
+    background: rgba(247, 247, 245, 0.98);
+  }
+
+  .mobileLinks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding-top: 0.8rem;
+  }
+
+  .mobileLink,
+  .mobileAccountLink,
+  .mobileTextButton {
+    padding: 0.7rem 0.75rem;
+    border: none;
+    background: none;
+    color: var(--color-charcoal);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .mobileActions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--color-light-gray);
+  }
+
+  .mobileAccountLink,
+  .mobileTextButton {
+    padding: 0;
+  }
+
+  .mobileAdminLink {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--color-dusty-rose);
+    border-radius: 999px;
+    background: var(--color-white);
+    color: var(--color-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
   }
 }
 
 @media (max-width: 560px) {
-  .signIn {
-    display: none;
-  }
-
   .brandName {
     font-size: 0.9rem;
   }
@@ -129,8 +211,8 @@
     padding: 0.85rem 1rem;
   }
 
-  .cta {
-    padding: 0.5rem 0.85rem;
-    font-size: 0.8rem;
+  .mobileMenu {
+    padding-right: 1rem;
+    padding-left: 1rem;
   }
 }

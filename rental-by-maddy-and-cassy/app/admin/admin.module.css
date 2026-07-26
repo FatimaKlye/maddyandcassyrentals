@@ -1,0 +1,86 @@
+.main {
+  min-height: calc(100vh - 67px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.25rem;
+}
+
+.card {
+  width: 100%;
+  max-width: 680px;
+  padding: 2.5rem;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 24px;
+  background: var(--color-white);
+  box-shadow: 0 14px 42px rgba(36, 36, 36, 0.06);
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.heading {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  letter-spacing: -0.02em;
+}
+
+.description {
+  margin: 0;
+  color: var(--color-charcoal);
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 1.75rem;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primaryAction {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.secondaryAction {
+  border: 1px solid var(--color-light-gray);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+}
+
+.primaryAction:hover {
+  background: var(--color-primary-hover);
+}
+
+.secondaryAction:hover {
+  border-color: var(--color-dusty-rose);
+  color: var(--color-primary);
+}
+
+@media (max-width: 560px) {
+  .card {
+    padding: 2rem 1.4rem;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}

@@ -19,7 +19,7 @@ import { getStorage, type Storage } from "firebase-admin/storage";
  *    FIREBASE_AUTH_EMULATOR_HOST / FIREBASE_STORAGE_EMULATOR_HOST are set —
  *    in that case no real credentials are required at all.
  */
-function createAdminApp(): App {
+export function getAdminApp(): App {
   if (getApps().length) return getApps()[0];
 
   const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -60,9 +60,20 @@ function createAdminApp(): App {
   return initializeApp({ projectId, storageBucket });
 }
 
-const adminApp: App = createAdminApp();
+/**
+ * Keep Admin SDK initialization lazy. Next.js imports route modules while
+ * collecting build metadata, when local service-account credentials may not
+ * be available. Credentials are required only when a server operation
+ * actually calls one of these accessors.
+ */
+export function getAdminAuth(): Auth {
+  return getAuth(getAdminApp());
+}
 
-export const adminAuth: Auth = getAuth(adminApp);
-export const adminDb: Firestore = getFirestore(adminApp);
-export const adminStorage: Storage = getStorage(adminApp);
-export { adminApp };
+export function getAdminDb(): Firestore {
+  return getFirestore(getAdminApp());
+}
+
+export function getAdminStorage(): Storage {
+  return getStorage(getAdminApp());
+}

@@ -31,11 +31,11 @@ export default async function Hero() {
 
           <div className={styles.buttons}>
             <Link href="/catalog" className={styles.primaryButton}>
-              Browse Rentals
-            </Link>
-            <a href="#contact" className={styles.secondaryButton}>
               <CalendarIcon size={18} />
               Check Availability
+            </Link>
+            <a href="#about" className={styles.secondaryButton}>
+              How Renting Works
             </a>
           </div>
 

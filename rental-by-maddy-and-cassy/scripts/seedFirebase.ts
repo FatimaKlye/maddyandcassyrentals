@@ -130,7 +130,8 @@ async function main() {
   // Imported lazily so this script can run even if GOOGLE_APPLICATION_CREDENTIALS
   // / emulator env vars are only set by loadEnvLocal() above, before the
   // Admin SDK reads them at module-init time.
-  const { adminDb } = await import("@/src/lib/firebase/admin");
+  const { getAdminDb } = await import("@/src/lib/firebase/admin");
+  const adminDb = getAdminDb();
   const { FieldValue } = await import("firebase-admin/firestore");
 
   const counts: SeedCounts = {

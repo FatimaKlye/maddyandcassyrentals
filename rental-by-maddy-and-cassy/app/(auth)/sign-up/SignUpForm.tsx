@@ -24,6 +24,13 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
+function getCustomerRedirect(value: string | null): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/admin")) {
+    return "/account/bookings";
+  }
+  return value;
+}
+
 export default function SignUpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,7 +43,7 @@ export default function SignUpForm() {
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-  const redirectTo = searchParams.get("redirect") || "/account/bookings";
+  const redirectTo = getCustomerRedirect(searchParams.get("redirect"));
 
   async function onSubmit(values: FormValues) {
     setFormError(null);

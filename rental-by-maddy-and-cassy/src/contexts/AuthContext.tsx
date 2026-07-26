@@ -3,12 +3,14 @@
 import { createContext, useEffect, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { subscribeToAuthChanges } from "@/src/services/authService";
+import { isActiveAdmin } from "@/src/services/adminService";
 import { getUserProfile } from "@/src/services/userService";
 import type { UserProfile } from "@/src/types/firebase";
 
 export interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
+  isAdmin: boolean;
   loading: boolean;
   refreshProfile: () => Promise<void>;
 }
@@ -16,6 +18,7 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
+  isAdmin: false,
   loading: true,
   refreshProfile: async () => {},
 });
@@ -23,22 +26,36 @@ export const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  async function loadProfile(uid: string) {
-    const userProfile = await getUserProfile(uid);
+  async function loadAccount(uid: string) {
+    const [userProfile, adminAccess] = await Promise.all([
+      getUserProfile(uid),
+      isActiveAdmin(uid),
+    ]);
     setProfile(userProfile);
+    setIsAdmin(adminAccess);
   }
 
   useEffect(() => {
     const unsubscribe = subscribeToAuthChanges(async (nextUser) => {
       setUser(nextUser);
-      if (nextUser) {
-        await loadProfile(nextUser.uid);
-      } else {
+      setLoading(true);
+
+      try {
+        if (nextUser) {
+          await loadAccount(nextUser.uid);
+        } else {
+          setProfile(null);
+          setIsAdmin(false);
+        }
+      } catch {
         setProfile(null);
+        setIsAdmin(false);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
@@ -46,12 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refreshProfile() {
     if (user) {
-      await loadProfile(user.uid);
+      await loadAccount(user.uid);
     }
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, isAdmin, loading, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

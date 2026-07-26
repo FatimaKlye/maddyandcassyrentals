@@ -5,8 +5,8 @@ import {
 } from "firebase-admin/firestore";
 
 import {
-  adminAuth,
-  adminDb,
+  getAdminAuth,
+  getAdminDb,
 } from "../../../../src/lib/firebase/admin";
 
 export const runtime = "nodejs";
@@ -311,6 +311,8 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const token = getBearerToken(request);
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
 
     let decodedToken;
 

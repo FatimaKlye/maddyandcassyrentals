@@ -76,7 +76,9 @@ async function main() {
   loadEnvLocal();
   const { uid, email, name } = parseArgs(process.argv.slice(2));
 
-  const { adminAuth, adminDb } = await import("@/src/lib/firebase/admin");
+  const { getAdminAuth, getAdminDb } = await import("@/src/lib/firebase/admin");
+  const adminAuth = getAdminAuth();
+  const adminDb = getAdminDb();
   const { FieldValue } = await import("firebase-admin/firestore");
 
   // Verify the UID exists in Firebase Authentication before writing anything.

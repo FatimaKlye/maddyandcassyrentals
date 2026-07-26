@@ -3,3 +3,83 @@
   flex-direction: column;
   min-height: 100vh;
 }
+
+.about {
+  scroll-margin-top: 90px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 4.5rem 1.5rem 5.5rem;
+}
+
+.aboutIntro {
+  max-width: 720px;
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.heading {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-primary);
+  font-size: clamp(1.8rem, 3.5vw, 2.7rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.description {
+  margin: 0;
+  color: var(--color-charcoal);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.step {
+  padding: 1.5rem;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 20px;
+  background: var(--color-white);
+  box-shadow: 0 12px 32px rgba(36, 36, 36, 0.05);
+}
+
+.stepNumber {
+  display: inline-flex;
+  margin-bottom: 1rem;
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.step h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.step p {
+  margin: 0;
+  color: var(--color-charcoal);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .about {
+    padding-top: 3rem;
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+  }
+}

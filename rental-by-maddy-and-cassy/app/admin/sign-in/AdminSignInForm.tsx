@@ -9,7 +9,7 @@ import { z } from "zod";
 import { isActiveAdmin } from "@/src/services/adminService";
 import { loginWithEmail, logout } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
-import styles from "../auth.module.css";
+import styles from "../../(auth)/auth.module.css";
 
 const schema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email address"),
@@ -18,14 +18,13 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-function getCustomerRedirect(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/admin")) {
-    return "/account/bookings";
-  }
-  return value;
+function getAdminRedirect(value: string | null): string {
+  if (!value || value === "/admin/sign-in") return "/admin";
+  if (value === "/admin" || value.startsWith("/admin/")) return value;
+  return "/admin";
 }
 
-export default function SignInForm() {
+export default function AdminSignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
@@ -37,72 +36,76 @@ export default function SignInForm() {
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-  const redirectTo = getCustomerRedirect(searchParams.get("redirect"));
+  const redirectTo = getAdminRedirect(searchParams.get("redirect"));
 
   async function onSubmit(values: FormValues) {
     setFormError(null);
     setSubmitting(true);
+
     try {
       const signedInUser = await loginWithEmail(values.email, values.password);
-      if (await isActiveAdmin(signedInUser.uid)) {
+      const hasAdminAccess = await isActiveAdmin(signedInUser.uid);
+
+      if (!hasAdminAccess) {
         await logout();
-        setFormError("This is an administrator account. Please use the separate Admin Login.");
+        setFormError("This account does not have active administrator access.");
         setSubmitting(false);
         return;
       }
+
       router.replace(redirectTo);
     } catch {
-      setFormError("We couldn't sign you in. Check your email and password and try again.");
+      setFormError("We couldn't sign you in. Check your admin email and password and try again.");
       setSubmitting(false);
     }
   }
 
   return (
     <div className={styles.card}>
-      <p className={styles.eyebrow}>Welcome back</p>
-      <h1 className={styles.heading}>Customer Sign In</h1>
+      <p className={styles.eyebrow}>Authorized access only</p>
+      <h1 className={styles.heading}>Admin Login</h1>
       <p className={styles.subheading}>
-        Sign in to reserve gear and manage your bookings.
+        Sign in with an active administrator account to access rental operations.
       </p>
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
         {formError ? <p className={styles.formError}>{formError}</p> : null}
 
         <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="email">
-            Email address<span className={formStyles.required}>*</span>
+          <label className={formStyles.label} htmlFor="admin-email">
+            Admin email address<span className={formStyles.required}>*</span>
           </label>
           <input
-            id="email"
+            id="admin-email"
             type="email"
             autoComplete="email"
             className={`${formStyles.input} ${errors.email ? formStyles.inputError : ""}`}
             aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? "email-error" : undefined}
+            aria-describedby={errors.email ? "admin-email-error" : undefined}
             {...register("email")}
           />
           {errors.email ? (
-            <p className={formStyles.errorText} id="email-error" role="alert">
+            <p className={formStyles.errorText} id="admin-email-error" role="alert">
               {errors.email.message}
             </p>
           ) : null}
         </div>
 
         <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="password">
+          <label className={formStyles.label} htmlFor="admin-password">
             Password<span className={formStyles.required}>*</span>
           </label>
           <input
-            id="password"
+            id="admin-password"
             type="password"
             autoComplete="current-password"
             className={`${formStyles.input} ${errors.password ? formStyles.inputError : ""}`}
             aria-invalid={!!errors.password}
-            aria-describedby={errors.password ? "password-error" : undefined}
+            aria-describedby={errors.password ? "admin-password-error" : undefined}
             {...register("password")}
           />
           {errors.password ? (
-            <p className={formStyles.errorText} id="password-error" role="alert">
+            <p className={formStyles.errorText} id="admin-password-error" role="alert">
               {errors.password.message}
             </p>
           ) : null}
@@ -114,24 +117,15 @@ export default function SignInForm() {
             className={`${formStyles.primaryButton} ${styles.submitButton}`}
             disabled={submitting}
           >
-            {submitting ? "Signing in..." : "Sign In"}
+            {submitting ? "Verifying access..." : "Admin Login"}
           </button>
         </div>
       </form>
 
       <p className={styles.footer}>
-        Don&apos;t have an account?{" "}
-        <Link
-          href={`/sign-up${redirectTo !== "/account/bookings" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`}
-          className={styles.footerLink}
-        >
-          Create one
-        </Link>
-      </p>
-      <p className={styles.footer}>
-        Are you an administrator?{" "}
-        <Link href="/admin/sign-in" className={styles.footerLink}>
-          Admin Login
+        Renting as a customer?{" "}
+        <Link href="/sign-in" className={styles.footerLink}>
+          Customer Sign In
         </Link>
       </p>
     </div>
