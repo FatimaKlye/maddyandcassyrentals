@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { isActiveAdmin } from "@/src/services/adminService";
+import { checkActiveAdmin } from "@/src/services/adminService";
 import { loginWithEmail, logout } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
 import PasswordInput from "@/components/ui/PasswordInput";
@@ -45,7 +45,7 @@ export default function SignInForm() {
     setSubmitting(true);
     try {
       const signedInUser = await loginWithEmail(values.email, values.password);
-      if (await isActiveAdmin(signedInUser.uid)) {
+      if (await checkActiveAdmin(signedInUser)) {
         await logout();
         setFormError("This is an administrator account. Please use the separate Admin Login.");
         setSubmitting(false);

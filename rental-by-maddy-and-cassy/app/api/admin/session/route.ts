@@ -9,6 +9,23 @@ import {
 
 export const runtime = "nodejs";
 
+export async function GET(request: Request) {
+  try {
+    enforceRateLimit(request, "admin-access-check", 60, 60_000);
+    const db = getAdminDb();
+    const admin = await requireAdmin(request, db);
+    return NextResponse.json({ isAdmin: true, uid: admin.uid });
+  } catch (error) {
+    if (error instanceof RequestSecurityError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json(
+      { error: "Administrator access could not be verified." },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     enforceRateLimit(request, "admin-session", 10, 60_000);

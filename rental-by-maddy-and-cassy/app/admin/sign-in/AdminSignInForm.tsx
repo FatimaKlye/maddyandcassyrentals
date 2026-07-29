@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { isActiveAdmin } from "@/src/services/adminService";
 import { loginWithEmail, logout } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
 import PasswordInput from "@/components/ui/PasswordInput";
@@ -45,15 +44,6 @@ export default function AdminSignInForm() {
 
     try {
       const signedInUser = await loginWithEmail(values.email, values.password);
-      const hasAdminAccess = await isActiveAdmin(signedInUser.uid);
-
-      if (!hasAdminAccess) {
-        await logout();
-        setFormError("This account does not have active administrator access.");
-        setSubmitting(false);
-        return;
-      }
-
       const sessionResponse = await fetch("/api/admin/session", {
         method: "POST",
         headers: {
@@ -61,13 +51,25 @@ export default function AdminSignInForm() {
         },
       });
       if (!sessionResponse.ok) {
+        const body = (await sessionResponse.json().catch(() => null)) as
+          | { error?: unknown }
+          | null;
         await logout();
-        throw new Error("ADMIN_SESSION_FAILED");
+        throw new Error(
+          typeof body?.error === "string"
+            ? body.error
+            : "Administrator access could not be verified.",
+        );
       }
 
       router.replace(redirectTo);
-    } catch {
-      setFormError("We couldn't sign you in. Check your admin email and password and try again.");
+    } catch (error) {
+      setFormError(
+        error instanceof Error &&
+          !error.message.toLowerCase().includes("firebase")
+          ? error.message
+          : "We couldn't sign you in. Check your admin email and password and try again.",
+      );
       setSubmitting(false);
     }
   }

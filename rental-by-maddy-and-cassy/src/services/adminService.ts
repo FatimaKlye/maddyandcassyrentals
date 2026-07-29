@@ -6,6 +6,7 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
+import type { User } from "firebase/auth";
 import { db } from "@/src/lib/firebase/config";
 import type { Admin } from "@/src/types/admin";
 
@@ -24,6 +25,29 @@ function mapAdmin(snapshot: QueryDocumentSnapshot<DocumentData>): Admin {
 export async function isActiveAdmin(uid: string): Promise<boolean> {
   const snapshot = await getDoc(doc(db, ADMINS_COLLECTION, uid));
   return snapshot.exists() && snapshot.data().active === true;
+}
+
+export async function checkActiveAdmin(user: User): Promise<boolean> {
+  const response = await fetch("/api/admin/session", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${await user.getIdToken()}`,
+    },
+    cache: "no-store",
+  });
+
+  if (response.ok) return true;
+  if (response.status === 403) return false;
+  if (response.status === 401) return false;
+
+  const body = (await response.json().catch(() => null)) as
+    | { error?: unknown }
+    | null;
+  throw new Error(
+    typeof body?.error === "string"
+      ? body.error
+      : "Administrator access could not be verified.",
+  );
 }
 
 export async function getAdminProfile(uid: string): Promise<Admin | null> {
