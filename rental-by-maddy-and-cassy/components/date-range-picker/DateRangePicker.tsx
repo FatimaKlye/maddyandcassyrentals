@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import {
+  addDays,
   addMonths,
+  differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
   format,
   getDay,
   isBefore,
   isSameDay,
-  isSameMonth,
   isWithinInterval,
+  isSameMonth,
   startOfDay,
   startOfMonth,
+  subDays,
   subMonths,
 } from "date-fns";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
@@ -35,6 +38,7 @@ export default function DateRangePicker({
   maxRentalDays = 30,
 }: DateRangePickerProps) {
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(startDate ?? new Date()));
+  const [error, setError] = useState<string | null>(null);
   const today = startOfDay(new Date());
 
   function isPast(day: Date): boolean {
@@ -52,35 +56,48 @@ export default function DateRangePicker({
   function handleDayClick(day: Date) {
     if (isDisabled(day)) return;
 
-    if (!startDate || (startDate && endDate)) {
+    // Nothing selected yet: this click becomes the (single-day) selection.
+    if (!startDate) {
+      setError(null);
       onChange({ startDate: day, endDate: null });
       return;
     }
 
-    if (isBefore(day, startDate)) {
-      onChange({ startDate: day, endDate: null });
+    const lastSelected = endDate ?? startDate;
+
+    // Clicking the latest selected date removes it, keeping the run
+    // consecutive from the start.
+    if (isSameDay(day, lastSelected)) {
+      setError(null);
+      if (isSameDay(startDate, lastSelected)) {
+        onChange({ startDate: null, endDate: null });
+      } else {
+        const newEnd = subDays(lastSelected, 1);
+        onChange({
+          startDate,
+          endDate: isSameDay(newEnd, startDate) ? null : newEnd,
+        });
+      }
       return;
     }
 
-    const daySpan =
-      Math.round((day.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-    if (daySpan > maxRentalDays) {
-      onChange({ startDate: day, endDate: null });
+    // Only the day immediately following the current selection can extend it.
+    const nextAvailableDay = addDays(lastSelected, 1);
+    if (isSameDay(day, nextAvailableDay) && !isDisabled(nextAvailableDay)) {
+      const daySpan = differenceInCalendarDays(day, startDate) + 1;
+      if (daySpan > maxRentalDays) {
+        setError(`Maximum rental period is ${maxRentalDays} days.`);
+        return;
+      }
+      setError(null);
+      onChange({ startDate, endDate: day });
       return;
     }
 
-    // If any day in the prospective range is disabled, restart the selection
-    // from this day instead of allowing a range that spans a booked date.
-    const spanDays = eachDayOfInterval({ start: startDate, end: day });
-    const hasDisabledDayInRange = spanDays.some(isDisabled);
-    if (hasDisabledDayInRange) {
-      onChange({ startDate: day, endDate: null });
-      return;
-    }
-
-    onChange({ startDate, endDate: day });
+    setError("Please select consecutive available dates");
   }
 
+  const selectionEnd = endDate ?? startDate;
   const monthStart = startOfMonth(visibleMonth);
   const monthEnd = endOfMonth(visibleMonth);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -122,14 +139,13 @@ export default function DateRangePicker({
           const past = isPast(day);
           const booked = !past && isBooked(day);
           const disabled = past || booked;
-          const isStart = startDate ? isSameDay(day, startDate) : false;
-          const isEnd = endDate ? isSameDay(day, endDate) : false;
-          const selected = isStart || isEnd;
-          const inRange =
-            startDate && endDate ? isWithinInterval(day, { start: startDate, end: endDate }) : false;
+          const selected =
+            !!startDate && !!selectionEnd
+              ? isWithinInterval(day, { start: startDate, end: selectionEnd })
+              : false;
 
           let statusLabel = "";
-          if (selected) statusLabel = "";
+          if (selected) statusLabel = ", selected";
           else if (past) statusLabel = ", past date";
           else if (booked) statusLabel = ", already booked";
           else statusLabel = ", available";
@@ -149,7 +165,6 @@ export default function DateRangePicker({
                 !selected && booked ? styles.dayBooked : "",
                 !selected && !disabled ? styles.dayAvailable : "",
                 selected ? styles.dayEdge : "",
-                inRange && !selected ? styles.dayInRange : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -160,6 +175,12 @@ export default function DateRangePicker({
           );
         })}
       </div>
+
+      {error ? (
+        <p className={styles.errorMessage} role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <p className={styles.legend}>
         <span className={styles.legendSwatch} data-variant="available" /> Available
