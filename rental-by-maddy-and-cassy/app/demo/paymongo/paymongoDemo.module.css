@@ -173,6 +173,21 @@
   background: var(--color-primary-hover);
 }
 
+.payButton:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 1rem 0 0;
+  padding: 0.8rem;
+  border: 1px solid var(--color-status-red-border);
+  border-radius: 10px;
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+  font-size: 0.78rem;
+}
+
 .cancel {
   display: block;
   margin-top: 0.85rem;

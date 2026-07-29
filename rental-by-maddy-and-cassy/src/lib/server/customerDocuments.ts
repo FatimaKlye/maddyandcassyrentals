@@ -59,6 +59,7 @@ export async function generateAndSaveInvoice(input: {
   totalAmount?: number;
   remainingBalance?: number;
   paymentOption?: string;
+  isDemo?: boolean;
 }): Promise<void> {
   const booking = input.booking;
   const customer = booking.customerSnapshot ?? {};
@@ -79,6 +80,7 @@ export async function generateAndSaveInvoice(input: {
         : input.paymentOption === "balance"
           ? "Remaining balance"
           : "Full payment",
+    isDemo: input.isDemo === true,
     issuedAt: formatDate(new Date(), true),
   });
   await savePrivatePdf(input.storagePath, bytes, {
@@ -94,6 +96,7 @@ export async function generateAndSaveReceipt(input: {
   paymentMethod: string;
   storagePath: string;
   amount?: number;
+  isDemo?: boolean;
 }): Promise<void> {
   const booking = input.booking;
   const customer = booking.customerSnapshot ?? {};
@@ -108,6 +111,7 @@ export async function generateAndSaveReceipt(input: {
     issuedAt: formatDate(new Date(), true),
     paymentReference: input.paymentReference,
     paymentMethod: input.paymentMethod || "PayMongo",
+    isDemo: input.isDemo === true,
   });
   await savePrivatePdf(input.storagePath, bytes, {
     bookingId: booking.id,
@@ -158,6 +162,7 @@ export async function generateAndSaveFinalAgreement(input: {
     signatureContentType,
     paymentReference: input.paymentReference,
     confirmedAt: formatDate(new Date(), true),
+    isDemo: booking.demoPayment === true,
   });
   await savePrivatePdf(input.storagePath, bytes, {
     bookingId: booking.id,

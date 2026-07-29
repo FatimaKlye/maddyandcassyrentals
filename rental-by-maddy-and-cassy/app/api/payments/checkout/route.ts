@@ -10,6 +10,7 @@ import {
 } from "@/src/lib/server/requestSecurity";
 import { generateAndSaveInvoice } from "@/src/lib/server/customerDocuments";
 import type { PaymentOption } from "@/src/types/payment";
+import { isDemoPaymentEnabled } from "@/src/lib/paymongo/demo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,12 +114,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (amountCentavos < 100) {
       return responseError("The booking amount is below the payment minimum.", 409);
     }
-    const demoMode =
-      process.env.NODE_ENV !== "production" &&
-      (
-        !process.env.PAYMONGO_SECRET_KEY?.trim() ||
-        !process.env.PAYMONGO_WEBHOOK_SECRET?.trim()
-      );
+    const demoMode = isDemoPaymentEnabled();
 
     const reusablePayments = await bookingRef
       .collection("payments")
@@ -131,7 +127,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       typeof reusable.checkoutUrl === "string" &&
       reusable.amount === amount &&
       reusable.paymentOption === paymentOption &&
-      reusable.isDemo === demoMode
+      reusable.isDemo === demoMode &&
+      (!demoMode || reusable.checkoutUrl.includes("sessionId="))
     ) {
       return NextResponse.json({
         success: true,
@@ -174,6 +171,7 @@ export async function POST(request: Request): Promise<NextResponse> {
               bookingRef: booking.bookingRef,
               paymentLabel,
               returnPath,
+              sessionId: `demo_${paymentRef.id}`,
             }).toString(),
           livemode: false,
         }
@@ -226,6 +224,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         totalAmount,
         remainingBalance: Math.max(0, balanceDue - amount),
         paymentOption,
+        isDemo: demoMode,
       });
     } catch (error) {
       console.error("Invoice PDF generation failed", error);
@@ -273,6 +272,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       amountDueNow: amount,
       remainingBalance: Math.max(0, balanceDue - amount),
       paymentOption,
+      isDemo: demoMode,
       storagePath: invoicePath,
       paymentId: paymentRef.id,
       issuedAt: now,
@@ -281,7 +281,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     batch.set(bookingRef.collection("documents").doc(`invoice-${invoiceRef.id}`), {
       type: "invoice",
       storagePath: invoicePath,
-      title: `Invoice ${invoiceNumber}`,
+      title: demoMode
+        ? `DEMO Invoice ${invoiceNumber} - Not Valid`
+        : `Invoice ${invoiceNumber}`,
+      isDemo: demoMode,
       generatedAt: now,
     });
     batch.update(bookingRef, {
@@ -300,15 +303,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       bookingId,
       targetType: "payment",
       targetId: paymentRef.id,
-      metadata: { checkoutSessionId: checkout.id, amount, paymentOption },
+      metadata: { checkoutSessionId: checkout.id, amount, paymentOption, demo: demoMode },
       createdAt: now,
     });
     batch.set(db.collection("users").doc(user.uid).collection("notifications").doc(), {
       recipientId: user.uid,
       bookingId,
       type: "payment_pending",
-      title: "Payment checkout ready",
-      message: `Your secure payment checkout for ${booking.bookingRef} is ready.`,
+      title: demoMode ? "Demo payment checkout ready" : "Payment checkout ready",
+      message: demoMode
+        ? `Your demo checkout for ${booking.bookingRef} is ready. No real money will be processed.`
+        : `Your secure payment checkout for ${booking.bookingRef} is ready.`,
       actionUrl: `/account/bookings/${bookingId}`,
       isRead: false,
       createdAt: now,

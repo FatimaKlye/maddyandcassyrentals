@@ -19,6 +19,7 @@ interface StepPaymentSubmissionProps {
   product: Product;
   draft: ReservationDraft;
   paymentStatus: PaymentStatus;
+  isDemoPayment?: boolean;
   bookingNumber?: string;
   opening: boolean;
   checking: boolean;
@@ -33,6 +34,7 @@ export default function StepPaymentSubmission({
   product,
   draft,
   paymentStatus,
+  isDemoPayment = false,
   bookingNumber,
   opening,
   checking,
@@ -110,8 +112,9 @@ export default function StepPaymentSubmission({
         <p className={styles.notice}>Confirming the payment with PayMongo…</p>
       ) : paid ? (
         <p className={styles.success}>
-          Payment verified. Your reservation is secured. Continue with your verification
-          documents.
+          {isDemoPayment
+            ? "Demo payment recorded for flow testing. No money was processed. Continue with your verification documents."
+            : "Payment verified. Your reservation is secured. Continue with your verification documents."}
         </p>
       ) : null}
 

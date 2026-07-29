@@ -58,6 +58,7 @@ export interface BookingInvoice {
   amountDueNow?: number;
   remainingBalance?: number;
   paymentOption?: PaymentOption;
+  isDemo?: boolean;
   storagePath: string;
   paymentId?: string;
   issuedAt: Timestamp;
@@ -75,6 +76,7 @@ export interface BookingReceipt {
   paymentId: string;
   providerPaymentId?: string;
   amount: number;
+  isDemo?: boolean;
   currency: "PHP";
   storagePath: string;
   issuedAt: Timestamp;

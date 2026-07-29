@@ -24,6 +24,7 @@ interface CustomerDocumentBase {
   rentalDates: string;
   amount: number;
   issuedAt: string;
+  isDemo?: boolean;
 }
 
 export interface InvoicePdfInput extends CustomerDocumentBase {
@@ -101,6 +102,7 @@ function addBrandHeader(
   bold: PDFFont,
   title: string,
   reference: string,
+  isDemo = false,
 ): number {
   page.drawRectangle({
     x: 0,
@@ -116,6 +118,22 @@ function addBrandHeader(
     font: bold,
     color: ROSE,
   });
+  if (isDemo) {
+    page.drawRectangle({
+      x: PAGE_WIDTH - MARGIN - 174,
+      y: PAGE_HEIGHT - 67,
+      width: 174,
+      height: 25,
+      color: rgb(1, 0.84, 0.84),
+    });
+    page.drawText("DEMO - NOT A VALID PAYMENT RECORD", {
+      x: PAGE_WIDTH - MARGIN - 165,
+      y: PAGE_HEIGHT - 58,
+      size: 6.8,
+      font: bold,
+      color: ROSE,
+    });
+  }
   page.drawText(safeText(title), {
     x: MARGIN,
     y: PAGE_HEIGHT - 88,
@@ -254,7 +272,13 @@ export async function createInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arr
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let y = addBrandHeader(page, bold, "Rental Invoice", input.invoiceNumber);
+  let y = addBrandHeader(
+    page,
+    bold,
+    input.isDemo ? "Demo Rental Invoice" : "Rental Invoice",
+    input.invoiceNumber,
+    input.isDemo,
+  );
   y = drawSummary(page, regular, bold, input, y);
   const totalAmount = input.totalAmount ?? input.amount;
   const amountDueNow = input.amountDueNow ?? input.amount;
@@ -283,7 +307,13 @@ export async function createInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arr
   y = Math.min(dueY, balanceY);
   drawField(page, regular, bold, "Booking reference", input.bookingRef, MARGIN, y, 230);
   drawField(page, regular, bold, "Issued", input.issuedAt, MARGIN + 270, y, 220);
-  addFooter(page, regular, "This booking invoice is payable through the secure PayMongo checkout linked to the reservation.");
+  addFooter(
+    page,
+    regular,
+    input.isDemo
+      ? "DEMO ONLY - This invoice is for flow testing and is not a valid demand for payment."
+      : "This booking invoice is payable through the secure PayMongo checkout linked to the reservation.",
+  );
   pdf.setTitle(`Invoice ${safeText(input.invoiceNumber)}`);
   pdf.setAuthor("Rental by Maddy & Cassy");
   return pdf.save();
@@ -294,12 +324,33 @@ export async function createReceiptPdf(input: ReceiptPdfInput): Promise<Uint8Arr
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let y = addBrandHeader(page, bold, "Official Payment Receipt", input.receiptNumber);
+  let y = addBrandHeader(
+    page,
+    bold,
+    input.isDemo ? "Demo Payment Receipt" : "Official Payment Receipt",
+    input.receiptNumber,
+    input.isDemo,
+  );
   y = drawSummary(page, regular, bold, input, y);
   y = drawAmountBox(page, regular, bold, input.amount, y, "Payment received");
-  y = drawField(page, regular, bold, "PayMongo transaction reference", input.paymentReference, MARGIN, y, 300);
+  y = drawField(
+    page,
+    regular,
+    bold,
+    input.isDemo ? "Demo transaction reference" : "PayMongo transaction reference",
+    input.paymentReference,
+    MARGIN,
+    y,
+    300,
+  );
   drawField(page, regular, bold, "Payment method", input.paymentMethod, MARGIN + 330, y + 23, 160);
-  addFooter(page, regular, `Payment received for booking ${input.bookingRef}. Keep this receipt for your records.`);
+  addFooter(
+    page,
+    regular,
+    input.isDemo
+      ? `DEMO ONLY - No money was received for booking ${input.bookingRef}. This receipt is not valid.`
+      : `Payment received for booking ${input.bookingRef}. Keep this receipt for your records.`,
+  );
   pdf.setTitle(`Receipt ${safeText(input.receiptNumber)}`);
   pdf.setAuthor("Rental by Maddy & Cassy");
   return pdf.save();
@@ -330,7 +381,13 @@ export async function createFinalAgreementPdf(
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const pageOne = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let y = addBrandHeader(pageOne, bold, "Rental Agreement", `Booking ${input.bookingRef}`);
+  let y = addBrandHeader(
+    pageOne,
+    bold,
+    input.isDemo ? "Demo Rental Agreement" : "Rental Agreement",
+    `Booking ${input.bookingRef}`,
+    input.isDemo,
+  );
   y = drawSummary(pageOne, regular, bold, input, y);
   const half = (PAGE_WIDTH - MARGIN * 2 - 20) / 2;
   const phoneY = drawField(pageOne, regular, bold, "Phone", input.phone, MARGIN, y, half);
@@ -379,10 +436,24 @@ export async function createFinalAgreementPdf(
   y = drawAmountBox(pageOne, regular, bold, input.amount, y, "Reservation payment received");
   drawField(pageOne, regular, bold, "Payment confirmation", input.paymentReference, MARGIN, y, 270);
   drawField(pageOne, regular, bold, "Reservation secured", input.confirmedAt, MARGIN + 310, y, 180);
-  addFooter(pageOne, regular, `Agreement terms version ${input.termsVersion} - Page 1 of 2`);
+  addFooter(
+    pageOne,
+    regular,
+    `${input.isDemo ? "DEMO FLOW TEST - " : ""}Agreement terms version ${input.termsVersion} - Page 1 of 2`,
+  );
 
   const pageTwo = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   y = PAGE_HEIGHT - MARGIN;
+  if (input.isDemo) {
+    pageTwo.drawText("DEMO FLOW TEST - NOT A VALID PAYMENT RECORD", {
+      x: PAGE_WIDTH - MARGIN - 225,
+      y,
+      size: 7.5,
+      font: bold,
+      color: ROSE,
+    });
+    y -= 24;
+  }
   pageTwo.drawText("RENTAL TERMS & CONDITIONS", {
     x: MARGIN,
     y,
@@ -450,7 +521,11 @@ export async function createFinalAgreementPdf(
   y -= 96;
   drawField(pageTwo, regular, bold, "Legally signed by", input.typedFullName, MARGIN, y, half);
   drawField(pageTwo, regular, bold, "Signed at", input.signedAt, MARGIN + half + 20, y, half);
-  addFooter(pageTwo, regular, `Agreement terms version ${input.termsVersion} - Page 2 of 2`);
+  addFooter(
+    pageTwo,
+    regular,
+    `${input.isDemo ? "DEMO FLOW TEST - " : ""}Agreement terms version ${input.termsVersion} - Page 2 of 2`,
+  );
 
   pdf.setTitle(`Signed Rental Agreement - ${safeText(input.bookingRef)}`);
   pdf.setSubject("Electronically signed rental agreement for a secured reservation");

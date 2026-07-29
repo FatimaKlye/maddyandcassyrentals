@@ -65,7 +65,13 @@ export default function BookingPaymentPanel({
       <div className={styles.heading}>
         <div>
           <p>SECURE PAYMENT</p>
-          <h3>{paymentStatus === "paid" ? "Payment confirmed" : "Rental payment"}</h3>
+          <h3>
+            {booking.demoPayment
+              ? "Demo payment recorded"
+              : paymentStatus === "paid"
+                ? "Payment confirmed"
+                : "Rental payment"}
+          </h3>
         </div>
         <span className={`${styles.status} ${styles[paymentStatus]}`}>
           {paymentStatus.replaceAll("_", " ")}
@@ -85,8 +91,9 @@ export default function BookingPaymentPanel({
 
       {paymentStatus === "paid" ? (
         <p className={styles.message}>
-          PayMongo verified this transaction. Your official receipt and finalized agreement are
-          available under Documents.
+          {booking.demoPayment
+            ? "This is a development flow test. No money was processed, and all generated documents are marked as demo records."
+            : "PayMongo verified this transaction. Your official receipt and finalized agreement are available under Documents."}
         </p>
       ) : paymentAvailable ? (
         <>

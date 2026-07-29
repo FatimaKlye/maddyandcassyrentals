@@ -74,6 +74,7 @@ export interface Booking {
   amountPaid?: number;
   balanceDue?: number;
   paymentChoice?: PaymentOption;
+  demoPayment?: boolean;
   paymentRequired?: boolean;
   paymentStatus?: PaymentStatus;
   status: BookingStatus;

@@ -45,6 +45,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookingNumber, setBookingNumber] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
+  const [isDemoPayment, setIsDemoPayment] = useState(false);
   const [openingPayment, setOpeningPayment] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -104,6 +105,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
       setBookingId(booking.id);
       setBookingNumber(booking.bookingRef);
       setPaymentStatus(booking.paymentStatus ?? "unpaid");
+      setIsDemoPayment(booking.demoPayment === true);
       setDraft((current) => ({
         ...current,
         startDate: booking.startDate.toDate(),
@@ -258,6 +260,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
             product={product}
             draft={draft}
             paymentStatus={paymentStatus}
+            isDemoPayment={isDemoPayment}
             bookingNumber={bookingNumber ?? undefined}
             opening={openingPayment}
             checking={checkingPayment}
@@ -292,7 +295,11 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
         ) : null}
 
         {step === 6 && bookingId && bookingNumber ? (
-          <StepBookingConfirmation bookingId={bookingId} bookingNumber={bookingNumber} />
+          <StepBookingConfirmation
+            bookingId={bookingId}
+            bookingNumber={bookingNumber}
+            isDemo={isDemoPayment}
+          />
         ) : null}
       </div>
     </div>
