@@ -7,6 +7,7 @@ import { getDayCount } from "@/src/types/reservationDraft";
 import { toDateKey } from "@/src/services/availabilityService";
 import { DatesUnavailableError } from "@/src/services/inventoryService";
 import { TERMS_VERSION } from "@/components/reservation/AgreementDocument";
+import { getAppCheckHeaders } from "@/src/lib/firebase/appCheckClient";
 
 async function uploadFile(path: string, file: File): Promise<string> {
   const storageRef = ref(storage, path);
@@ -85,13 +86,10 @@ async function callSubmitBookingApi(input: {
 
 export interface SubmitBookingResult {
   bookingId: string;
+  bookingNumber?: string;
 }
 
-export async function submitBooking(
-  product: Product,
-  userId: string,
-  draft: ReservationDraft
-): Promise<SubmitBookingResult> {
+function validateReservationDetails(draft: ReservationDraft): void {
   if (!draft.startDate || !draft.endDate || !draft.fulfillmentMethod) {
     throw new Error("Missing rental details.");
   }
@@ -107,7 +105,47 @@ export async function submitBooking(
   ) {
     throw new Error("Missing required customer information.");
   }
+}
 
+export async function createBookingReservation(
+  product: Product,
+  draft: ReservationDraft
+): Promise<SubmitBookingResult> {
+  validateReservationDetails(draft);
+  const { customerInfo } = draft;
+  const startDate = draft.startDate!;
+  const endDate = draft.endDate!;
+  const fulfillmentMethod = draft.fulfillmentMethod!;
+  const dayCount = getDayCount(startDate, endDate);
+
+  const { bookingId, bookingNumber } = await callSubmitBookingApi({
+    productId: product.id,
+    startDate: toDateKey(startDate),
+    endDate: toDateKey(endDate),
+    dayCount,
+    fulfillmentMethod,
+    customerLocation: draft.customerLocation,
+    customerSnapshot: {
+      fullName: customerInfo.fullName.trim(),
+      email: customerInfo.email.trim(),
+      phone: customerInfo.phone.trim(),
+      address: customerInfo.address.trim(),
+      facebookLink: customerInfo.facebookLink.trim(),
+      instagramLink: customerInfo.instagramLink.trim(),
+    },
+  });
+
+  return { bookingId, bookingNumber };
+}
+
+export async function submitBookingDocuments(
+  product: Product,
+  userId: string,
+  bookingId: string,
+  bookingNumber: string,
+  draft: ReservationDraft,
+): Promise<void> {
+  validateReservationDetails(draft);
   const { requirements } = draft;
   if (
     !requirements.idOneFile ||
@@ -139,23 +177,6 @@ export async function submitBooking(
   }
 
   const dayCount = getDayCount(draft.startDate, draft.endDate);
-
-  const { bookingId, bookingNumber } = await callSubmitBookingApi({
-    productId: product.id,
-    startDate: toDateKey(draft.startDate),
-    endDate: toDateKey(draft.endDate),
-    dayCount,
-    fulfillmentMethod: draft.fulfillmentMethod,
-    customerLocation: draft.customerLocation,
-    customerSnapshot: {
-      fullName: customerInfo.fullName.trim(),
-      email: customerInfo.email.trim(),
-      phone: customerInfo.phone.trim(),
-      address: customerInfo.address.trim(),
-      facebookLink: customerInfo.facebookLink.trim(),
-      instagramLink: customerInfo.instagramLink.trim(),
-    },
-  });
 
   const requirementsPath = `private/users/${userId}/bookings/${bookingId}/requirements`;
   const [idOnePath, idTwoPath, selfiePath, emergencyIdPath, signaturePath] = await Promise.all([
@@ -205,10 +226,10 @@ export async function submitBooking(
     agreementSnapshot: {
       customerName: draft.customerInfo.fullName,
       productName: product.name,
-      startDate: Timestamp.fromDate(draft.startDate),
-      endDate: Timestamp.fromDate(draft.endDate),
+      startDate: Timestamp.fromDate(draft.startDate!),
+      endDate: Timestamp.fromDate(draft.endDate!),
       dayCount,
-      fulfillmentMethod: draft.fulfillmentMethod,
+      fulfillmentMethod: draft.fulfillmentMethod!,
       customerLocation: draft.customerLocation,
       pricePerDay: product.pricePerDay,
       currency: product.currency,
@@ -235,7 +256,34 @@ export async function submitBooking(
 
   await batch.commit();
 
-  return { bookingId };
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("Your session expired before the agreement was finalized.");
+  const response = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/documents/agreement`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${await currentUser.getIdToken()}`,
+      ...(await getAppCheckHeaders()),
+    },
+  });
+  if (!response.ok) {
+    console.warn("Documents were submitted, but the signed agreement PDF is still being prepared.");
+  }
+}
+
+export async function submitBooking(
+  product: Product,
+  userId: string,
+  draft: ReservationDraft
+): Promise<SubmitBookingResult> {
+  const reservation = await createBookingReservation(product, draft);
+  await submitBookingDocuments(
+    product,
+    userId,
+    reservation.bookingId,
+    reservation.bookingNumber ?? reservation.bookingId,
+    draft,
+  );
+  return reservation;
 }
 
 function extensionOf(file: File): string {

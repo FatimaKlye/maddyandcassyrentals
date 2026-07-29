@@ -227,6 +227,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       paymentReference: providerPaymentId,
       paymentMethod,
       storagePath: receiptPath,
+      amount: expectedAmount,
     });
     if (canFinalizeAgreement) {
       await generateAndSaveFinalAgreement({
@@ -252,10 +253,31 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const now = Timestamp.now();
     await db.runTransaction(async (transaction) => {
-      const [latestPayment, latestEvent] = await transaction.getAll(paymentRef, eventRef);
+      const [latestBooking, latestPayment, latestEvent] = await transaction.getAll(
+        bookingRef,
+        paymentRef,
+        eventRef,
+      );
       if (latestPayment.data()?.status === "paid" || latestEvent.data()?.status === "processed") {
         return;
       }
+      const latestBookingData = latestBooking.data() ?? {};
+      const totalAmount =
+        typeof latestBookingData.estimatedRentalAmount === "number"
+          ? latestBookingData.estimatedRentalAmount
+          : latestBookingData.amountDue;
+      const previousAmountPaid =
+        typeof latestBookingData.amountPaid === "number"
+          ? latestBookingData.amountPaid
+          : 0;
+      const newAmountPaid = Math.min(
+        typeof totalAmount === "number" ? totalAmount : previousAmountPaid + expectedAmount,
+        previousAmountPaid + expectedAmount,
+      );
+      const remainingBalance =
+        typeof totalAmount === "number" ? Math.max(0, totalAmount - newAmountPaid) : 0;
+      const nextPaymentStatus =
+        remainingBalance <= 0.009 ? "paid" : "partially_paid";
 
       transaction.update(paymentRef, {
         status: "paid",
@@ -302,7 +324,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
 
       const bookingUpdates: Record<string, unknown> = {
-        paymentStatus: "paid",
+        paymentStatus: nextPaymentStatus,
+        amountPaid: newAmountPaid,
+        balanceDue: remainingBalance,
         paidAt: now,
         paymentReference: providerPaymentId,
         updatedAt: now,
@@ -348,8 +372,8 @@ export async function POST(request: Request): Promise<NextResponse> {
         recipientId: userId,
         bookingId,
         type: "payment_paid",
-        title: "Payment confirmed",
-        message: `Your payment for ${booking.bookingRef} was verified. Your receipt is ready.`,
+        title: "Reservation payment confirmed",
+        message: `Your payment for ${booking.bookingRef} was verified. Your rental dates are now secured and your receipt is ready.`,
         actionUrl: `/account/bookings/${bookingId}`,
         isRead: false,
         createdAt: now,
@@ -365,6 +389,8 @@ export async function POST(request: Request): Promise<NextResponse> {
           checkoutSessionId,
           providerPaymentId,
           amount: expectedAmount,
+          paymentOption: session.paymentOption ?? "full",
+          remainingBalance,
         },
         createdAt: now,
       });
@@ -384,8 +410,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   await sendPushNotification({
     userId,
-    title: "Payment confirmed",
-    body: `Your payment for ${booking.bookingRef} was verified. Your receipt is ready.`,
+    title: "Reservation payment confirmed",
+    body: `Your payment for ${booking.bookingRef} was verified. Your rental dates are secured and your receipt is ready.`,
     actionUrl: `/account/bookings/${bookingId}`,
   }).catch((pushError) => console.error("Payment push notification failed", pushError));
 

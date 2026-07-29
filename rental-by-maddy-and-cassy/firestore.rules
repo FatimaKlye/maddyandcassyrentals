@@ -60,6 +60,26 @@ service cloud.firestore {
 
       allow update: if isActiveAdmin()
         || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && resource.data.status == 'submitted'
+          && request.resource.data.status == resource.data.status
+          && resource.data.paymentStatus in ['paid', 'partially_paid']
+          && resource.data.requirementsStatus == 'not_submitted'
+          && request.resource.data.requirementsStatus == 'submitted'
+          && resource.data.agreementStatus == 'awaiting_customer_signature'
+          && request.resource.data.agreementStatus == 'submitted_for_review'
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'requirementsStatus',
+              'agreementStatus',
+              'updatedAt'
+            ])
+        )
+        || (
           isOwner(userId)
           && request.resource.data.role == resource.data.role
           && request.resource.data.accountStatus
@@ -236,7 +256,9 @@ service cloud.firestore {
 
         allow create: if ownsBooking(bookingId)
           && request.resource.data.userId == request.auth.uid
-          && request.resource.data.status == 'submitted';
+          && request.resource.data.status == 'submitted'
+          && get(/databases/$(database)/documents/bookings/$(bookingId))
+            .data.paymentStatus in ['paid', 'partially_paid'];
 
         allow update: if isActiveAdmin()
           || (
@@ -262,7 +284,9 @@ service cloud.firestore {
         allow create: if ownsBooking(bookingId)
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.status
-            == 'submitted_for_review';
+            == 'submitted_for_review'
+          && get(/databases/$(database)/documents/bookings/$(bookingId))
+            .data.paymentStatus in ['paid', 'partially_paid'];
 
         allow update: if isActiveAdmin()
           || (

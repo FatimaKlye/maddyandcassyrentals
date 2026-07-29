@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import test from "node:test";
 import { verifyPayMongoSignature } from "../src/lib/paymongo/webhook";
 import {
+  createFinalAgreementPdf,
   createInvoicePdf,
   createReceiptPdf,
 } from "../src/lib/pdf/customerDocuments";
@@ -44,6 +45,20 @@ test("generates invoice and receipt PDFs", async () => {
     paymentReference: "pay_test",
     paymentMethod: "gcash",
   });
+  const agreement = await createFinalAgreementPdf({
+    ...base,
+    address: "Sta. Cruz, Manila",
+    phone: "+63 917 000 0000",
+    fulfillmentMethod: "Pickup",
+    customerLocation: "Sta. Cruz, Manila",
+    includedAccessories: ["Protective case"],
+    termsVersion: "2026-01",
+    signedAt: "July 29, 2026",
+    typedFullName: "Test Customer",
+    paymentReference: "pay_test",
+    confirmedAt: "July 29, 2026",
+  });
   assert.equal(Buffer.from(invoice).subarray(0, 4).toString(), "%PDF");
   assert.equal(Buffer.from(receipt).subarray(0, 4).toString(), "%PDF");
+  assert.equal(Buffer.from(agreement).subarray(0, 4).toString(), "%PDF");
 });

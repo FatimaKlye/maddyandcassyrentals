@@ -1,5 +1,5 @@
 import type { Timestamp } from "firebase/firestore";
-import type { PaymentStatus } from "@/src/types/payment";
+import type { PaymentOption, PaymentStatus } from "@/src/types/payment";
 
 export type BookingStatus =
   | "submitted"
@@ -71,6 +71,9 @@ export interface Booking {
   pricePerDaySnapshot: number;
   estimatedRentalAmount: number;
   amountDue?: number;
+  amountPaid?: number;
+  balanceDue?: number;
+  paymentChoice?: PaymentOption;
   paymentRequired?: boolean;
   paymentStatus?: PaymentStatus;
   status: BookingStatus;

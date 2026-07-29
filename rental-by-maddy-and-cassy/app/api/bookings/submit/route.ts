@@ -652,6 +652,8 @@ export async function POST(
           pricePerDaySnapshot: pricePerDay,
           estimatedRentalAmount: pricePerDay * dayCount,
           amountDue: pricePerDay * dayCount,
+          amountPaid: 0,
+          balanceDue: pricePerDay * dayCount,
           paymentRequired: true,
           paymentStatus: "unpaid",
 
@@ -692,7 +694,7 @@ export async function POST(
           changedBy: "system",
           changedByUserId: uid,
 
-          message: "Booking request submitted.",
+          message: "Reservation created and awaiting payment.",
           createdAt: now,
         });
 
@@ -701,9 +703,9 @@ export async function POST(
           bookingId: bookingRef.id,
 
           type: "booking_submitted",
-          title: "Booking request submitted",
+          title: "Reservation created",
           message:
-            `Your booking request for ${productName} has been submitted for review.`,
+            `Your dates for ${productName} are held while you complete payment.`,
 
           actionUrl:
             `/account/bookings/${bookingRef.id}`,

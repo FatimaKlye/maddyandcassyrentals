@@ -203,6 +203,18 @@ export async function PATCH(
         throw new Error("INVALID_TRANSITION");
       }
       if (
+        targetStatus === "under_review" &&
+        (
+          !requirementsSnapshot.exists ||
+          requirementsSnapshot.data()?.status !== "submitted" ||
+          !agreementSnapshot.exists ||
+          agreementSnapshot.data()?.status !== "submitted_for_review" ||
+          !["paid", "partially_paid"].includes(String(booking?.paymentStatus))
+        )
+      ) {
+        throw new Error("INCOMPLETE_SUBMISSION");
+      }
+      if (
         targetStatus === "approved" &&
         (
           !requirementsSnapshot.exists ||
@@ -215,6 +227,11 @@ export async function PATCH(
       ) {
         throw new Error("INCOMPLETE_SUBMISSION");
       }
+      const nextStatus: BookingStatus =
+        targetStatus === "approved" &&
+        ["paid", "partially_paid"].includes(String(booking?.paymentStatus))
+          ? "confirmed"
+          : targetStatus;
 
       const userId = typeof booking?.userId === "string" ? booking.userId : "";
       const userRef = userId ? adminDb.collection("users").doc(userId) : null;
@@ -222,7 +239,7 @@ export async function PATCH(
 
       const now = Timestamp.now();
       const updates: Record<string, unknown> = {
-        status: targetStatus,
+        status: nextStatus,
         updatedAt: now,
         reviewedBy: adminUid,
         reviewedAt: now,
@@ -237,9 +254,14 @@ export async function PATCH(
         updates.agreementStatus = "correction_required";
       } else if (targetStatus === "approved") {
         updates.requirementsStatus = "verified";
-        updates.agreementStatus = "awaiting_admin_signature";
+        updates.agreementStatus = nextStatus === "confirmed" ? "completed" : "awaiting_admin_signature";
         updates.paymentStatus =
-          booking?.paymentStatus === "paid" ? "paid" : "unpaid";
+          ["paid", "partially_paid"].includes(String(booking?.paymentStatus))
+            ? booking?.paymentStatus
+            : "unpaid";
+        if (nextStatus === "confirmed") {
+          updates.confirmedAt = now;
+        }
       }
 
       transaction.update(bookingRef, updates);
@@ -270,7 +292,9 @@ export async function PATCH(
         transaction.update(agreementRef, {
           status:
             targetStatus === "approved"
-              ? "awaiting_admin_signature"
+              ? nextStatus === "confirmed"
+                ? "completed"
+                : "awaiting_admin_signature"
               : targetStatus === "correction_required"
                 ? "correction_required"
                 : "submitted_for_review",
@@ -290,10 +314,10 @@ export async function PATCH(
       const historyRef = bookingRef.collection("statusHistory").doc();
       transaction.create(historyRef, {
         previousStatus: currentStatus,
-        newStatus: targetStatus,
+        newStatus: nextStatus,
         changedBy: "admin",
         changedByUserId: adminUid,
-        message: note || STATUS_COPY[targetStatus].message,
+        message: note || STATUS_COPY[nextStatus].message,
         createdAt: now,
       });
 
@@ -302,11 +326,11 @@ export async function PATCH(
         transaction.create(notificationRef, {
           recipientId: userId,
           bookingId,
-          type: STATUS_COPY[targetStatus].notificationType,
-          title: STATUS_COPY[targetStatus].title,
+          type: STATUS_COPY[nextStatus].notificationType,
+          title: STATUS_COPY[nextStatus].title,
           message: note
-            ? `${STATUS_COPY[targetStatus].message} Note: ${note}`
-            : STATUS_COPY[targetStatus].message,
+            ? `${STATUS_COPY[nextStatus].message} Note: ${note}`
+            : STATUS_COPY[nextStatus].message,
           actionUrl: `/account/bookings/${bookingId}`,
           isRead: false,
           createdAt: now,
@@ -322,7 +346,7 @@ export async function PATCH(
         targetId: bookingId,
         metadata: {
           previousStatus: currentStatus,
-          newStatus: targetStatus,
+          newStatus: nextStatus,
           note,
         },
         createdAt: now,
@@ -340,34 +364,50 @@ export async function PATCH(
             .collection("calendar")
             .doc(dateKey);
 
-          if (targetStatus === "cancelled" || targetStatus === "rejected") {
+          if (nextStatus === "cancelled" || nextStatus === "rejected") {
             transaction.delete(calendarRef);
           } else if (
-            targetStatus === "approved" ||
-            targetStatus === "confirmed" ||
-            targetStatus === "active"
+            nextStatus === "approved" ||
+            nextStatus === "confirmed" ||
+            nextStatus === "active"
           ) {
             transaction.update(calendarRef, {
-              status: targetStatus === "active" ? "active" : "confirmed",
+              status: nextStatus === "active" ? "active" : "confirmed",
               updatedAt: now,
             });
           }
         }
       }
+
+      if (
+        nextStatus === "confirmed" &&
+        agreementSnapshot.exists &&
+        typeof agreementSnapshot.data()?.finalAgreementPath === "string"
+      ) {
+        transaction.set(bookingRef.collection("documents").doc("booking-confirmation"), {
+          type: "booking_confirmation",
+          storagePath: agreementSnapshot.data()!.finalAgreementPath,
+          title: "Confirmed Booking and Signed Rental Agreement",
+          generatedAt: now,
+        });
+      }
     });
 
     const updatedBooking = await adminDb.collection("bookings").doc(bookingId).get();
     const pushUserId = updatedBooking.data()?.userId;
+    const resultingStatus = updatedBooking.data()?.status as BookingStatus;
     if (typeof pushUserId === "string") {
       await sendPushNotification({
         userId: pushUserId,
-        title: STATUS_COPY[targetStatus].title,
-        body: note || STATUS_COPY[targetStatus].message,
+        title: STATUS_COPY[resultingStatus]?.title ?? STATUS_COPY[targetStatus].title,
+        body:
+          note ||
+          (STATUS_COPY[resultingStatus]?.message ?? STATUS_COPY[targetStatus].message),
         actionUrl: `/account/bookings/${bookingId}`,
       }).catch((pushError) => console.error("Booking push notification failed", pushError));
     }
 
-    return NextResponse.json({ success: true, bookingId, status: targetStatus });
+    return NextResponse.json({ success: true, bookingId, status: resultingStatus });
   } catch (error) {
     if (error instanceof Error && error.message === "BOOKING_NOT_FOUND") {
       return errorResponse("The selected booking no longer exists.", 404);

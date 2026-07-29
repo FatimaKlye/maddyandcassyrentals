@@ -93,6 +93,13 @@ export default function PaymentHistoryPage() {
               </div>
               <div className={styles.payment}>
                 <strong>{money(payment.amount)}</strong>
+                <small>
+                  {payment.paymentOption === "deposit_50"
+                    ? "50% reservation payment"
+                    : payment.paymentOption === "balance"
+                      ? "Remaining balance"
+                      : "Full payment"}
+                </small>
                 <span className={`${styles.status} ${styles[payment.status]}`}>
                   {payment.status}
                 </span>
@@ -104,7 +111,7 @@ export default function PaymentHistoryPage() {
       ) : rows ? (
         <div className={styles.empty}>
           <h2>No payment records yet</h2>
-          <p>Your checkout and receipt history will appear here after a booking is approved.</p>
+          <p>Your checkout, proof, and receipt history will appear here after you reserve an item.</p>
         </div>
       ) : null}
     </div>

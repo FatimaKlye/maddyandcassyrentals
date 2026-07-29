@@ -10,7 +10,7 @@ interface StepCustomerInfoProps {
   uid: string;
   customerInfo: CustomerInfoDraft;
   onUpdate: (patch: Partial<CustomerInfoDraft>) => void;
-  onBack: () => void;
+  onBack?: () => void;
   onContinue: () => void;
 }
 
@@ -58,9 +58,10 @@ export default function StepCustomerInfo({
 
   return (
     <div className={styles.wrapper}>
-      <h2 className={styles.heading}>Customer Information</h2>
+      <h2 className={styles.heading}>Rental Details</h2>
       <p className={styles.subheading}>
-        We&apos;ve prefilled what we have on file. Update anything that&apos;s changed.
+        Confirm the renter information that will appear on this reservation, invoice, receipt,
+        and rental agreement.
       </p>
 
       <div className={formStyles.row}>
@@ -154,9 +155,11 @@ export default function StepCustomerInfo({
       </div>
 
       <div className={styles.footer}>
-        <button type="button" className={formStyles.secondaryButton} onClick={onBack}>
-          Back
-        </button>
+        {onBack ? (
+          <button type="button" className={formStyles.secondaryButton} onClick={onBack}>
+            Back
+          </button>
+        ) : <span />}
         <button
           type="button"
           className={formStyles.primaryButton}

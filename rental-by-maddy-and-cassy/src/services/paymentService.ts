@@ -10,6 +10,7 @@ import { db } from "@/src/lib/firebase/config";
 import type {
   BookingInvoice,
   BookingReceipt,
+  PaymentOption,
   PaymentRecord,
 } from "@/src/types/payment";
 import { getAppCheckHeaders } from "@/src/lib/firebase/appCheckClient";
@@ -21,6 +22,8 @@ function withId<T>(snapshot: QueryDocumentSnapshot<DocumentData>): T {
 export async function createPaymentCheckout(
   bookingId: string,
   idToken: string,
+  paymentOption: PaymentOption = "full",
+  returnPath?: string,
 ): Promise<{ checkoutUrl: string }> {
   const response = await fetch("/api/payments/checkout", {
     method: "POST",
@@ -29,7 +32,7 @@ export async function createPaymentCheckout(
       "Content-Type": "application/json",
       ...(await getAppCheckHeaders()),
     },
-    body: JSON.stringify({ bookingId }),
+    body: JSON.stringify({ bookingId, paymentOption, returnPath }),
   });
 
   const body = (await response.json().catch(() => null)) as

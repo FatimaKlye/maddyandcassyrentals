@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
+import type { PaymentStatus } from "@/src/types/payment";
 import { useAuth } from "@/hooks/useAuth";
 import RequireAuth from "@/components/route-guards/RequireAuth";
 import ReservationStepper from "@/components/reservation/ReservationStepper";
@@ -11,13 +11,26 @@ import StepRentalDetails from "@/components/reservation/StepRentalDetails";
 import StepCustomerInfo from "@/components/reservation/StepCustomerInfo";
 import StepRequirements from "@/components/reservation/StepRequirements";
 import StepAgreement from "@/components/reservation/StepAgreement";
-import StepReview from "@/components/reservation/StepReview";
+import StepPaymentSubmission from "@/components/reservation/StepPaymentSubmission";
+import StepBookingConfirmation from "@/components/reservation/StepBookingConfirmation";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createEmptyDraft, getDayCount, type ReservationDraft } from "@/src/types/reservationDraft";
-import { submitBooking } from "@/src/services/bookingSubmissionService";
+import {
+  createBookingReservation,
+  submitBookingDocuments,
+} from "@/src/services/bookingSubmissionService";
+import { createPaymentCheckout } from "@/src/services/paymentService";
+import { getBookingById } from "@/src/services/bookingService";
 import styles from "./reserve.module.css";
 
-const STEP_LABELS = ["Rental Details", "Customer Info", "Requirements", "Agreement", "Review"];
+const STEP_LABELS = [
+  "Rental Details",
+  "Reservation",
+  "Payment Submission",
+  "Verification Documents",
+  "Rental Agreement",
+  "Booking Confirmation",
+];
 
 interface ReserveFlowClientProps {
   product: Product;
@@ -26,20 +39,21 @@ interface ReserveFlowClientProps {
 
 function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
   const { user, profile } = useAuth();
-  const router = useRouter();
   const { showToast } = useToast();
-
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<ReservationDraft>(createEmptyDraft());
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [bookingNumber, setBookingNumber] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
+  const [openingPayment, setOpeningPayment] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [submittingDocuments, setSubmittingDocuments] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
 
   useEffect(() => {
     if (prefilled || !user) return;
-    // Prefill is a one-time sync from the async auth/profile subscription
-    // (AuthContext) into locally editable draft state, not a value derivable
-    // during render, so an effect is the right tool here.
+    // One-time hydration of the locally editable booking form from async auth/profile data.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft((current) => ({
       ...current,
@@ -60,6 +74,80 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     setPrefilled(true);
   }, [user, profile, prefilled]);
 
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    const resumedBookingId = params.get("bookingId");
+    if (!resumedBookingId) return;
+    const activeUser = user;
+    const activeBookingId = resumedBookingId;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const returnedFromPayment = params.get("payment") === "success";
+    const paymentCancelled = params.get("payment") === "cancelled";
+    let attempts = 0;
+
+    async function refreshBooking() {
+      const booking = await getBookingById(activeBookingId);
+      if (
+        !booking ||
+        booking.userId !== activeUser.uid ||
+        booking.productId !== product.id ||
+        cancelled
+      ) {
+        setPaymentError("This reservation could not be resumed.");
+        return;
+      }
+
+      setBookingId(booking.id);
+      setBookingNumber(booking.bookingRef);
+      setPaymentStatus(booking.paymentStatus ?? "unpaid");
+      setDraft((current) => ({
+        ...current,
+        startDate: booking.startDate.toDate(),
+        endDate: booking.endDate.toDate(),
+        fulfillmentMethod: booking.fulfillmentMethod,
+        customerLocation: booking.customerLocation,
+        paymentOption:
+          booking.paymentChoice === "full" || booking.paymentChoice === "deposit_50"
+            ? booking.paymentChoice
+            : current.paymentOption,
+        customerInfo: booking.customerSnapshot ?? current.customerInfo,
+      }));
+      setStep(3);
+
+      const verified =
+        booking.paymentStatus === "paid" || booking.paymentStatus === "partially_paid";
+      if (verified) {
+        setCheckingPayment(false);
+        setPaymentError(null);
+        return;
+      }
+
+      if (returnedFromPayment && attempts < 15) {
+        attempts += 1;
+        setCheckingPayment(true);
+        timer = setTimeout(refreshBooking, 2000);
+      } else {
+        setCheckingPayment(false);
+        if (returnedFromPayment) {
+          setPaymentError(
+            "PayMongo is still confirming the transaction. Please wait a moment, then refresh this page.",
+          );
+        } else if (paymentCancelled) {
+          setPaymentError("Payment was cancelled. Your reservation can still be paid from here.");
+        }
+      }
+    }
+
+    void refreshBooking();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [user, product.id]);
+
   function updateDraft(patch: Partial<ReservationDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
   }
@@ -69,37 +157,65 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handleSubmit() {
+  async function handlePayment() {
     if (!user) return;
-    setSubmitting(true);
-    setSubmitError(null);
+    setOpeningPayment(true);
+    setPaymentError(null);
 
     try {
-      const { bookingId } = await submitBooking(product, user.uid, draft);
-      showToast("Booking request submitted successfully.", "success");
-      router.push(`/account/bookings/${bookingId}?justSubmitted=1`);
-    } catch (error) {
-      setSubmitting(false);
-      if (error instanceof Error && error.name === "DatesUnavailableError") {
-        setSubmitError(
-          "One or more of your selected dates were just booked by someone else. Please go back and choose different dates."
-        );
-      } else {
-        setSubmitError("We couldn't submit your booking request. Please try again.");
+      let activeBookingId = bookingId;
+      let activeBookingNumber = bookingNumber;
+      if (!activeBookingId) {
+        const reservation = await createBookingReservation(product, draft);
+        activeBookingId = reservation.bookingId;
+        activeBookingNumber = reservation.bookingNumber ?? reservation.bookingId;
+        setBookingId(activeBookingId);
+        setBookingNumber(activeBookingNumber);
       }
+
+      const idToken = await user.getIdToken();
+      const returnPath =
+        `/catalog/${encodeURIComponent(product.id)}/reserve?bookingId=${encodeURIComponent(activeBookingId)}`;
+      const checkout = await createPaymentCheckout(
+        activeBookingId,
+        idToken,
+        draft.paymentOption,
+        returnPath,
+      );
+      window.location.assign(checkout.checkoutUrl);
+    } catch (error) {
+      setOpeningPayment(false);
+      setPaymentError(
+        error instanceof Error
+          ? error.message
+          : "The secure PayMongo checkout could not be opened.",
+      );
+    }
+  }
+
+  async function handleDocumentSubmission() {
+    if (!user || !bookingId || !bookingNumber) return;
+    setSubmittingDocuments(true);
+    try {
+      await submitBookingDocuments(product, user.uid, bookingId, bookingNumber, draft);
+      showToast("Verification documents and signed agreement submitted.", "success");
+      goToStep(6);
+    } catch {
+      showToast("We couldn't submit your documents. Please try again.", "error");
+      setSubmittingDocuments(false);
     }
   }
 
   const agreementData = {
-    bookingRef: "Generated at submission",
-    customerName: draft.customerInfo.fullName || "—",
+    bookingRef: bookingNumber ?? "Created before payment",
+    customerName: draft.customerInfo.fullName || "-",
     productName: product.name,
     brand: product.brand,
     startDate: draft.startDate ?? new Date(),
     endDate: draft.endDate ?? new Date(),
     dayCount: getDayCount(draft.startDate, draft.endDate),
     fulfillmentMethod: draft.fulfillmentMethod ?? "pickup",
-    customerLocation: draft.customerLocation || "—",
+    customerLocation: draft.customerLocation || "-",
     pricePerDay: product.pricePerDay,
     currency: product.currency,
     includedAccessories: product.included,
@@ -111,54 +227,67 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
 
       <div className={styles.card}>
         {step === 1 ? (
-          <StepRentalDetails
-            product={product}
-            units={units}
-            draft={draft}
-            onUpdate={updateDraft}
+          <StepCustomerInfo
+            uid={user!.uid}
+            customerInfo={draft.customerInfo}
+            onUpdate={(patch) =>
+              updateDraft({ customerInfo: { ...draft.customerInfo, ...patch } })
+            }
             onContinue={() => goToStep(2)}
           />
         ) : null}
 
         {step === 2 ? (
-          <StepCustomerInfo
-            uid={user!.uid}
-            customerInfo={draft.customerInfo}
-            onUpdate={(patch) => updateDraft({ customerInfo: { ...draft.customerInfo, ...patch } })}
+          <StepRentalDetails
+            product={product}
+            units={units}
+            draft={draft}
+            onUpdate={updateDraft}
             onBack={() => goToStep(1)}
             onContinue={() => goToStep(3)}
           />
         ) : null}
 
         {step === 3 ? (
-          <StepRequirements
-            requirements={draft.requirements}
-            onUpdate={(patch) => updateDraft({ requirements: { ...draft.requirements, ...patch } })}
+          <StepPaymentSubmission
+            product={product}
+            draft={draft}
+            paymentStatus={paymentStatus}
+            bookingNumber={bookingNumber ?? undefined}
+            opening={openingPayment}
+            checking={checkingPayment}
+            error={paymentError}
+            onPaymentOptionChange={(paymentOption) => updateDraft({ paymentOption })}
             onBack={() => goToStep(2)}
+            onPay={() => void handlePayment()}
             onContinue={() => goToStep(4)}
           />
         ) : null}
 
         {step === 4 ? (
-          <StepAgreement
-            agreementData={agreementData}
-            agreement={draft.agreement}
-            onUpdate={(patch) => updateDraft({ agreement: { ...draft.agreement, ...patch } })}
+          <StepRequirements
+            requirements={draft.requirements}
+            onUpdate={(patch) =>
+              updateDraft({ requirements: { ...draft.requirements, ...patch } })
+            }
             onBack={() => goToStep(3)}
             onContinue={() => goToStep(5)}
           />
         ) : null}
 
         {step === 5 ? (
-          <StepReview
-            product={product}
-            draft={draft}
-            onEditStep={goToStep}
+          <StepAgreement
+            agreementData={agreementData}
+            agreement={draft.agreement}
+            onUpdate={(patch) => updateDraft({ agreement: { ...draft.agreement, ...patch } })}
             onBack={() => goToStep(4)}
-            onSubmit={handleSubmit}
-            submitting={submitting}
-            submitError={submitError}
+            onContinue={() => void handleDocumentSubmission()}
+            submitting={submittingDocuments}
           />
+        ) : null}
+
+        {step === 6 && bookingId && bookingNumber ? (
+          <StepBookingConfirmation bookingId={bookingId} bookingNumber={bookingNumber} />
         ) : null}
       </div>
     </div>

@@ -88,9 +88,9 @@ export default function AgreementDocument({ data }: { data: AgreementDocumentDat
             business.
           </li>
           <li>
-            Payment is completed through the secure PayMongo checkout after the booking and
-            verification requirements are approved. A booking is confirmed only after the
-            payment webhook is verified by the system.
+            The reservation is secured after PayMongo verifies the initial payment. The booking
+            becomes fully confirmed after the required verification documents and this signed
+            agreement are approved by the business.
           </li>
           <li>
             This agreement, once electronically signed, is considered binding for this specific

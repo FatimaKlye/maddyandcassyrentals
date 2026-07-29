@@ -13,6 +13,7 @@ export interface CreateCheckoutInput {
   productName: string;
   bookingRef: string;
   referenceNumber: string;
+  paymentLabel: string;
   customer: {
     name: string;
     email: string;
@@ -82,7 +83,7 @@ export async function createCheckoutSession(
           },
           line_items: [
             {
-              name: `Rental - ${input.productName}`,
+              name: input.paymentLabel,
               description: `Booking ${input.bookingRef}`,
               amount: input.amountCentavos,
               currency: "PHP",

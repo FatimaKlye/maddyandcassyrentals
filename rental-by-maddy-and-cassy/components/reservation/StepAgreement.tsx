@@ -14,6 +14,7 @@ interface StepAgreementProps {
   onUpdate: (patch: Partial<AgreementDraft>) => void;
   onBack: () => void;
   onContinue: () => void;
+  submitting?: boolean;
 }
 
 const CONFIRMATIONS: Array<{ key: keyof AgreementDraft; label: ReactNode }> = [
@@ -64,6 +65,7 @@ export default function StepAgreement({
   onUpdate,
   onBack,
   onContinue,
+  submitting = false,
 }: StepAgreementProps) {
   const allChecked = CONFIRMATIONS.every((item) => Boolean(agreement[item.key]));
   const hasSignature =
@@ -120,16 +122,21 @@ export default function StepAgreement({
       </div>
 
       <div className={styles.footer}>
-        <button type="button" className={formStyles.secondaryButton} onClick={onBack}>
+        <button
+          type="button"
+          className={formStyles.secondaryButton}
+          onClick={onBack}
+          disabled={submitting}
+        >
           Back
         </button>
         <button
           type="button"
           className={formStyles.primaryButton}
-          disabled={!canContinue}
+          disabled={!canContinue || submitting}
           onClick={onContinue}
         >
-          Continue
+          {submitting ? "Submitting…" : "Sign & Submit Agreement"}
         </button>
       </div>
     </div>

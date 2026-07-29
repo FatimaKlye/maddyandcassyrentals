@@ -28,6 +28,10 @@ interface CustomerDocumentBase {
 
 export interface InvoicePdfInput extends CustomerDocumentBase {
   invoiceNumber: string;
+  totalAmount?: number;
+  amountDueNow?: number;
+  remainingBalance?: number;
+  paymentLabel?: string;
 }
 
 export interface ReceiptPdfInput extends CustomerDocumentBase {
@@ -252,10 +256,34 @@ export async function createInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arr
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let y = addBrandHeader(page, bold, "Rental Invoice", input.invoiceNumber);
   y = drawSummary(page, regular, bold, input, y);
-  y = drawAmountBox(page, regular, bold, input.amount, y, "Amount due");
+  const totalAmount = input.totalAmount ?? input.amount;
+  const amountDueNow = input.amountDueNow ?? input.amount;
+  const remainingBalance = input.remainingBalance ?? Math.max(0, totalAmount - amountDueNow);
+  y = drawAmountBox(page, regular, bold, totalAmount, y, "Total rental amount");
+  const dueY = drawField(
+    page,
+    regular,
+    bold,
+    "Payment selected",
+    `${input.paymentLabel ?? "Amount due"}: ${money(amountDueNow)}`,
+    MARGIN,
+    y,
+    250,
+  );
+  const balanceY = drawField(
+    page,
+    regular,
+    bold,
+    "Balance after this payment",
+    money(remainingBalance),
+    MARGIN + 290,
+    y,
+    200,
+  );
+  y = Math.min(dueY, balanceY);
   drawField(page, regular, bold, "Booking reference", input.bookingRef, MARGIN, y, 230);
   drawField(page, regular, bold, "Issued", input.issuedAt, MARGIN + 270, y, 220);
-  addFooter(page, regular, "This invoice is payable through the secure PayMongo checkout linked to the booking.");
+  addFooter(page, regular, "This booking invoice is payable through the secure PayMongo checkout linked to the reservation.");
   pdf.setTitle(`Invoice ${safeText(input.invoiceNumber)}`);
   pdf.setAuthor("Rental by Maddy & Cassy");
   return pdf.save();
@@ -348,9 +376,9 @@ export async function createFinalAgreementPdf(
     y,
     PAGE_WIDTH - MARGIN * 2,
   );
-  y = drawAmountBox(pageOne, regular, bold, input.amount, y, "Paid rental amount");
+  y = drawAmountBox(pageOne, regular, bold, input.amount, y, "Reservation payment received");
   drawField(pageOne, regular, bold, "Payment confirmation", input.paymentReference, MARGIN, y, 270);
-  drawField(pageOne, regular, bold, "Booking confirmed", input.confirmedAt, MARGIN + 310, y, 180);
+  drawField(pageOne, regular, bold, "Reservation secured", input.confirmedAt, MARGIN + 310, y, 180);
   addFooter(pageOne, regular, `Agreement terms version ${input.termsVersion} - Page 1 of 2`);
 
   const pageTwo = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -376,12 +404,12 @@ export async function createFinalAgreementPdf(
   ];
 
   terms.forEach((term, index) => {
-    const lines = wrap(`${index + 1}. ${term}`, regular, 9.5, PAGE_WIDTH - MARGIN * 2);
+    const lines = wrap(`${index + 1}. ${term}`, regular, 10.5, PAGE_WIDTH - MARGIN * 2);
     for (const line of lines) {
-      pageTwo.drawText(line, { x: MARGIN, y, size: 9.5, font: regular, color: INK });
-      y -= 14;
+      pageTwo.drawText(line, { x: MARGIN, y, size: 10.5, font: regular, color: INK });
+      y -= 17;
     }
-    y -= 5;
+    y -= 9;
   });
 
   y -= 14;
@@ -424,8 +452,8 @@ export async function createFinalAgreementPdf(
   drawField(pageTwo, regular, bold, "Signed at", input.signedAt, MARGIN + half + 20, y, half);
   addFooter(pageTwo, regular, `Agreement terms version ${input.termsVersion} - Page 2 of 2`);
 
-  pdf.setTitle(`Final Rental Agreement - ${safeText(input.bookingRef)}`);
-  pdf.setSubject("Electronically signed rental agreement and booking confirmation");
+  pdf.setTitle(`Signed Rental Agreement - ${safeText(input.bookingRef)}`);
+  pdf.setSubject("Electronically signed rental agreement for a secured reservation");
   pdf.setAuthor("Rental by Maddy & Cassy");
   return pdf.save();
 }

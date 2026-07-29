@@ -9,6 +9,7 @@ import {
   RequestSecurityError,
 } from "@/src/lib/server/requestSecurity";
 import { generateAndSaveInvoice } from "@/src/lib/server/customerDocuments";
+import type { PaymentOption } from "@/src/types/payment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,23 @@ function documentNumber(prefix: string, bookingRef: string, id: string): string 
   return `${prefix}-${cleanBooking}-${id.slice(0, 6).toUpperCase()}`;
 }
 
+function isPaymentOption(value: unknown): value is PaymentOption {
+  return value === "deposit_50" || value === "full" || value === "balance";
+}
+
+function safeReturnPath(value: unknown, fallback: string): string {
+  if (
+    typeof value === "string" &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.includes("\r") &&
+    !value.includes("\n")
+  ) {
+    return value;
+  }
+  return fallback;
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     enforceRateLimit(request, "payment-checkout", 8, 60_000);
@@ -30,7 +48,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const db = getAdminDb();
 
     const body = (await request.json().catch(() => null)) as
-      | { bookingId?: unknown }
+      | { bookingId?: unknown; paymentOption?: unknown; returnPath?: unknown }
       | null;
     const bookingId =
       typeof body?.bookingId === "string" ? body.bookingId.trim() : "";
@@ -51,20 +69,46 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (booking.userId !== user.uid) {
       return responseError("You do not have access to this booking.", 403);
     }
-    if (!["approved", "confirmed"].includes(booking.status)) {
+    if (
+      !["submitted", "under_review", "correction_required", "approved", "confirmed"].includes(
+        booking.status,
+      )
+    ) {
       return responseError(
-        "Payment becomes available after the booking and requirements are approved.",
+        "Payment is not available for this booking.",
         409,
       );
     }
-    if (booking.paymentStatus === "paid") {
+    const paymentOption = isPaymentOption(body?.paymentOption)
+      ? body.paymentOption
+      : "full";
+    if (booking.paymentStatus === "paid" && paymentOption !== "balance") {
       return responseError("This booking is already paid.", 409);
     }
 
-    const amount = booking.amountDue ?? booking.estimatedRentalAmount;
-    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    const configuredTotal = booking.estimatedRentalAmount ?? booking.amountDue;
+    const amountPaid =
+      typeof booking.amountPaid === "number" && Number.isFinite(booking.amountPaid)
+        ? booking.amountPaid
+        : 0;
+    if (
+      typeof configuredTotal !== "number" ||
+      !Number.isFinite(configuredTotal) ||
+      configuredTotal <= 0
+    ) {
       return responseError("The booking amount is not configured correctly.", 409);
     }
+    const totalAmount = configuredTotal;
+    const balanceDue = Math.max(0, totalAmount - amountPaid);
+    if (balanceDue <= 0) {
+      return responseError("This booking is already paid.", 409);
+    }
+    const amount =
+      paymentOption === "deposit_50" && amountPaid === 0
+        ? Math.round(totalAmount * 50) / 100
+        : paymentOption === "balance"
+          ? balanceDue
+          : balanceDue;
     const amountCentavos = Math.round(amount * 100);
     if (amountCentavos < 100) {
       return responseError("The booking amount is below the payment minimum.", 409);
@@ -79,7 +123,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (
       reusable &&
       typeof reusable.checkoutUrl === "string" &&
-      reusable.amount === amount
+      reusable.amount === amount &&
+      reusable.paymentOption === paymentOption
     ) {
       return NextResponse.json({
         success: true,
@@ -97,7 +142,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       `private/users/${user.uid}/bookings/${bookingId}/documents/${invoiceNumber}.pdf`;
     const appOrigin =
       process.env.APP_URL?.replace(/\/$/, "") || new URL(request.url).origin;
-    const returnUrl = `${appOrigin}/account/bookings/${bookingId}`;
+    const returnPath = safeReturnPath(
+      body?.returnPath,
+      `/account/bookings/${bookingId}`,
+    );
+    const returnUrl = `${appOrigin}${returnPath}`;
+    const returnSeparator = returnUrl.includes("?") ? "&" : "?";
     const customer = booking.customerSnapshot ?? {};
 
     const checkout = await createCheckoutSession({
@@ -110,13 +160,20 @@ export async function POST(request: Request): Promise<NextResponse> {
         email: customer.email || user.email || "",
         phone: customer.phone || "",
       },
-      successUrl: `${returnUrl}?payment=success`,
-      cancelUrl: `${returnUrl}?payment=cancelled`,
+      paymentLabel:
+        paymentOption === "deposit_50"
+          ? "50% reservation payment"
+          : paymentOption === "balance"
+            ? "Remaining rental balance"
+            : "Full rental payment",
+      successUrl: `${returnUrl}${returnSeparator}payment=success`,
+      cancelUrl: `${returnUrl}${returnSeparator}payment=cancelled`,
       metadata: {
         booking_id: bookingId,
         payment_record_id: paymentRef.id,
         user_id: user.uid,
         invoice_id: invoiceRef.id,
+        payment_option: paymentOption,
       },
       idempotencyKey: `checkout-${bookingId}-${paymentRef.id}`,
     });
@@ -129,6 +186,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       invoiceId: invoiceRef.id,
       userId: user.uid,
       amount,
+      totalAmount,
+      paymentOption,
       currency: "PHP",
       referenceNumber,
       livemode: checkout.livemode,
@@ -140,6 +199,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         booking,
         invoiceNumber,
         storagePath: invoicePath,
+        amountDueNow: amount,
+        totalAmount,
+        remainingBalance: Math.max(0, balanceDue - amount),
+        paymentOption,
       });
     } catch (error) {
       console.error("Invoice PDF generation failed", error);
@@ -154,6 +217,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       userId: user.uid,
       bookingRef: booking.bookingRef,
       amount,
+      paymentOption,
       currency: "PHP",
       status: "pending",
       provider: "paymongo",
@@ -181,7 +245,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         },
       ],
       subtotal: amount,
-      total: amount,
+      total: totalAmount,
+      amountDueNow: amount,
+      remainingBalance: Math.max(0, balanceDue - amount),
+      paymentOption,
       storagePath: invoicePath,
       paymentId: paymentRef.id,
       issuedAt: now,
@@ -194,7 +261,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       generatedAt: now,
     });
     batch.update(bookingRef, {
-      amountDue: amount,
+      amountDue: totalAmount,
+      balanceDue,
+      paymentChoice: paymentOption,
       paymentRequired: true,
       paymentStatus: "pending",
       activePaymentId: paymentRef.id,
@@ -207,7 +276,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       bookingId,
       targetType: "payment",
       targetId: paymentRef.id,
-      metadata: { checkoutSessionId: checkout.id, amount },
+      metadata: { checkoutSessionId: checkout.id, amount, paymentOption },
       createdAt: now,
     });
     batch.set(db.collection("users").doc(user.uid).collection("notifications").doc(), {

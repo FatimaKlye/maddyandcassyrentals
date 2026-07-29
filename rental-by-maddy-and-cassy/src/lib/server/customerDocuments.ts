@@ -55,6 +55,10 @@ export async function generateAndSaveInvoice(input: {
   booking: DocumentData;
   invoiceNumber: string;
   storagePath: string;
+  amountDueNow?: number;
+  totalAmount?: number;
+  remainingBalance?: number;
+  paymentOption?: string;
 }): Promise<void> {
   const booking = input.booking;
   const customer = booking.customerSnapshot ?? {};
@@ -65,7 +69,16 @@ export async function generateAndSaveInvoice(input: {
     customerEmail: customer.email || "",
     productName: booking.productSnapshot?.name || "Rental item",
     rentalDates: bookingRentalDates(booking),
-    amount: booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
+    amount: input.amountDueNow ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
+    totalAmount: input.totalAmount ?? booking.estimatedRentalAmount ?? booking.amountDue ?? 0,
+    amountDueNow: input.amountDueNow ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
+    remainingBalance: input.remainingBalance ?? 0,
+    paymentLabel:
+      input.paymentOption === "deposit_50"
+        ? "50% reservation payment"
+        : input.paymentOption === "balance"
+          ? "Remaining balance"
+          : "Full payment",
     issuedAt: formatDate(new Date(), true),
   });
   await savePrivatePdf(input.storagePath, bytes, {
@@ -80,6 +93,7 @@ export async function generateAndSaveReceipt(input: {
   paymentReference: string;
   paymentMethod: string;
   storagePath: string;
+  amount?: number;
 }): Promise<void> {
   const booking = input.booking;
   const customer = booking.customerSnapshot ?? {};
@@ -90,7 +104,7 @@ export async function generateAndSaveReceipt(input: {
     customerEmail: customer.email || "",
     productName: booking.productSnapshot?.name || "Rental item",
     rentalDates: bookingRentalDates(booking),
-    amount: booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
+    amount: input.amount ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
     issuedAt: formatDate(new Date(), true),
     paymentReference: input.paymentReference,
     paymentMethod: input.paymentMethod || "PayMongo",
@@ -132,7 +146,7 @@ export async function generateAndSaveFinalAgreement(input: {
     address: customer.address || "",
     productName: booking.productSnapshot?.name || "Rental item",
     rentalDates: bookingRentalDates(booking),
-    amount: booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
+    amount: booking.amountPaid ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
     issuedAt: formatDate(new Date(), true),
     fulfillmentMethod: booking.fulfillmentMethod || "",
     customerLocation: booking.customerLocation || "",

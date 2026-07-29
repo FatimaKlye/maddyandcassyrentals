@@ -1,4 +1,5 @@
 import type { FulfillmentMethod } from "@/src/types/booking";
+import type { PaymentOption } from "@/src/types/payment";
 
 export interface EmergencyContactDraft {
   fullName: string;
@@ -46,6 +47,7 @@ export interface ReservationDraft {
   endDate: Date | null;
   fulfillmentMethod: FulfillmentMethod | null;
   customerLocation: string;
+  paymentOption: Exclude<PaymentOption, "balance">;
   customerInfo: CustomerInfoDraft;
   requirements: RequirementsDraft;
   agreement: AgreementDraft;
@@ -57,6 +59,7 @@ export function createEmptyDraft(): ReservationDraft {
     endDate: null,
     fulfillmentMethod: null,
     customerLocation: "",
+    paymentOption: "deposit_50",
     customerInfo: {
       fullName: "",
       email: "",

@@ -44,6 +44,11 @@
   color: var(--color-status-green);
 }
 
+.partially_paid {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green);
+}
+
 .failed,
 .expired,
 .refunded {

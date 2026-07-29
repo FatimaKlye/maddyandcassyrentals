@@ -3,6 +3,7 @@ import type { Timestamp } from "firebase/firestore";
 export type PaymentStatus =
   | "unpaid"
   | "pending"
+  | "partially_paid"
   | "paid"
   | "failed"
   | "expired"
@@ -10,12 +11,15 @@ export type PaymentStatus =
 
 export type InvoiceStatus = "open" | "paid" | "void";
 
+export type PaymentOption = "deposit_50" | "full" | "balance";
+
 export interface PaymentRecord {
   id: string;
   bookingId: string;
   userId: string;
   bookingRef: string;
   amount: number;
+  paymentOption?: PaymentOption;
   currency: "PHP";
   status: PaymentStatus;
   provider: "paymongo";
@@ -50,6 +54,9 @@ export interface BookingInvoice {
   lineItems: InvoiceLineItem[];
   subtotal: number;
   total: number;
+  amountDueNow?: number;
+  remainingBalance?: number;
+  paymentOption?: PaymentOption;
   storagePath: string;
   paymentId?: string;
   issuedAt: Timestamp;
