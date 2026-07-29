@@ -50,7 +50,9 @@ export default function SignUpForm() {
     setSubmitting(true);
     try {
       await registerWithEmail(values.email, values.password);
-      router.replace(redirectTo);
+      router.replace(
+        `/verify-email?redirect=${encodeURIComponent(redirectTo)}`,
+      );
     } catch {
       setFormError(
         "We couldn't create your account. That email may already be in use, or your password may be too weak.",
@@ -64,8 +66,8 @@ export default function SignUpForm() {
       <p className={styles.eyebrow}>Customer account</p>
       <h1 className={styles.heading}>Create Account</h1>
       <p className={styles.subheading}>
-        Create your login now. Your identity and rental requirements are
-        collected only when you reserve an item.
+        Create your login and verify your email with a one-time code. Your
+        identity documents are collected only when you reserve an item.
       </p>
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -132,7 +134,7 @@ export default function SignUpForm() {
             className={`${formStyles.primaryButton} ${styles.submitButton}`}
             disabled={submitting}
           >
-            {submitting ? "Creating account..." : "Create Account"}
+            {submitting ? "Creating account..." : "Create & Verify Account"}
           </button>
         </div>
       </form>

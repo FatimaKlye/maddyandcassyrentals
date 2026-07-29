@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import { getAdminDb } from "@/src/lib/firebase/admin";
 import {
   parseCatalogInput,
@@ -12,6 +12,52 @@ import {
 } from "@/src/lib/server/requestSecurity";
 
 export const runtime = "nodejs";
+
+function serializeRecord(
+  id: string,
+  data: DocumentData,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { id };
+  for (const [key, value] of Object.entries(data)) {
+    result[key] =
+      value && typeof value === "object" && typeof value.toDate === "function"
+        ? value.toDate().toISOString()
+        : value;
+  }
+  return result;
+}
+
+export async function GET(request: Request): Promise<NextResponse> {
+  try {
+    enforceRateLimit(request, "admin-catalog-read", 60, 60_000);
+    const db = getAdminDb();
+    await requireAdmin(request, db);
+
+    const [productsSnapshot, historySnapshot] = await Promise.all([
+      db.collection("products").get(),
+      db.collectionGroup("priceHistory").get(),
+    ]);
+
+    return NextResponse.json({
+      products: productsSnapshot.docs.map((item) =>
+        serializeRecord(item.id, item.data()),
+      ),
+      priceHistory: historySnapshot.docs.map((item) => ({
+        ...serializeRecord(item.id, item.data()),
+        productId: item.ref.parent.parent?.id ?? "",
+      })),
+    });
+  } catch (error) {
+    if (error instanceof RequestSecurityError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("Admin catalog read failed", error);
+    return NextResponse.json(
+      { error: "The catalog could not be loaded." },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {

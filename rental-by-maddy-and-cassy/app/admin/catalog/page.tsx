@@ -1,5 +1,10 @@
 import AdminCatalogManager from "./AdminCatalogManager";
+import AdminShell from "@/components/admin/AdminShell";
 
 export default function AdminCatalogPage() {
-  return <AdminCatalogManager />;
+  return (
+    <AdminShell>
+      <AdminCatalogManager />
+    </AdminShell>
+  );
 }

@@ -51,6 +51,12 @@ export default function SignInForm() {
         setSubmitting(false);
         return;
       }
+      if (!signedInUser.emailVerified) {
+        router.replace(
+          `/verify-email?redirect=${encodeURIComponent(redirectTo)}`,
+        );
+        return;
+      }
       router.replace(redirectTo);
     } catch {
       setFormError("We couldn't sign you in. Check your email and password and try again.");

@@ -57,6 +57,17 @@ subscribe to `checkout_session.payment.paid`.
 Firebase Cloud Messaging is available from the customer profile after the web
 push VAPID key and Cloud Messaging APIs are configured.
 
+## Gmail signup verification
+
+New customer accounts complete a six-digit email OTP step. Configure
+`GMAIL_SMTP_USER`, `GMAIL_SMTP_APP_PASSWORD`, and a long random
+`EMAIL_OTP_HMAC_SECRET` to send the code through Gmail. Use a Google App
+Password, not the Gmail account's normal password.
+
+In local development, when Gmail credentials are absent, the verification
+screen displays a clearly marked preview code so the full signup and booking
+flow remains testable. Preview codes are never returned in production.
+
 ## Verification
 
 Run `npm run verify` to lint, type-check, test payment security and PDF

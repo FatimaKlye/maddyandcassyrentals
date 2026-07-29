@@ -8,13 +8,14 @@ import Spinner from "@/components/ui/Spinner";
 import {
   createCatalogProductAsAdmin,
   deactivateCatalogProductAsAdmin,
-  getAllProducts,
-  getPriceHistory,
   updateCatalogProductAsAdmin,
   uploadCatalogImage,
   type CatalogEditorInput,
-  type PriceHistoryEntry,
 } from "@/src/services/productService";
+import {
+  getAdminCatalog,
+  type AdminPriceHistoryEntry,
+} from "@/src/services/adminReadService";
 import type { Product } from "@/types/product";
 import styles from "./catalog.module.css";
 
@@ -39,13 +40,25 @@ export default function AdminCatalogManager() {
   const [includedText, setIncludedText] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
+  const [priceHistory, setPriceHistory] = useState<AdminPriceHistoryEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [allProducts, history] = await Promise.all([getAllProducts(), getPriceHistory()]);
-    setProducts(allProducts);
-    setPriceHistory(history);
-  }, []);
+    if (!user) return;
+    setError(null);
+    try {
+      const data = await getAdminCatalog(await user.getIdToken());
+      setProducts(data.products);
+      setPriceHistory(data.priceHistory);
+      setError(null);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "The catalog could not be loaded. Please refresh and try again.",
+      );
+    }
+  }, [user]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -132,9 +145,18 @@ export default function AdminCatalogManager() {
         <button type="button" onClick={() => openEditor()}>Add Product</button>
       </header>
 
-      {!products ? (
+      {error ? (
+        <div className={styles.error} role="alert">
+          {error}
+          <button type="button" onClick={() => void load()}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+
+      {!products && !error ? (
         <div className={styles.loading}><Spinner size={28} label="Loading catalog" /></div>
-      ) : (
+      ) : products ? (
         <div className={styles.grid}>
           {products.map((product) => (
             <article key={product.id} className={styles.card}>
@@ -164,7 +186,7 @@ export default function AdminCatalogManager() {
             </article>
           ))}
         </div>
-      )}
+      ) : null}
 
       {products ? (
         <section className={styles.history}>
@@ -174,14 +196,22 @@ export default function AdminCatalogManager() {
               <thead><tr><th>Product</th><th>Previous</th><th>New price</th><th>Reason</th><th>Date</th></tr></thead>
               <tbody>
                 {[...priceHistory]
-                  .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0))
+                  .sort(
+                    (a, b) =>
+                      Date.parse(b.createdAt || "") -
+                      Date.parse(a.createdAt || ""),
+                  )
                   .slice(0,20)
                   .map((entry)=><tr key={`${entry.productId}-${entry.id}`}>
                     <td>{products.find((product)=>product.id===entry.productId)?.name ?? entry.productId}</td>
                     <td>{entry.previousPrice === null ? "Initial" : `PHP ${entry.previousPrice.toLocaleString("en-PH")}`}</td>
                     <td>PHP {entry.newPrice.toLocaleString("en-PH")}</td>
                     <td>{entry.reason}</td>
-                    <td>{entry.createdAt?.toDate?.().toLocaleString("en-PH") ?? "—"}</td>
+                    <td>
+                      {entry.createdAt
+                        ? new Date(entry.createdAt).toLocaleString("en-PH")
+                        : "—"}
+                    </td>
                   </tr>)}
               </tbody>
             </table>

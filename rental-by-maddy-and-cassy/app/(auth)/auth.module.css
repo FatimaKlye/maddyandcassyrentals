@@ -79,3 +79,78 @@
   font-size: 0.85rem;
   font-weight: 500;
 }
+
+.notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-dusty-rose);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-blush) 42%, white);
+  color: var(--color-charcoal);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.previewCode {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px dashed var(--color-primary);
+  border-radius: 14px;
+  background: var(--color-blush);
+  text-align: center;
+}
+
+.previewCode span {
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.previewCode strong {
+  color: var(--color-primary-hover);
+  font-size: 1.8rem;
+  letter-spacing: 0.28em;
+}
+
+.previewCode small {
+  color: var(--color-charcoal);
+  font-size: 0.7rem;
+}
+
+.otpInput {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.verifyActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.verifyActions button {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.verifyActions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.authLoading {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+}
