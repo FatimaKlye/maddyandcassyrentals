@@ -20,6 +20,7 @@ export interface PaymentRecord {
   bookingRef: string;
   amount: number;
   paymentOption?: PaymentOption;
+  isDemo?: boolean;
   currency: "PHP";
   status: PaymentStatus;
   provider: "paymongo";

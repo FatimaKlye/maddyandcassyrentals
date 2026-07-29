@@ -94,7 +94,9 @@ export default function PaymentHistoryPage() {
               <div className={styles.payment}>
                 <strong>{money(payment.amount)}</strong>
                 <small>
-                  {payment.paymentOption === "deposit_50"
+                  {payment.isDemo
+                    ? "Demo checkout preview — no charge"
+                    : payment.paymentOption === "deposit_50"
                     ? "50% reservation payment"
                     : payment.paymentOption === "balance"
                       ? "Remaining balance"

@@ -86,6 +86,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const returnedFromPayment = params.get("payment") === "success";
     const paymentCancelled = params.get("payment") === "cancelled";
+    const demoPreviewCompleted = params.get("payment") === "demo-preview";
     let attempts = 0;
 
     async function refreshBooking() {
@@ -137,6 +138,10 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
           );
         } else if (paymentCancelled) {
           setPaymentError("Payment was cancelled. Your reservation can still be paid from here.");
+        } else if (demoPreviewCompleted) {
+          setPaymentError(
+            "Demo preview completed. No payment was charged or recorded, so verification remains locked until PayMongo confirms a real payment.",
+          );
         }
       }
     }

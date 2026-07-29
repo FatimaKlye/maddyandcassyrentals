@@ -113,6 +113,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (amountCentavos < 100) {
       return responseError("The booking amount is below the payment minimum.", 409);
     }
+    const demoMode =
+      process.env.NODE_ENV !== "production" &&
+      (
+        !process.env.PAYMONGO_SECRET_KEY?.trim() ||
+        !process.env.PAYMONGO_WEBHOOK_SECRET?.trim()
+      );
 
     const reusablePayments = await bookingRef
       .collection("payments")
@@ -124,7 +130,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       reusable &&
       typeof reusable.checkoutUrl === "string" &&
       reusable.amount === amount &&
-      reusable.paymentOption === paymentOption
+      reusable.paymentOption === paymentOption &&
+      reusable.isDemo === demoMode
     ) {
       return NextResponse.json({
         success: true,
@@ -149,34 +156,49 @@ export async function POST(request: Request): Promise<NextResponse> {
     const returnUrl = `${appOrigin}${returnPath}`;
     const returnSeparator = returnUrl.includes("?") ? "&" : "?";
     const customer = booking.customerSnapshot ?? {};
+    const paymentLabel =
+      paymentOption === "deposit_50"
+        ? "50% reservation payment"
+        : paymentOption === "balance"
+          ? "Remaining rental balance"
+          : "Full rental payment";
 
-    const checkout = await createCheckoutSession({
-      amountCentavos,
-      productName: booking.productSnapshot?.name || "Rental item",
-      bookingRef: booking.bookingRef,
-      referenceNumber,
-      customer: {
-        name: customer.fullName || user.name || "Customer",
-        email: customer.email || user.email || "",
-        phone: customer.phone || "",
-      },
-      paymentLabel:
-        paymentOption === "deposit_50"
-          ? "50% reservation payment"
-          : paymentOption === "balance"
-            ? "Remaining rental balance"
-            : "Full rental payment",
-      successUrl: `${returnUrl}${returnSeparator}payment=success`,
-      cancelUrl: `${returnUrl}${returnSeparator}payment=cancelled`,
-      metadata: {
-        booking_id: bookingId,
-        payment_record_id: paymentRef.id,
-        user_id: user.uid,
-        invoice_id: invoiceRef.id,
-        payment_option: paymentOption,
-      },
-      idempotencyKey: `checkout-${bookingId}-${paymentRef.id}`,
-    });
+    const checkout = demoMode
+      ? {
+          id: `demo_${paymentRef.id}`,
+          checkoutUrl:
+            `${appOrigin}/demo/paymongo?` +
+            new URLSearchParams({
+              amount: amount.toFixed(2),
+              item: booking.productSnapshot?.name || "Rental item",
+              bookingRef: booking.bookingRef,
+              paymentLabel,
+              returnPath,
+            }).toString(),
+          livemode: false,
+        }
+      : await createCheckoutSession({
+          amountCentavos,
+          productName: booking.productSnapshot?.name || "Rental item",
+          bookingRef: booking.bookingRef,
+          referenceNumber,
+          customer: {
+            name: customer.fullName || user.name || "Customer",
+            email: customer.email || user.email || "",
+            phone: customer.phone || "",
+          },
+          paymentLabel,
+          successUrl: `${returnUrl}${returnSeparator}payment=success`,
+          cancelUrl: `${returnUrl}${returnSeparator}payment=cancelled`,
+          metadata: {
+            booking_id: bookingId,
+            payment_record_id: paymentRef.id,
+            user_id: user.uid,
+            invoice_id: invoiceRef.id,
+            payment_option: paymentOption,
+          },
+          idempotencyKey: `checkout-${bookingId}-${paymentRef.id}`,
+        });
 
     const now = Timestamp.now();
     await db.collection("paymentSessions").doc(checkout.id).set({
@@ -191,6 +213,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       currency: "PHP",
       referenceNumber,
       livemode: checkout.livemode,
+      isDemo: demoMode,
       createdAt: now,
     });
 
@@ -218,6 +241,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       bookingRef: booking.bookingRef,
       amount,
       paymentOption,
+      isDemo: demoMode,
       currency: "PHP",
       status: "pending",
       provider: "paymongo",
