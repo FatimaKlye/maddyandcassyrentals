@@ -17,7 +17,7 @@ export interface AgreementDocumentData {
   includedAccessories: string[];
 }
 
-export const TERMS_VERSION = "2026-01";
+export { RENTAL_TERMS_VERSION as TERMS_VERSION } from "@/src/lib/rentalAgreement";
 
 export default function AgreementDocument({ data }: { data: AgreementDocumentData }) {
   return (

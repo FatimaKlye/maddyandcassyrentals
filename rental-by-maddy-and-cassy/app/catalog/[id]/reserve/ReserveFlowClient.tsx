@@ -204,11 +204,17 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     if (!user || !bookingId || !bookingNumber) return;
     setSubmittingDocuments(true);
     try {
-      await submitBookingDocuments(product, user.uid, bookingId, bookingNumber, draft);
+      await submitBookingDocuments(bookingId, draft);
       showToast("Verification documents and signed agreement submitted.", "success");
       goToStep(6);
-    } catch {
-      showToast("We couldn't submit your documents. Please try again.", "error");
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "We couldn't submit your documents. Please try again.",
+        "error",
+      );
+    } finally {
       setSubmittingDocuments(false);
     }
   }
