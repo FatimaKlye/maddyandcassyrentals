@@ -150,8 +150,7 @@ export async function submitBookingDocuments(
     throw new Error("Your session expired. Sign in again before submitting.");
   }
 
-  const signatureResponse = await fetch(agreement.signatureDataUrl);
-  const signatureBlob = await signatureResponse.blob();
+  const signatureBlob = dataUrlToBlob(agreement.signatureDataUrl);
   const signatureFile = new File(
     [signatureBlob],
     `signature.${extensionFromContentType(signatureBlob.type)}`,
@@ -301,4 +300,31 @@ function extensionFromContentType(contentType: string): string {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";
   return "jpg";
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const separatorIndex = dataUrl.indexOf(",");
+  if (!dataUrl.startsWith("data:") || separatorIndex < 0) {
+    throw new Error("The electronic signature is invalid. Please sign again.");
+  }
+
+  const header = dataUrl.slice(5, separatorIndex);
+  const encoded = dataUrl.slice(separatorIndex + 1);
+  const isBase64 = header.endsWith(";base64");
+  const contentType = header.replace(/;base64$/, "") || "image/png";
+
+  try {
+    if (isBase64) {
+      const binary = window.atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return new Blob([bytes], { type: contentType });
+    }
+
+    return new Blob([decodeURIComponent(encoded)], { type: contentType });
+  } catch {
+    throw new Error("The electronic signature is invalid. Please sign again.");
+  }
 }
