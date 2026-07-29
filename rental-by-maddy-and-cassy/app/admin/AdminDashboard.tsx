@@ -11,11 +11,14 @@ import type { Product } from "@/types/product";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import styles from "./admin.module.css";
+import { getAllPaymentRecords } from "@/src/services/operationsService";
+import type { PaymentRecord } from "@/src/types/payment";
 
 interface DashboardData {
   users: UserProfile[];
   bookings: Booking[];
   products: Product[];
+  payments: PaymentRecord[];
 }
 
 const closedStatuses = new Set(["completed", "cancelled", "rejected"]);
@@ -40,9 +43,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     let active = true;
 
-    Promise.all([getAllUsers(), getAllBookings(), getAllProducts()])
-      .then(([users, bookings, products]) => {
-        if (active) setData({ users, bookings, products });
+    Promise.all([getAllUsers(), getAllBookings(), getAllProducts(), getAllPaymentRecords()])
+      .then(([users, bookings, products, payments]) => {
+        if (active) setData({ users, bookings, products, payments });
       })
       .catch(() => {
         if (active) setError("The dashboard data could not be loaded. Please refresh and try again.");
@@ -71,6 +74,24 @@ export default function AdminDashboard() {
     data?.bookings.filter((booking) => !closedStatuses.has(booking.status)).length ?? 0;
   const completedRentals =
     data?.bookings.filter((booking) => booking.status === "completed").length ?? 0;
+  const paidPayments = data?.payments.filter((payment) => payment.status === "paid") ?? [];
+  const verifiedRevenue = paidPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const failedPayments =
+    data?.payments.filter((payment) => payment.status === "failed").length ?? 0;
+  const pendingVerification =
+    data?.bookings.filter((booking) =>
+      ["submitted", "under_review", "correction_required"].includes(booking.status),
+    ).length ?? 0;
+  const productBookingCounts = new Map<string, number>();
+  data?.bookings.forEach((booking) => {
+    productBookingCounts.set(
+      booking.productSnapshot.name,
+      (productBookingCounts.get(booking.productSnapshot.name) ?? 0) + 1,
+    );
+  });
+  const popularProduct = [...productBookingCounts.entries()].sort(
+    (left, right) => right[1] - left[1],
+  )[0];
 
   return (
     <div className={styles.page}>
@@ -95,6 +116,31 @@ export default function AdminDashboard() {
               <span>Customer Accounts</span>
               <strong>{data.users.length}</strong>
               <Link href="/admin/users">View all users</Link>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Verified Revenue</span>
+              <strong>PHP {verifiedRevenue.toLocaleString("en-PH")}</strong>
+              <Link href="/admin/payments">View payment activity</Link>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Successful Payments</span>
+              <strong>{paidPayments.length}</strong>
+              <small>Verified through PayMongo webhooks</small>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Failed Payments</span>
+              <strong>{failedPayments}</strong>
+              <small>Checkout attempts requiring attention</small>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Verification Queue</span>
+              <strong>{pendingVerification}</strong>
+              <small>Submitted or correction-required bookings</small>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Most Requested Gadget</span>
+              <strong>{popularProduct?.[0] ?? "—"}</strong>
+              <small>{popularProduct ? `${popularProduct[1]} booking request(s)` : "No booking data yet"}</small>
             </article>
             <article className={styles.metricCard}>
               <span>Active Bookings</span>

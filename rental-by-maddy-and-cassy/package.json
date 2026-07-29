@@ -11,7 +11,10 @@
     "firebase:emulators": "firebase emulators:start --import=./.emulator-data --export-on-exit=./.emulator-data",
     "firebase:test-rules": "tsx scripts/runRuleTests.ts",
     "firebase:set-admin": "tsx scripts/setAdmin.ts",
-    "firebase:deploy-rules": "firebase deploy --only firestore:rules,firestore:indexes,storage"
+    "firebase:deploy-rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",
+    "firebase:backup": "tsx scripts/backupFirebase.ts",
+    "test:payments": "tsx --test scripts/testPayments.ts",
+    "verify": "npm run lint && tsc --noEmit && npm run test:payments && npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.3",

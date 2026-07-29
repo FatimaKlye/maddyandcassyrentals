@@ -651,6 +651,9 @@ export async function POST(
 
           pricePerDaySnapshot: pricePerDay,
           estimatedRentalAmount: pricePerDay * dayCount,
+          amountDue: pricePerDay * dayCount,
+          paymentRequired: true,
+          paymentStatus: "unpaid",
 
           status: "submitted",
           requirementsStatus: "not_submitted",
@@ -706,6 +709,21 @@ export async function POST(
             `/account/bookings/${bookingRef.id}`,
 
           isRead: false,
+          createdAt: now,
+        });
+
+        transaction.create(adminDb.collection("auditLogs").doc(), {
+          action: "booking.submitted",
+          actorType: "customer",
+          actorId: uid,
+          bookingId: bookingRef.id,
+          targetType: "booking",
+          targetId: bookingRef.id,
+          metadata: {
+            bookingRef: bookingNumber,
+            productId,
+            amount: pricePerDay * dayCount,
+          },
           createdAt: now,
         });
 

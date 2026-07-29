@@ -83,3 +83,29 @@ export async function deleteCustomerAccountAsAdmin(
 
   throw new Error(message);
 }
+
+export async function updateAccountAsAdmin(
+  uid: string,
+  idToken: string,
+  updates: {
+    displayName: string;
+    phoneNumber: string;
+    fullAddress: string;
+    accountStatus: UserProfile["accountStatus"];
+    role: UserProfile["role"];
+  },
+): Promise<void> {
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(updates),
+  });
+  if (response.ok) return;
+  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  throw new Error(
+    typeof body?.error === "string" ? body.error : "The account could not be updated.",
+  );
+}

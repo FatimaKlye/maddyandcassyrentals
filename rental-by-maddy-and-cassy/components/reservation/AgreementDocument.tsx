@@ -88,8 +88,9 @@ export default function AgreementDocument({ data }: { data: AgreementDocumentDat
             business.
           </li>
           <li>
-            Payment arrangements, including any deposit, are handled directly between the
-            customer and the business outside of this website.
+            Payment is completed through the secure PayMongo checkout after the booking and
+            verification requirements are approved. A booking is confirmed only after the
+            payment webhook is verified by the system.
           </li>
           <li>
             This agreement, once electronically signed, is considered binding for this specific

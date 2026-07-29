@@ -54,6 +54,17 @@ export default function AdminSignInForm() {
         return;
       }
 
+      const sessionResponse = await fetch("/api/admin/session", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${await signedInUser.getIdToken()}`,
+        },
+      });
+      if (!sessionResponse.ok) {
+        await logout();
+        throw new Error("ADMIN_SESSION_FAILED");
+      }
+
       router.replace(redirectTo);
     } catch {
       setFormError("We couldn't sign you in. Check your admin email and password and try again.");

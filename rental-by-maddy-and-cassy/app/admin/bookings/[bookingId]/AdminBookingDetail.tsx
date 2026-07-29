@@ -19,6 +19,7 @@ import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import { useToast } from "@/components/ui/ToastProvider";
 import styles from "./bookingDetail.module.css";
+import RequirementsReviewPanel from "@/components/admin/RequirementsReviewPanel";
 
 const REQUIREMENTS_STATUS_LABELS: Record<string, string> = {
   not_submitted: "Not Submitted",
@@ -202,7 +203,16 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
     );
   }
 
-  const { booking, requirements, agreement, statusHistory } = state.details;
+  const {
+    booking,
+    requirements,
+    agreement,
+    statusHistory,
+    payments,
+    invoices,
+    receipts,
+    documents: customerDocuments,
+  } = state.details;
   const { profile } = state;
   const customer = booking.customerSnapshot;
   const fullName = customer?.fullName || profile?.displayName || "Customer";
@@ -410,6 +420,11 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                 </button>
               ))}
             </div>
+            <RequirementsReviewPanel
+              bookingId={bookingId}
+              requirements={requirements}
+              onUpdated={loadDetails}
+            />
           </>
         ) : (
           <p className={styles.empty}>Requirements have not been submitted for this booking.</p>
@@ -451,7 +466,35 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
-          <div><p>05</p><h2>Status History</h2></div>
+          <div><p>05</p><h2>Payment &amp; Customer Documents</h2></div>
+        </div>
+        <dl className={styles.detailGrid}>
+          <div><dt>Payment status</dt><dd>{formatStatus(booking.paymentStatus ?? "unpaid")}</dd></div>
+          <div><dt>Payment attempts</dt><dd>{payments.length}</dd></div>
+          <div><dt>Invoices</dt><dd>{invoices.length}</dd></div>
+          <div><dt>Receipts</dt><dd>{receipts.length}</dd></div>
+        </dl>
+        {customerDocuments.length ? (
+          <div className={styles.documents}>
+            {customerDocuments.map((document) => (
+              <button
+                key={document.id}
+                type="button"
+                onClick={() => openPrivateFile(document.storagePath)}
+              >
+                <span>{document.title}</span>
+                <strong>View private PDF</strong>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className={styles.empty}>No customer-facing financial documents have been issued yet.</p>
+        )}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <div><p>06</p><h2>Status History</h2></div>
         </div>
         {statusHistory.length ? (
           <ol className={styles.timeline}>

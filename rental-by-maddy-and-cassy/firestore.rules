@@ -94,6 +94,10 @@ service cloud.firestore {
 
         allow delete: if isActiveAdmin();
       }
+
+      match /pushTokens/{tokenId} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
     }
 
     // =========================================================
@@ -315,6 +319,50 @@ service cloud.firestore {
          */
         allow create, update, delete: if isActiveAdmin();
       }
+
+      // ---------------------------------------------------------
+      // Server-authoritative financial records
+      // ---------------------------------------------------------
+
+      match /payments/{paymentId} {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+        allow create, update, delete: if false;
+      }
+
+      match /invoices/{invoiceId} {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+        allow create, update, delete: if false;
+      }
+
+      match /receipts/{receiptId} {
+        allow read: if isActiveAdmin() || ownsBooking(bookingId);
+        allow create, update, delete: if false;
+      }
+    }
+
+    // PayMongo reconciliation data is never exposed to customers. Payment
+    // history is read through the owner-scoped booking subcollections above.
+    match /paymentSessions/{sessionId} {
+      allow read: if isActiveAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /paymentEvents/{eventId} {
+      allow read: if isActiveAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Append-only business audit records. Trusted server operations create
+    // these; administrators may inspect them but never edit history.
+    match /auditLogs/{logId} {
+      allow read: if isActiveAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /products/{productId}/priceHistory/{historyId} {
+      allow read: if isActiveAdmin();
+      allow create: if isActiveAdmin();
+      allow update, delete: if false;
     }
 
     // =========================================================

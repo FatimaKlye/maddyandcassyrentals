@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/src/lib/firebase/admin";
 import type { BookingStatus } from "@/src/types/booking";
+import { sendPushNotification } from "@/src/lib/server/pushNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ const TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
   submitted: ["under_review", "correction_required", "approved", "rejected"],
   under_review: ["correction_required", "approved", "rejected"],
   correction_required: ["under_review", "approved", "rejected"],
-  approved: ["confirmed", "correction_required", "rejected", "cancelled"],
+  approved: ["correction_required", "rejected", "cancelled"],
   confirmed: ["ready", "cancelled"],
   ready: ["active", "cancelled"],
   active: ["completed"],
@@ -203,7 +204,14 @@ export async function PATCH(
       }
       if (
         targetStatus === "approved" &&
-        (!requirementsSnapshot.exists || !agreementSnapshot.exists)
+        (
+          !requirementsSnapshot.exists ||
+          requirementsSnapshot.data()?.status !== "verified" ||
+          !agreementSnapshot.exists ||
+          !["submitted_for_review", "awaiting_admin_signature"].includes(
+            agreementSnapshot.data()?.status,
+          )
+        )
       ) {
         throw new Error("INCOMPLETE_SUBMISSION");
       }
@@ -229,7 +237,9 @@ export async function PATCH(
         updates.agreementStatus = "correction_required";
       } else if (targetStatus === "approved") {
         updates.requirementsStatus = "verified";
-        updates.agreementStatus = "completed";
+        updates.agreementStatus = "awaiting_admin_signature";
+        updates.paymentStatus =
+          booking?.paymentStatus === "paid" ? "paid" : "unpaid";
       }
 
       transaction.update(bookingRef, updates);
@@ -260,10 +270,19 @@ export async function PATCH(
         transaction.update(agreementRef, {
           status:
             targetStatus === "approved"
-              ? "completed"
+              ? "awaiting_admin_signature"
               : targetStatus === "correction_required"
                 ? "correction_required"
                 : "submitted_for_review",
+          ...(targetStatus === "approved"
+            ? {
+                adminTypedName:
+                  adminSnapshot.data()?.displayName ??
+                  adminSnapshot.data()?.email ??
+                  "Rental by Maddy & Cassy",
+                adminSignedAt: now,
+              }
+            : {}),
           updatedAt: now,
         });
       }
@@ -294,6 +313,21 @@ export async function PATCH(
         });
       }
 
+      transaction.create(adminDb.collection("auditLogs").doc(), {
+        action: "booking.status_changed",
+        actorType: "admin",
+        actorId: adminUid,
+        bookingId,
+        targetType: "booking",
+        targetId: bookingId,
+        metadata: {
+          previousStatus: currentStatus,
+          newStatus: targetStatus,
+          note,
+        },
+        createdAt: now,
+      });
+
       const unitId =
         typeof booking?.assignedUnitId === "string" ? booking.assignedUnitId : "";
       const dateKeys = getDateKeys(booking?.startDateKey, booking?.endDateKey);
@@ -322,6 +356,17 @@ export async function PATCH(
       }
     });
 
+    const updatedBooking = await adminDb.collection("bookings").doc(bookingId).get();
+    const pushUserId = updatedBooking.data()?.userId;
+    if (typeof pushUserId === "string") {
+      await sendPushNotification({
+        userId: pushUserId,
+        title: STATUS_COPY[targetStatus].title,
+        body: note || STATUS_COPY[targetStatus].message,
+        actionUrl: `/account/bookings/${bookingId}`,
+      }).catch((pushError) => console.error("Booking push notification failed", pushError));
+    }
+
     return NextResponse.json({ success: true, bookingId, status: targetStatus });
   } catch (error) {
     if (error instanceof Error && error.message === "BOOKING_NOT_FOUND") {
@@ -335,7 +380,7 @@ export async function PATCH(
     }
     if (error instanceof Error && error.message === "INCOMPLETE_SUBMISSION") {
       return errorResponse(
-        "The booking cannot be approved until its requirements and signed agreement are submitted.",
+        "The booking cannot be approved until every requirement is verified and the signed agreement is submitted.",
         409,
       );
     }

@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import formStyles from "@/components/ui/Form.module.css";
 import Spinner from "@/components/ui/Spinner";
 import styles from "./profile.module.css";
+import PushNotificationButton from "@/components/push/PushNotificationButton";
 
 interface ProfileDraft {
   displayName: string;
@@ -242,6 +243,7 @@ function CustomerProfileEditor({
             {saving ? "Saving..." : "Save Profile"}
           </button>
         </div>
+        <PushNotificationButton />
       </form>
     </section>
   );
