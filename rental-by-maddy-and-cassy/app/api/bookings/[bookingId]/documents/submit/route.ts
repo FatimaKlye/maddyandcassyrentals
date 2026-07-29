@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
 import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getAdminDb, getAdminStorage } from "@/src/lib/firebase/admin";
@@ -15,19 +14,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
-const ID_CONTENT_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/pdf",
-]);
-const SIGNATURE_CONTENT_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-
 const metadataSchema = z.object({
+  submissionId: z.string().uuid(),
+  files: z.object({
+    idOne: z.string().min(1),
+    idTwo: z.string().min(1),
+    selfie: z.string().min(1),
+    emergencyId: z.string().min(1),
+    signature: z.string().min(1),
+  }),
   facebookLink: z.string().url().max(1000),
   instagramLink: z.string().url().max(1000),
   emergencyContact: z.object({
@@ -52,46 +47,6 @@ function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
-function requireUpload(
-  formData: FormData,
-  key: string,
-  label: string,
-  allowedTypes: Set<string>,
-): File {
-  const value = formData.get(key);
-  if (!(value instanceof File) || value.size === 0) {
-    throw new RequestSecurityError(`${label} is required.`, 400);
-  }
-  if (value.size > MAX_FILE_SIZE) {
-    throw new RequestSecurityError(`${label} must be 8MB or smaller.`, 400);
-  }
-  if (!allowedTypes.has(value.type)) {
-    throw new RequestSecurityError(`${label} has an unsupported file type.`, 400);
-  }
-  return value;
-}
-
-function extensionFor(contentType: string): string {
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/webp") return "webp";
-  if (contentType === "application/pdf") return "pdf";
-  return "jpg";
-}
-
-async function savePrivateFile(
-  bucket: ReturnType<ReturnType<typeof getAdminStorage>["bucket"]>,
-  path: string,
-  file: File,
-): Promise<void> {
-  await bucket.file(path).save(Buffer.from(await file.arrayBuffer()), {
-    resumable: false,
-    metadata: {
-      contentType: file.type,
-      cacheControl: "private, no-store, max-age=0",
-    },
-  });
-}
-
 function bookingDate(value: unknown, field: string): FirebaseFirestore.Timestamp {
   if (
     value &&
@@ -104,54 +59,107 @@ function bookingDate(value: unknown, field: string): FirebaseFirestore.Timestamp
   throw new RequestSecurityError(`The booking ${field} is invalid.`, 409);
 }
 
+function expectedPathPrefix(
+  userId: string,
+  bookingId: string,
+  folder: "requirements" | "signatures",
+  fileName: string,
+  submissionId: string,
+): string {
+  return (
+    `private/users/${userId}/bookings/${bookingId}/${folder}/` +
+    `${fileName}-${submissionId}.`
+  );
+}
+
+async function verifyUploadedFile(
+  path: string,
+  expectedPrefix: string,
+  signature = false,
+): Promise<void> {
+  if (!path.startsWith(expectedPrefix) || path.slice(expectedPrefix.length).includes("/")) {
+    throw new RequestSecurityError("An uploaded document reference is invalid.", 400);
+  }
+  const [metadata] = await getAdminStorage().bucket().file(path).getMetadata();
+  const size = Number(metadata.size || 0);
+  const contentType = String(metadata.contentType || "");
+  if (!size || size > MAX_FILE_SIZE) {
+    throw new RequestSecurityError("An uploaded document has an invalid size.", 400);
+  }
+  const validType = signature
+    ? ["image/jpeg", "image/png", "image/webp"].includes(contentType)
+    : ["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(
+        contentType,
+      );
+  if (!validType) {
+    throw new RequestSecurityError("An uploaded document has an invalid type.", 400);
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ bookingId: string }> },
 ) {
-  const uploadedPaths: string[] = [];
-
   try {
-    enforceRateLimit(request, "booking-document-submit", 6, 10 * 60_000);
+    enforceRateLimit(request, "booking-document-submit", 8, 10 * 60_000);
     await enforceAppCheck(request);
     const user = await requireUser(request);
     const { bookingId } = await params;
-    const formData = await request.formData();
-    const rawMetadata = formData.get("metadata");
-    if (typeof rawMetadata !== "string") {
-      throw new RequestSecurityError("The document details are missing.", 400);
-    }
+    const input = metadataSchema.parse(await request.json());
 
-    const metadata = metadataSchema.parse(JSON.parse(rawMetadata));
-    const idOne = requireUpload(
-      formData,
-      "idOne",
-      "First valid ID",
-      ID_CONTENT_TYPES,
-    );
-    const idTwo = requireUpload(
-      formData,
-      "idTwo",
-      "Second valid ID",
-      ID_CONTENT_TYPES,
-    );
-    const selfie = requireUpload(
-      formData,
-      "selfie",
-      "Selfie holding a valid ID",
-      ID_CONTENT_TYPES,
-    );
-    const emergencyId = requireUpload(
-      formData,
-      "emergencyId",
-      "Emergency contact ID",
-      ID_CONTENT_TYPES,
-    );
-    const signature = requireUpload(
-      formData,
-      "signature",
-      "Electronic signature",
-      SIGNATURE_CONTENT_TYPES,
-    );
+    await Promise.all([
+      verifyUploadedFile(
+        input.files.idOne,
+        expectedPathPrefix(
+          user.uid,
+          bookingId,
+          "requirements",
+          "id-one",
+          input.submissionId,
+        ),
+      ),
+      verifyUploadedFile(
+        input.files.idTwo,
+        expectedPathPrefix(
+          user.uid,
+          bookingId,
+          "requirements",
+          "id-two",
+          input.submissionId,
+        ),
+      ),
+      verifyUploadedFile(
+        input.files.selfie,
+        expectedPathPrefix(
+          user.uid,
+          bookingId,
+          "requirements",
+          "selfie",
+          input.submissionId,
+        ),
+      ),
+      verifyUploadedFile(
+        input.files.emergencyId,
+        expectedPathPrefix(
+          user.uid,
+          bookingId,
+          "requirements",
+          "emergency-contact-id",
+          input.submissionId,
+        ),
+      ),
+      verifyUploadedFile(
+        input.files.signature,
+        expectedPathPrefix(
+          user.uid,
+          bookingId,
+          "signatures",
+          "signature",
+          input.submissionId,
+        ),
+        true,
+      ),
+    ]);
 
     const db = getAdminDb();
     const bookingRef = db.collection("bookings").doc(bookingId);
@@ -159,41 +167,22 @@ export async function POST(
     if (!bookingSnapshot.exists) {
       return errorResponse("The booking could not be found.", 404);
     }
-
     const booking = bookingSnapshot.data() as DocumentData;
     if (booking.userId !== user.uid) {
       return errorResponse("You do not have access to this booking.", 403);
     }
     if (!["paid", "partially_paid"].includes(String(booking.paymentStatus))) {
-      return errorResponse("Complete the reservation payment before submitting documents.", 409);
+      return errorResponse(
+        "Complete the reservation payment before submitting documents.",
+        409,
+      );
     }
     if (String(booking.requirementsStatus) !== "not_submitted") {
-      return errorResponse("Verification documents have already been submitted.", 409);
+      return errorResponse(
+        "Verification documents have already been submitted.",
+        409,
+      );
     }
-
-    const submissionId = randomUUID();
-    const requirementsBase =
-      `private/users/${user.uid}/bookings/${bookingId}/requirements`;
-    const signaturePath =
-      `private/users/${user.uid}/bookings/${bookingId}/signatures/signature-${submissionId}.${extensionFor(signature.type)}`;
-    const paths = {
-      idOne: `${requirementsBase}/id-one-${submissionId}.${extensionFor(idOne.type)}`,
-      idTwo: `${requirementsBase}/id-two-${submissionId}.${extensionFor(idTwo.type)}`,
-      selfie: `${requirementsBase}/selfie-${submissionId}.${extensionFor(selfie.type)}`,
-      emergencyId:
-        `${requirementsBase}/emergency-contact-id-${submissionId}.${extensionFor(emergencyId.type)}`,
-      signature: signaturePath,
-    };
-    uploadedPaths.push(...Object.values(paths));
-
-    const bucket = getAdminStorage().bucket();
-    await Promise.all([
-      savePrivateFile(bucket, paths.idOne, idOne),
-      savePrivateFile(bucket, paths.idTwo, idTwo),
-      savePrivateFile(bucket, paths.selfie, selfie),
-      savePrivateFile(bucket, paths.emergencyId, emergencyId),
-      savePrivateFile(bucket, paths.signature, signature),
-    ]);
 
     const now = Timestamp.now();
     await db.runTransaction(async (transaction) => {
@@ -221,14 +210,14 @@ export async function POST(
       transaction.set(bookingRef.collection("requirements").doc("main"), {
         bookingId,
         userId: user.uid,
-        idOneStoragePath: paths.idOne,
-        idTwoStoragePath: paths.idTwo,
-        selfieWithIdStoragePath: paths.selfie,
-        facebookLink: metadata.facebookLink,
-        instagramLink: metadata.instagramLink,
+        idOneStoragePath: input.files.idOne,
+        idTwoStoragePath: input.files.idTwo,
+        selfieWithIdStoragePath: input.files.selfie,
+        facebookLink: input.facebookLink,
+        instagramLink: input.instagramLink,
         emergencyContact: {
-          ...metadata.emergencyContact,
-          idStoragePath: paths.emergencyId,
+          ...input.emergencyContact,
+          idStoragePath: input.files.emergencyId,
         },
         status: "submitted",
         submittedAt: now,
@@ -242,7 +231,9 @@ export async function POST(
         bookingRef: String(current.bookingRef || bookingId),
         generatedTermsVersion: RENTAL_TERMS_VERSION,
         agreementSnapshot: {
-          customerName: String(current.customerSnapshot?.fullName || metadata.typedFullName),
+          customerName: String(
+            current.customerSnapshot?.fullName || input.typedFullName,
+          ),
           productName: String(productSnapshot.name || "Rental item"),
           startDate: bookingDate(current.startDate, "start date"),
           endDate: bookingDate(current.endDate, "end date"),
@@ -255,11 +246,11 @@ export async function POST(
             ? productSnapshot.included
             : [],
         },
-        acknowledgements: metadata.acknowledgements,
+        acknowledgements: input.acknowledgements,
         signature: {
-          method: metadata.signatureMethod,
-          storagePath: paths.signature,
-          typedFullName: metadata.typedFullName,
+          method: input.signatureMethod,
+          storagePath: input.files.signature,
+          typedFullName: input.typedFullName,
           signedAt: now,
         },
         status: "submitted_for_review",
@@ -292,14 +283,6 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (uploadedPaths.length) {
-      const bucket = getAdminStorage().bucket();
-      await Promise.allSettled(
-        uploadedPaths.map((path) =>
-          bucket.file(path).delete({ ignoreNotFound: true }),
-        ),
-      );
-    }
     if (error instanceof RequestSecurityError) {
       return errorResponse(error.message, error.status);
     }
@@ -309,9 +292,9 @@ export async function POST(
         400,
       );
     }
-    console.error("Booking document submission failed", error);
+    console.error("Booking document finalization failed", error);
     return errorResponse(
-      "The documents could not be securely submitted. Please try again.",
+      "The documents could not be finalized. Please try again.",
       500,
     );
   }

@@ -152,19 +152,94 @@ export async function submitBookingDocuments(
 
   const signatureResponse = await fetch(agreement.signatureDataUrl);
   const signatureBlob = await signatureResponse.blob();
-  const formData = new FormData();
-  formData.append("idOne", requirements.idOneFile);
-  formData.append("idTwo", requirements.idTwoFile);
-  formData.append("selfie", requirements.selfieFile);
-  formData.append("emergencyId", requirements.emergencyContact.idFile);
-  formData.append(
-    "signature",
-    signatureBlob,
+  const signatureFile = new File(
+    [signatureBlob],
     `signature.${extensionFromContentType(signatureBlob.type)}`,
+    { type: signatureBlob.type || "image/png" },
   );
-  formData.append(
-    "metadata",
-    JSON.stringify({
+  const idToken = await currentUser.getIdToken();
+  const appCheckHeaders = await getAppCheckHeaders();
+  const submissionId = crypto.randomUUID();
+
+  async function uploadDocument(
+    kind: "idOne" | "idTwo" | "selfie" | "emergencyId" | "signature",
+    file: File,
+    label: string,
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    let response: Response;
+    try {
+      response = await fetch(
+        `/api/bookings/${encodeURIComponent(bookingId)}/documents/upload` +
+          `?kind=${encodeURIComponent(kind)}&submissionId=${encodeURIComponent(submissionId)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            ...appCheckHeaders,
+          },
+          body: formData,
+        },
+      );
+    } catch {
+      throw new Error(
+        `${label} could not reach the upload server. Check your connection and try again.`,
+      );
+    }
+    const body = (await response.json().catch(() => null)) as
+      | { path?: unknown; error?: unknown }
+      | null;
+    if (!response.ok || typeof body?.path !== "string") {
+      throw new Error(
+        typeof body?.error === "string"
+          ? body.error
+          : `${label} could not be uploaded.`,
+      );
+    }
+    return body.path;
+  }
+
+  const uploadedFiles = {
+    idOne: await uploadDocument(
+      "idOne",
+      requirements.idOneFile,
+      "First valid ID",
+    ),
+    idTwo: await uploadDocument(
+      "idTwo",
+      requirements.idTwoFile,
+      "Second valid ID",
+    ),
+    selfie: await uploadDocument(
+      "selfie",
+      requirements.selfieFile,
+      "Selfie with ID",
+    ),
+    emergencyId: await uploadDocument(
+      "emergencyId",
+      requirements.emergencyContact.idFile,
+      "Emergency contact ID",
+    ),
+    signature: await uploadDocument(
+      "signature",
+      signatureFile,
+      "Electronic signature",
+    ),
+  };
+
+  const submitResponse = await fetch(
+    `/api/bookings/${encodeURIComponent(bookingId)}/documents/submit`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+        ...appCheckHeaders,
+      },
+      body: JSON.stringify({
+        submissionId,
+        files: uploadedFiles,
       facebookLink: requirements.facebookLink.trim(),
       instagramLink: requirements.instagramLink.trim(),
       emergencyContact: {
@@ -183,18 +258,7 @@ export async function submitBookingDocuments(
       },
       signatureMethod: agreement.signatureMethod,
       typedFullName: agreement.typedFullName.trim(),
-    }),
-  );
-
-  const submitResponse = await fetch(
-    `/api/bookings/${encodeURIComponent(bookingId)}/documents/submit`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${await currentUser.getIdToken()}`,
-        ...(await getAppCheckHeaders()),
-      },
-      body: formData,
+      }),
     },
   );
   if (!submitResponse.ok) {
@@ -209,11 +273,11 @@ export async function submitBookingDocuments(
   }
 
   const response = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/documents/agreement`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${await currentUser.getIdToken()}`,
-      ...(await getAppCheckHeaders()),
-    },
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        ...appCheckHeaders,
+      },
   });
   if (!response.ok) {
     console.warn("Documents were submitted, but the signed agreement PDF is still being prepared.");
