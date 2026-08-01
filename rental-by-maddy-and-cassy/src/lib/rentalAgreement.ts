@@ -1,0 +1,1 @@
+export const RENTAL_TERMS_VERSION = "2026-01";

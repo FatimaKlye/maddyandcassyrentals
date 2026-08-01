@@ -21,10 +21,15 @@ export default function RequireCustomer({ children }: { children: ReactNode }) {
 
     if (isAdmin) {
       router.replace("/admin");
+      return;
+    }
+
+    if (!user.emailVerified) {
+      router.replace(`/verify-email?redirect=${encodeURIComponent(pathname)}`);
     }
   }, [isAdmin, loading, pathname, router, user]);
 
-  if (loading || !user || isAdmin) {
+  if (loading || !user || isAdmin || !user.emailVerified) {
     return (
       <div className={styles.loading}>
         <Spinner size={28} label="Checking your customer account" />

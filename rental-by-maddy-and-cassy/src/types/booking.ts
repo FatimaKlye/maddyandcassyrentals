@@ -1,4 +1,5 @@
 import type { Timestamp } from "firebase/firestore";
+import type { PaymentOption, PaymentStatus } from "@/src/types/payment";
 
 export type BookingStatus =
   | "submitted"
@@ -69,6 +70,13 @@ export interface Booking {
   // is a payment amount — no payment/deposit workflow exists in this CMS.
   pricePerDaySnapshot: number;
   estimatedRentalAmount: number;
+  amountDue?: number;
+  amountPaid?: number;
+  balanceDue?: number;
+  paymentChoice?: PaymentOption;
+  demoPayment?: boolean;
+  paymentRequired?: boolean;
+  paymentStatus?: PaymentStatus;
   status: BookingStatus;
   requirementsStatus: RequirementsStatus;
   agreementStatus: AgreementStatus;
@@ -99,6 +107,26 @@ export interface RequirementsDoc {
   correctionNotes?: string;
   submittedAt: Timestamp;
   updatedAt: Timestamp;
+  reviews?: Partial<Record<RequirementDocumentKey, RequirementDocumentReview>>;
+}
+
+export type RequirementDocumentKey =
+  | "idOneStoragePath"
+  | "idTwoStoragePath"
+  | "selfieWithIdStoragePath"
+  | "emergencyContactIdStoragePath";
+
+export type RequirementReviewStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "replacement_requested";
+
+export interface RequirementDocumentReview {
+  status: RequirementReviewStatus;
+  reason?: string;
+  reviewedBy?: string;
+  reviewedAt?: Timestamp;
 }
 
 export interface AgreementSnapshot {
@@ -164,7 +192,10 @@ export interface StatusHistoryEntry {
 export type BookingDocumentType =
   | "final_rental_agreement"
   | "booking_confirmation"
-  | "pickup_delivery_instructions";
+  | "pickup_delivery_instructions"
+  | "invoice"
+  | "receipt"
+  | "payment_proof";
 
 export interface BookingDocument {
   id: string;

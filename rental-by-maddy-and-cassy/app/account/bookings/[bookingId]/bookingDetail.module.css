@@ -130,6 +130,25 @@
   color: var(--color-text-primary);
 }
 
+.documentList li {
+  margin: 0.35rem 0;
+}
+
+.documentList button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.documentList button:hover {
+  text-decoration: underline;
+}
+
 .footnote {
   margin: 0;
   font-size: 0.78rem;

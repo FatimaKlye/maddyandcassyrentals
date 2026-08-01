@@ -651,6 +651,11 @@ export async function POST(
 
           pricePerDaySnapshot: pricePerDay,
           estimatedRentalAmount: pricePerDay * dayCount,
+          amountDue: pricePerDay * dayCount,
+          amountPaid: 0,
+          balanceDue: pricePerDay * dayCount,
+          paymentRequired: true,
+          paymentStatus: "unpaid",
 
           status: "submitted",
           requirementsStatus: "not_submitted",
@@ -689,7 +694,7 @@ export async function POST(
           changedBy: "system",
           changedByUserId: uid,
 
-          message: "Booking request submitted.",
+          message: "Reservation created and awaiting payment.",
           createdAt: now,
         });
 
@@ -698,14 +703,29 @@ export async function POST(
           bookingId: bookingRef.id,
 
           type: "booking_submitted",
-          title: "Booking request submitted",
+          title: "Reservation created",
           message:
-            `Your booking request for ${productName} has been submitted for review.`,
+            `Your dates for ${productName} are held while you complete payment.`,
 
           actionUrl:
             `/account/bookings/${bookingRef.id}`,
 
           isRead: false,
+          createdAt: now,
+        });
+
+        transaction.create(adminDb.collection("auditLogs").doc(), {
+          action: "booking.submitted",
+          actorType: "customer",
+          actorId: uid,
+          bookingId: bookingRef.id,
+          targetType: "booking",
+          targetId: bookingRef.id,
+          metadata: {
+            bookingRef: bookingNumber,
+            productId,
+            amount: pricePerDay * dayCount,
+          },
           createdAt: now,
         });
 

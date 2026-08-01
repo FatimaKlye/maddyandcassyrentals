@@ -17,7 +17,7 @@ export interface AgreementDocumentData {
   includedAccessories: string[];
 }
 
-export const TERMS_VERSION = "2026-01";
+export { RENTAL_TERMS_VERSION as TERMS_VERSION } from "@/src/lib/rentalAgreement";
 
 export default function AgreementDocument({ data }: { data: AgreementDocumentData }) {
   return (
@@ -88,8 +88,9 @@ export default function AgreementDocument({ data }: { data: AgreementDocumentDat
             business.
           </li>
           <li>
-            Payment arrangements, including any deposit, are handled directly between the
-            customer and the business outside of this website.
+            The reservation is secured after PayMongo verifies the initial payment. The booking
+            becomes fully confirmed after the required verification documents and this signed
+            agreement are approved by the business.
           </li>
           <li>
             This agreement, once electronically signed, is considered binding for this specific

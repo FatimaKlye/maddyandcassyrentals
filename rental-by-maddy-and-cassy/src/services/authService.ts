@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reload,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -9,11 +10,61 @@ import {
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "@/src/lib/firebase/config";
+import { getAppCheckHeaders } from "@/src/lib/firebase/appCheckClient";
 
 export interface RegisterOptions {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
+}
+
+export interface EmailOtpDelivery {
+  alreadyVerified?: boolean;
+  delivery?: "email" | "preview";
+  maskedEmail?: string;
+  demoCode?: string;
+}
+
+async function emailOtpRequest<T>(
+  path: "/api/auth/email-otp/request" | "/api/auth/email-otp/verify",
+  user: User,
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${await user.getIdToken()}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(await getAppCheckHeaders()),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const result = (await response.json().catch(() => null)) as
+    | (T & { error?: unknown })
+    | null;
+  if (!response.ok) {
+    throw new Error(
+      typeof result?.error === "string"
+        ? result.error
+        : "Email verification could not be completed.",
+    );
+  }
+  if (!result) throw new Error("Email verification could not be completed.");
+  return result;
+}
+
+export function requestEmailOtp(user: User): Promise<EmailOtpDelivery> {
+  return emailOtpRequest("/api/auth/email-otp/request", user);
+}
+
+export async function verifyEmailOtp(user: User, code: string): Promise<void> {
+  await emailOtpRequest<{ verified: boolean }>(
+    "/api/auth/email-otp/verify",
+    user,
+    { code },
+  );
+  await reload(user);
+  await user.getIdToken(true);
 }
 
 /**

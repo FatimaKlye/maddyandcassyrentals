@@ -12,12 +12,17 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       router.replace(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
+      return;
+    }
+    if (!user.emailVerified) {
+      router.replace(`/verify-email?redirect=${encodeURIComponent(pathname)}`);
     }
   }, [loading, user, router, pathname]);
 
-  if (loading || !user) {
+  if (loading || !user || !user.emailVerified) {
     return (
       <div className={styles.loading}>
         <Spinner size={28} label="Checking your session" />

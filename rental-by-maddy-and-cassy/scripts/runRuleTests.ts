@@ -78,12 +78,38 @@ async function main() {
       dayCount: 1,
       fulfillmentMethod: "pickup",
     });
+    await setDoc(
+      doc(db, "bookings", "booking-owned-by-alice", "payments", "payment-1"),
+      {
+        bookingId: "booking-owned-by-alice",
+        userId: "alice-uid",
+        amount: 500,
+        status: "paid",
+        provider: "paymongo",
+      },
+    );
+    await setDoc(doc(db, "paymentEvents", "evt-1"), {
+      type: "checkout_session.payment.paid",
+      status: "processed",
+    });
+    await setDoc(doc(db, "auditLogs", "audit-1"), {
+      action: "payment.paid",
+      actorType: "system",
+      actorId: "paymongo",
+      targetType: "payment",
+      targetId: "payment-1",
+    });
 
     const storage = context.storage();
     await uploadBytes(
       ref(storage, "private/users/alice-uid/bookings/booking-owned-by-alice/requirements/id-one.jpg"),
       new Uint8Array([1, 2, 3]),
       { contentType: "image/jpeg" }
+    );
+    await uploadBytes(
+      ref(storage, "private/users/alice-uid/bookings/booking-owned-by-alice/documents/receipt.pdf"),
+      new Uint8Array([1, 2, 3]),
+      { contentType: "application/pdf" },
     );
   });
 
@@ -159,6 +185,50 @@ async function main() {
     );
   });
 
+  await check("Booking owner can read their server-authored payment record", async () => {
+    await assertSucceeds(
+      getDoc(
+        doc(
+          alice.firestore(),
+          "bookings",
+          "booking-owned-by-alice",
+          "payments",
+          "payment-1",
+        ),
+      ),
+    );
+  });
+
+  await check("Customer cannot forge a payment record", async () => {
+    await assertFails(
+      setDoc(
+        doc(
+          alice.firestore(),
+          "bookings",
+          "booking-owned-by-alice",
+          "payments",
+          "forged",
+        ),
+        { userId: "alice-uid", amount: 1, status: "paid" },
+      ),
+    );
+  });
+
+  await check("Customer cannot read payment webhook events", async () => {
+    await assertFails(getDoc(doc(alice.firestore(), "paymentEvents", "evt-1")));
+  });
+
+  await check("Active admin can inspect payment events and audit logs", async () => {
+    await assertSucceeds(getDoc(doc(admin.firestore(), "paymentEvents", "evt-1")));
+    await assertSucceeds(getDoc(doc(admin.firestore(), "auditLogs", "audit-1")));
+  });
+
+  await check("Admin cannot rewrite immutable audit history", async () => {
+    await assertFails(
+      setDoc(doc(admin.firestore(), "auditLogs", "audit-1"), { action: "tampered" }),
+    );
+  });
+
   console.log("\nStorage rules:");
 
   await check("Customer can upload their own requirement file", async () => {
@@ -193,6 +263,19 @@ async function main() {
           "private/users/alice-uid/bookings/booking-owned-by-alice/requirements/id-one.jpg"
         )
       )
+    );
+  });
+
+  await check("Booking owner can read but cannot upload final financial documents", async () => {
+    const receiptRef = ref(
+      alice.storage(),
+      "private/users/alice-uid/bookings/booking-owned-by-alice/documents/receipt.pdf",
+    );
+    await assertSucceeds(getBytes(receiptRef));
+    await assertFails(
+      uploadBytes(receiptRef, new Uint8Array([4, 5, 6]), {
+        contentType: "application/pdf",
+      }),
     );
   });
 

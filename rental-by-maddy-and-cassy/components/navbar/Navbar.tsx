@@ -147,6 +147,11 @@ export default function Navbar() {
                   <Link href={profileHref} className={styles.profileMenuLink}>
                     {profileLabel}
                   </Link>
+                  {!isAdmin ? (
+                    <Link href="/account/payments" className={styles.profileMenuLink}>
+                      Payment History
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     className={styles.profileMenuButton}
@@ -243,6 +248,15 @@ export default function Navbar() {
                 >
                   {profileLabel}
                 </Link>
+                {!isAdmin ? (
+                  <Link
+                    href="/account/payments"
+                    className={styles.mobileAccountLink}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Payment History
+                  </Link>
+                ) : null}
                 <button type="button" className={styles.mobileTextButton} onClick={handleSignOut}>
                   Sign Out
                 </button>

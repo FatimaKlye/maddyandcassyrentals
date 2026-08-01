@@ -3,7 +3,7 @@
 import { createContext, useEffect, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { subscribeToAuthChanges } from "@/src/services/authService";
-import { isActiveAdmin } from "@/src/services/adminService";
+import { checkActiveAdmin } from "@/src/services/adminService";
 import { getUserProfile } from "@/src/services/userService";
 import type { UserProfile } from "@/src/types/firebase";
 
@@ -29,10 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  async function loadAccount(uid: string) {
+  async function loadAccount(account: User) {
     const [userProfile, adminAccess] = await Promise.all([
-      getUserProfile(uid),
-      isActiveAdmin(uid),
+      getUserProfile(account.uid).catch(() => null),
+      checkActiveAdmin(account),
     ]);
     setProfile(userProfile);
     setIsAdmin(adminAccess);
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         if (nextUser) {
-          await loadAccount(nextUser.uid);
+          await loadAccount(nextUser);
         } else {
           setProfile(null);
           setIsAdmin(false);
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refreshProfile() {
     if (user) {
-      await loadAccount(user.uid);
+      await loadAccount(user);
     }
   }
 

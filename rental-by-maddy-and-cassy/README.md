@@ -42,8 +42,39 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Payments, documents, and notifications
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The application uses PayMongo Hosted Checkout v2. Customers can pay only after
+verification and approval. A signed, replay-protected
+`checkout_session.payment.paid` webhook is the source of truth. The system
+privately generates invoices, official receipts, verified payment proof, and a
+two-page final rental agreement.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Configure `.env.example`, then register
+`https://your-domain/api/paymongo/webhook` in the PayMongo dashboard and
+subscribe to `checkout_session.payment.paid`.
+
+Firebase Cloud Messaging is available from the customer profile after the web
+push VAPID key and Cloud Messaging APIs are configured.
+
+## Gmail signup verification
+
+New customer accounts complete a six-digit email OTP step. Configure
+`GMAIL_SMTP_USER`, `GMAIL_SMTP_APP_PASSWORD`, and a long random
+`EMAIL_OTP_HMAC_SECRET` to send the code through Gmail. Use a Google App
+Password, not the Gmail account's normal password.
+
+In local development, when Gmail credentials are absent, the verification
+screen displays a clearly marked preview code so the full signup and booking
+flow remains testable. Preview codes are never returned in production.
+
+## Verification
+
+Run `npm run verify` to lint, type-check, test payment security and PDF
+generation, and build the production application.
+
+## GoDaddy production deployment
+
+The project builds as a standalone Node.js service for a GoDaddy VPS. It cannot
+run on static shared hosting. PM2, Nginx/TLS, Cloudflare WAF/CDN, backups, and
+monitoring are documented in `ops/PRODUCTION.md`.

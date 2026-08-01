@@ -1,0 +1,222 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import AdminShell from "@/components/admin/AdminShell";
+import Spinner from "@/components/ui/Spinner";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getAdminPayments,
+  type AdminPaymentsData,
+} from "@/src/services/adminReadService";
+import styles from "../operations.module.css";
+
+function money(value: number) {
+  return `PHP ${value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
+}
+
+function formatDate(value: string | null) {
+  return value ? new Date(value).toLocaleString("en-PH") : "—";
+}
+
+export default function AdminPaymentsPage() {
+  const { user } = useAuth();
+  const [data, setData] = useState<AdminPaymentsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) return;
+
+    user
+      .getIdToken()
+      .then(getAdminPayments)
+      .then((records) => {
+        if (active) setData(records);
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Payment activity could not be loaded.",
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  const payments = useMemo(
+    () =>
+      [...(data?.payments ?? [])].sort(
+        (a, b) =>
+          Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""),
+      ),
+    [data],
+  );
+  const paidRevenue = payments
+    .filter((payment) => payment.status === "paid")
+    .reduce((sum, payment) => sum + payment.amount, 0);
+
+  return (
+    <AdminShell>
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <div>
+            <p>PAYMENT OPERATIONS</p>
+            <h1>Payments &amp; Webhooks</h1>
+            <span>
+              Reconcile demo checkouts and verified PayMongo transactions.
+            </span>
+          </div>
+        </header>
+        {error ? <div className={styles.error}>{error}</div> : null}
+        {!data && !error ? (
+          <div className={styles.loading}>
+            <Spinner size={28} label="Loading payments" />
+          </div>
+        ) : data ? (
+          <>
+            <section className={styles.metrics}>
+              <article>
+                <span>Recorded Revenue</span>
+                <strong>{money(paidRevenue)}</strong>
+              </article>
+              <article>
+                <span>Successful Payments</span>
+                <strong>
+                  {payments.filter((payment) => payment.status === "paid").length}
+                </strong>
+              </article>
+              <article>
+                <span>Pending Checkouts</span>
+                <strong>
+                  {payments.filter((payment) => payment.status === "pending").length}
+                </strong>
+              </article>
+              <article>
+                <span>Webhook Events</span>
+                <strong>{data.events.length}</strong>
+              </article>
+            </section>
+
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2>Payment Records</h2>
+                  <p>Customer checkout and provider references.</p>
+                </div>
+              </div>
+              {payments.length ? (
+                <div className={styles.tableWrap}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Booking</th>
+                        <th>Reference</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Mode</th>
+                        <th>Method</th>
+                        <th>Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((payment) => (
+                        <tr key={payment.id}>
+                          <td>
+                            <Link href={`/admin/bookings/${payment.bookingId}`}>
+                              {payment.bookingRef}
+                            </Link>
+                          </td>
+                          <td>
+                            {payment.paymentId || payment.referenceNumber || "—"}
+                          </td>
+                          <td>{money(payment.amount)}</td>
+                          <td>
+                            <span
+                              className={`${styles.pill} ${styles[payment.status] ?? ""}`}
+                            >
+                              {payment.status}
+                            </span>
+                          </td>
+                          <td>{payment.isDemo ? "Demo" : "PayMongo"}</td>
+                          <td>{payment.paymentMethod || "—"}</td>
+                          <td>{formatDate(payment.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className={styles.empty}>No payment records yet.</p>
+              )}
+            </section>
+
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2>Webhook Submission Log</h2>
+                  <p>Signed PayMongo events and processing outcome.</p>
+                </div>
+              </div>
+              {data.events.length ? (
+                <div className={styles.tableWrap}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Event</th>
+                        <th>Type</th>
+                        <th>Mode</th>
+                        <th>Status</th>
+                        <th>Booking</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...data.events]
+                        .sort(
+                          (a, b) =>
+                            Date.parse(b.createdAt || "") -
+                            Date.parse(a.createdAt || ""),
+                        )
+                        .map((event) => (
+                          <tr key={event.id}>
+                            <td>{event.id}</td>
+                            <td>{event.type}</td>
+                            <td>{event.livemode ? "Live" : "Test"}</td>
+                            <td>
+                              <span
+                                className={`${styles.pill} ${styles[event.status] ?? ""}`}
+                              >
+                                {event.status}
+                              </span>
+                            </td>
+                            <td>
+                              {event.bookingId ? (
+                                <Link href={`/admin/bookings/${event.bookingId}`}>
+                                  {event.bookingId.slice(0, 8)}
+                                </Link>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className={styles.empty}>
+                  Demo payments do not create PayMongo webhook events.
+                </p>
+              )}
+            </section>
+          </>
+        ) : null}
+      </div>
+    </AdminShell>
+  );
+}

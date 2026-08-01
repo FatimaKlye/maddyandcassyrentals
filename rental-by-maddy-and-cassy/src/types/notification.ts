@@ -12,6 +12,9 @@ export type NotificationType =
   | "rental_completed"
   | "booking_cancelled"
   | "booking_rejected"
+  | "payment_pending"
+  | "payment_paid"
+  | "requirements_reviewed"
   // Legacy value kept for backward compatibility with any existing documents.
   | "status_changed"
   | "document_ready";

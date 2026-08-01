@@ -1,0 +1,132 @@
+.page {
+  display: flex;
+  gap: 1.4rem;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header p {
+  margin: 0 0 0.35rem;
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+}
+
+.header span {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--color-charcoal);
+  font-size: 0.86rem;
+}
+
+.header a,
+.card a {
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-white);
+}
+
+.card p,
+.card small {
+  margin: 0.25rem 0 0;
+  color: var(--color-charcoal);
+  font-size: 0.77rem;
+}
+
+.payment {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-direction: column;
+}
+
+.status {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--color-status-yellow-bg);
+  color: var(--color-status-yellow);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.paid {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green);
+}
+
+.failed,
+.expired,
+.refunded {
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+}
+
+.loading,
+.empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  padding: 2rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.empty h2,
+.empty p {
+  margin: 0.25rem;
+}
+
+.empty p {
+  color: var(--color-charcoal);
+  font-size: 0.85rem;
+}
+
+.error {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-status-red-border);
+  border-radius: 12px;
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+}
+
+@media (max-width: 560px) {
+  .header,
+  .card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .payment {
+    align-items: flex-start;
+  }
+}

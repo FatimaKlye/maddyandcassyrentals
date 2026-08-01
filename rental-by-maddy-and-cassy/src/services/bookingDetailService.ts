@@ -11,6 +11,7 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/src/lib/firebase/config";
 import type { Booking, RequirementsDoc, AgreementDoc, StatusHistoryEntry, BookingDocument } from "@/src/types/booking";
+import type { BookingInvoice, BookingReceipt, PaymentRecord } from "@/src/types/payment";
 
 export interface BookingDetails {
   booking: Booking;
@@ -18,18 +19,32 @@ export interface BookingDetails {
   agreement: AgreementDoc | null;
   statusHistory: StatusHistoryEntry[];
   documents: BookingDocument[];
+  payments: PaymentRecord[];
+  invoices: BookingInvoice[];
+  receipts: BookingReceipt[];
 }
 
 export async function getBookingDetails(bookingId: string): Promise<BookingDetails | null> {
   const bookingSnapshot = await getDoc(doc(db, "bookings", bookingId));
   if (!bookingSnapshot.exists()) return null;
 
-  const [requirementsSnapshot, agreementSnapshot, statusHistorySnapshot, documentsSnapshot] =
+  const [
+    requirementsSnapshot,
+    agreementSnapshot,
+    statusHistorySnapshot,
+    documentsSnapshot,
+    paymentsSnapshot,
+    invoicesSnapshot,
+    receiptsSnapshot,
+  ] =
     await Promise.all([
       getDoc(doc(db, "bookings", bookingId, "requirements", "main")),
       getDoc(doc(db, "bookings", bookingId, "agreement", "main")),
       getDocs(query(collection(db, "bookings", bookingId, "statusHistory"), orderBy("createdAt", "asc"))),
       getDocs(collection(db, "bookings", bookingId, "documents")),
+      getDocs(collection(db, "bookings", bookingId, "payments")),
+      getDocs(collection(db, "bookings", bookingId, "invoices")),
+      getDocs(collection(db, "bookings", bookingId, "receipts")),
     ]);
 
   return {
@@ -46,6 +61,18 @@ export async function getBookingDetails(bookingId: string): Promise<BookingDetai
       id: docSnapshot.id,
       ...docSnapshot.data(),
     })) as BookingDocument[],
+    payments: paymentsSnapshot.docs.map((docSnapshot) => ({
+      id: docSnapshot.id,
+      ...docSnapshot.data(),
+    })) as PaymentRecord[],
+    invoices: invoicesSnapshot.docs.map((docSnapshot) => ({
+      id: docSnapshot.id,
+      ...docSnapshot.data(),
+    })) as BookingInvoice[],
+    receipts: receiptsSnapshot.docs.map((docSnapshot) => ({
+      id: docSnapshot.id,
+      ...docSnapshot.data(),
+    })) as BookingReceipt[],
   };
 }
 
@@ -61,7 +88,8 @@ export async function getBookingFileUrl(storagePath: string): Promise<string> {
 type RequirementFileField =
   | "idOneStoragePath"
   | "idTwoStoragePath"
-  | "selfieWithIdStoragePath";
+  | "selfieWithIdStoragePath"
+  | "emergencyContactIdStoragePath";
 
 export async function resubmitBookingCorrections(
   userId: string,
@@ -78,7 +106,11 @@ export async function resubmitBookingCorrections(
     const extension = file.name.split(".").pop() ?? "jpg";
     const path = `private/users/${userId}/bookings/${bookingId}/requirements/${field}-${Date.now()}.${extension}`;
     await uploadBytes(ref(storage, path), file);
-    requirementUpdates[field] = path;
+    requirementUpdates[
+      field === "emergencyContactIdStoragePath"
+        ? "emergencyContact.idStoragePath"
+        : field
+    ] = path;
   }
 
   const bookingRef = doc(db, "bookings", bookingId);

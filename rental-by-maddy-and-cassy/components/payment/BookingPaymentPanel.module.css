@@ -1,0 +1,99 @@
+.panel {
+  display: flex;
+  gap: 1rem;
+  padding: 1.35rem;
+  border: 1px solid var(--color-dusty-rose);
+  border-radius: 18px;
+  background: linear-gradient(145deg, var(--color-white), var(--color-blush));
+  flex-direction: column;
+}
+
+.heading,
+.amountRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.heading p {
+  margin: 0 0 0.25rem;
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.status {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: var(--color-status-yellow-bg);
+  color: var(--color-status-yellow);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.paid {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green);
+}
+
+.partially_paid {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green);
+}
+
+.failed,
+.expired,
+.refunded {
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+}
+
+.amountRow {
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.amountRow span {
+  color: var(--color-charcoal);
+  font-size: 0.82rem;
+}
+
+.amountRow strong {
+  color: var(--color-text-primary);
+  font-size: 1.35rem;
+}
+
+.message,
+.panel small {
+  margin: 0;
+  color: var(--color-charcoal);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.panel button {
+  align-self: flex-start;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.panel button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}

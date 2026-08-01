@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getBookingDetails,
@@ -15,6 +16,9 @@ import NotificationList from "@/components/notification-list/NotificationList";
 import Spinner from "@/components/ui/Spinner";
 import formStyles from "@/components/ui/Form.module.css";
 import styles from "./bookingDetail.module.css";
+import BookingPaymentPanel from "@/components/payment/BookingPaymentPanel";
+import { getBookingFileUrl } from "@/src/services/bookingDetailService";
+import { useToast } from "@/components/ui/ToastProvider";
 
 const REQUIREMENTS_STATUS_LABEL: Record<string, string> = {
   not_submitted: "Not Submitted",
@@ -50,8 +54,10 @@ function BookingDetailContent() {
     idOneStoragePath?: File;
     idTwoStoragePath?: File;
     selfieWithIdStoragePath?: File;
+    emergencyContactIdStoragePath?: File;
   }>({});
   const [resubmitting, setResubmitting] = useState(false);
+  const { showToast } = useToast();
 
   async function loadDetails() {
     try {
@@ -80,7 +86,7 @@ function BookingDetailContent() {
     return <p className={formStyles.errorText}>We couldn&apos;t find that booking.</p>;
   }
 
-  const { booking, requirements, agreement, documents } = details;
+  const { booking, requirements, agreement, documents, payments } = details;
   const uid = user.uid;
 
   async function handleResubmit() {
@@ -98,15 +104,16 @@ function BookingDetailContent() {
     <div className={styles.wrapper}>
       {justSubmitted ? (
         <div className={styles.confirmationBanner}>
-          <h2>Your booking request has been submitted successfully.</h2>
+          <h2>Your reservation is secured and submitted successfully.</h2>
           <p>
-            The business will review your rental details, requirements, and signed agreement.
-            You will receive a notification when your booking status is updated or when
-            additional information is required.
+            {booking.demoPayment
+              ? "This booking completed the development payment flow. No real money was processed. The business can now test document review and confirmation."
+              : "PayMongo has verified your reservation payment. The business will now review your verification documents and signed agreement, then mark the booking Confirmed."}
           </p>
           <p className={styles.paymentNote}>
-            Payment arrangements, when applicable, are handled directly by the business outside
-            the website.
+            Your invoice, official receipt, verified proof of payment, and signed rental agreement
+            are available under Documents. If you selected the 50% option, you can pay the
+            remaining balance from this page.
           </p>
         </div>
       ) : null}
@@ -128,6 +135,24 @@ function BookingDetailContent() {
         fulfillmentMethod={booking.fulfillmentMethod}
         customerLocation={booking.customerLocation}
       />
+
+      {booking.requirementsStatus === "not_submitted" ? (
+        <section className={styles.section}>
+          <h3>Finish this booking</h3>
+          <p>
+            Continue the guided flow to complete payment, verification documents, and the signed
+            rental agreement.
+          </p>
+          <Link
+            href={`/catalog/${booking.productId}/reserve?bookingId=${booking.id}`}
+            className={formStyles.primaryButton}
+          >
+            Continue Booking
+          </Link>
+        </section>
+      ) : null}
+
+      <BookingPaymentPanel booking={booking} payments={payments} />
 
       <section className={styles.section}>
         <h3>Status Overview</h3>
@@ -161,6 +186,13 @@ function BookingDetailContent() {
                 value={replacementFiles.idOneStoragePath ?? null}
                 onChange={(file) =>
                   setReplacementFiles((current) => ({ ...current, idOneStoragePath: file ?? undefined }))
+                }
+              />
+              <FileUploadField
+                label="Replace emergency contact ID (optional)"
+                value={replacementFiles.emergencyContactIdStoragePath ?? null}
+                onChange={(file) =>
+                  setReplacementFiles((current) => ({ ...current, emergencyContactIdStoragePath: file ?? undefined }))
                 }
               />
               <FileUploadField
@@ -200,7 +232,20 @@ function BookingDetailContent() {
         ) : (
           <ul className={styles.documentList}>
             {documents.map((document) => (
-              <li key={document.id}>{document.title}</li>
+              <li key={document.id}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      window.open(await getBookingFileUrl(document.storagePath), "_blank", "noopener,noreferrer");
+                    } catch {
+                      showToast("This document could not be opened.", "error");
+                    }
+                  }}
+                >
+                  {document.title}
+                </button>
+              </li>
             ))}
           </ul>
         )}

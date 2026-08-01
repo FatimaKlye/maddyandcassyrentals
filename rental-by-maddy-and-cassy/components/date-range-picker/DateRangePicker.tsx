@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  addDays,
   addMonths,
   differenceInCalendarDays,
   eachDayOfInterval,
@@ -15,7 +14,6 @@ import {
   isSameMonth,
   startOfDay,
   startOfMonth,
-  subDays,
   subMonths,
 } from "date-fns";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
@@ -56,19 +54,16 @@ export default function DateRangePicker({
   function handleDayClick(day: Date) {
     if (isDisabled(day)) return;
 
-    // Nothing selected yet: this click becomes the (single-day) selection.
-    if (!startDate) {
+    // A first click is already a valid one-day rental.
+    if (!startDate || !endDate || !isSameDay(startDate, endDate)) {
       setError(null);
       onChange({ startDate: day, endDate: day });
       return;
     }
 
-    const lastSelected = endDate ?? startDate;
-
-    // Clicking the latest selected date removes it, keeping the run
-    // consecutive from the start.
-    if (isSameDay(day, lastSelected)) {
+    if (isSameDay(day, startDate)) {
       setError(null);
+<<<<<<< HEAD
       if (isSameDay(startDate, lastSelected)) {
         onChange({ startDate: null, endDate: null });
       } else {
@@ -78,23 +73,32 @@ export default function DateRangePicker({
           endDate: isSameDay(newEnd, startDate) ? startDate : newEnd,
         });
       }
+=======
+      onChange({ startDate: day, endDate: day });
+>>>>>>> 551e8370a249ddaf05261c7a97e0c915219cb044
       return;
     }
 
-    // Only the day immediately following the current selection can extend it.
-    const nextAvailableDay = addDays(lastSelected, 1);
-    if (isSameDay(day, nextAvailableDay) && !isDisabled(nextAvailableDay)) {
-      const daySpan = differenceInCalendarDays(day, startDate) + 1;
-      if (daySpan > maxRentalDays) {
-        setError(`Maximum rental period is ${maxRentalDays} days.`);
-        return;
-      }
+    if (isBefore(day, startDate)) {
       setError(null);
-      onChange({ startDate, endDate: day });
+      onChange({ startDate: day, endDate: day });
       return;
     }
 
-    setError("Please select consecutive available dates");
+    const daySpan = differenceInCalendarDays(day, startDate) + 1;
+    if (daySpan > maxRentalDays) {
+      setError(`Maximum rental period is ${maxRentalDays} days.`);
+      return;
+    }
+
+    const blockedDate = eachDayOfInterval({ start: startDate, end: day }).find(isDisabled);
+    if (blockedDate) {
+      setError("That range includes an unavailable date. Please choose another end date.");
+      return;
+    }
+
+    setError(null);
+    onChange({ startDate, endDate: day });
   }
 
   const selectionEnd = endDate ?? startDate;

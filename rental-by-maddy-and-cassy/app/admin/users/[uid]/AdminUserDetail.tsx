@@ -15,6 +15,7 @@ import type { Booking, UserProfile } from "@/src/types/firebase";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import styles from "./userDetail.module.css";
+import AccountManagementPanel from "@/components/admin/AccountManagementPanel";
 
 interface UserDetailData {
   account: UserProfile;
@@ -221,6 +222,11 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
           <p className={styles.empty}>This customer has no booking history yet.</p>
         )}
       </section>
+
+      <AccountManagementPanel
+        account={account}
+        isAdministrator={isAdministrator}
+      />
 
       <section
         className={`${styles.dangerZone} ${isAdministrator ? styles.protectedZone : ""}`}

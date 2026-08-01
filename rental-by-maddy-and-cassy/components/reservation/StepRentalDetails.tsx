@@ -24,6 +24,7 @@ interface StepRentalDetailsProps {
   draft: ReservationDraft;
   onUpdate: (patch: Partial<ReservationDraft>) => void;
   onContinue: () => void;
+  onBack?: () => void;
 }
 
 export default function StepRentalDetails({
@@ -32,6 +33,7 @@ export default function StepRentalDetails({
   draft,
   onUpdate,
   onContinue,
+  onBack,
 }: StepRentalDetailsProps) {
   const [disabledDateKeys, setDisabledDateKeys] = useState<Set<string>>(new Set());
   const [loadingCalendar, setLoadingCalendar] = useState(true);
@@ -103,6 +105,13 @@ export default function StepRentalDetails({
 
   return (
     <div className={styles.wrapper}>
+      <div>
+        <h2 className={styles.flowHeading}>Reservation</h2>
+        <p className={styles.flowSubheading}>
+          Select one day with a single click, or click a later available date to choose a longer
+          rental. Then choose pickup or delivery and provide the location.
+        </p>
+      </div>
       <div className={styles.productSummary}>
         <div className={styles.productImage}>
           <Image src={product.image} alt={product.name} fill sizes="88px" />
@@ -212,6 +221,16 @@ export default function StepRentalDetails({
       ) : null}
 
       <div className={styles.footer}>
+        {onBack ? (
+          <button
+            type="button"
+            className={formStyles.secondaryButton}
+            onClick={onBack}
+            disabled={checking}
+          >
+            Back
+          </button>
+        ) : <span />}
         <button
           type="button"
           className={formStyles.primaryButton}

@@ -18,7 +18,19 @@ export type {
   StatusHistoryEntry,
   BookingDocument,
   BookingDocumentType,
+  RequirementDocumentKey,
+  RequirementDocumentReview,
+  RequirementReviewStatus,
 } from "@/src/types/booking";
+export type {
+  PaymentStatus,
+  PaymentRecord,
+  InvoiceStatus,
+  InvoiceLineItem,
+  BookingInvoice,
+  BookingReceipt,
+  PaymentEventLog,
+} from "@/src/types/payment";
 export type { UserNotification, NotificationType } from "@/src/types/notification";
 export type { Admin } from "@/src/types/admin";
 export type {

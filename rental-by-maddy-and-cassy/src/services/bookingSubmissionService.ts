@@ -1,37 +1,10 @@
-import { Timestamp, doc, serverTimestamp, writeBatch } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { auth, db, storage } from "@/src/lib/firebase/config";
+import { auth } from "@/src/lib/firebase/config";
 import type { Product } from "@/types/product";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
 import { getDayCount } from "@/src/types/reservationDraft";
 import { toDateKey } from "@/src/services/availabilityService";
 import { DatesUnavailableError } from "@/src/services/inventoryService";
-import { TERMS_VERSION } from "@/components/reservation/AgreementDocument";
-
-async function uploadFile(path: string, file: File): Promise<string> {
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  // Confirms the upload actually landed before we reference the path elsewhere.
-  await getDownloadURL(storageRef);
-  return path;
-}
-
-async function uploadSignature(userId: string, bookingId: string, draft: ReservationDraft): Promise<string> {
-  const path = `private/users/${userId}/bookings/${bookingId}/signatures/signature.png`;
-  const storageRef = ref(storage, path);
-
-  if (draft.agreement.signatureFile) {
-    await uploadBytes(storageRef, draft.agreement.signatureFile);
-  } else if (draft.agreement.signatureDataUrl) {
-    const response = await fetch(draft.agreement.signatureDataUrl);
-    const blob = await response.blob();
-    await uploadBytes(storageRef, blob);
-  } else {
-    throw new Error("Missing signature.");
-  }
-
-  return path;
-}
+import { getAppCheckHeaders } from "@/src/lib/firebase/appCheckClient";
 
 interface SubmitBookingApiResponse {
   success: boolean;
@@ -85,13 +58,10 @@ async function callSubmitBookingApi(input: {
 
 export interface SubmitBookingResult {
   bookingId: string;
+  bookingNumber?: string;
 }
 
-export async function submitBooking(
-  product: Product,
-  userId: string,
-  draft: ReservationDraft
-): Promise<SubmitBookingResult> {
+function validateReservationDetails(draft: ReservationDraft): void {
   if (!draft.startDate || !draft.endDate || !draft.fulfillmentMethod) {
     throw new Error("Missing rental details.");
   }
@@ -107,7 +77,44 @@ export async function submitBooking(
   ) {
     throw new Error("Missing required customer information.");
   }
+}
 
+export async function createBookingReservation(
+  product: Product,
+  draft: ReservationDraft
+): Promise<SubmitBookingResult> {
+  validateReservationDetails(draft);
+  const { customerInfo } = draft;
+  const startDate = draft.startDate!;
+  const endDate = draft.endDate!;
+  const fulfillmentMethod = draft.fulfillmentMethod!;
+  const dayCount = getDayCount(startDate, endDate);
+
+  const { bookingId, bookingNumber } = await callSubmitBookingApi({
+    productId: product.id,
+    startDate: toDateKey(startDate),
+    endDate: toDateKey(endDate),
+    dayCount,
+    fulfillmentMethod,
+    customerLocation: draft.customerLocation,
+    customerSnapshot: {
+      fullName: customerInfo.fullName.trim(),
+      email: customerInfo.email.trim(),
+      phone: customerInfo.phone.trim(),
+      address: customerInfo.address.trim(),
+      facebookLink: customerInfo.facebookLink.trim(),
+      instagramLink: customerInfo.instagramLink.trim(),
+    },
+  });
+
+  return { bookingId, bookingNumber };
+}
+
+export async function submitBookingDocuments(
+  bookingId: string,
+  draft: ReservationDraft,
+): Promise<void> {
+  validateReservationDetails(draft);
   const { requirements } = draft;
   if (
     !requirements.idOneFile ||
@@ -138,109 +145,186 @@ export async function submitBooking(
     throw new Error("Complete and sign the rental agreement before submitting.");
   }
 
-  const dayCount = getDayCount(draft.startDate, draft.endDate);
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error("Your session expired. Sign in again before submitting.");
+  }
 
-  const { bookingId, bookingNumber } = await callSubmitBookingApi({
-    productId: product.id,
-    startDate: toDateKey(draft.startDate),
-    endDate: toDateKey(draft.endDate),
-    dayCount,
-    fulfillmentMethod: draft.fulfillmentMethod,
-    customerLocation: draft.customerLocation,
-    customerSnapshot: {
-      fullName: customerInfo.fullName.trim(),
-      email: customerInfo.email.trim(),
-      phone: customerInfo.phone.trim(),
-      address: customerInfo.address.trim(),
-      facebookLink: customerInfo.facebookLink.trim(),
-      instagramLink: customerInfo.instagramLink.trim(),
-    },
-  });
+  const signatureBlob = dataUrlToBlob(agreement.signatureDataUrl);
+  const signatureFile = new File(
+    [signatureBlob],
+    `signature.${extensionFromContentType(signatureBlob.type)}`,
+    { type: signatureBlob.type || "image/png" },
+  );
+  const idToken = await currentUser.getIdToken();
+  const appCheckHeaders = await getAppCheckHeaders();
+  const submissionId = crypto.randomUUID();
 
-  const requirementsPath = `private/users/${userId}/bookings/${bookingId}/requirements`;
-  const [idOnePath, idTwoPath, selfiePath, emergencyIdPath, signaturePath] = await Promise.all([
-    uploadFile(`${requirementsPath}/id-one.${extensionOf(requirements.idOneFile)}`, requirements.idOneFile),
-    uploadFile(`${requirementsPath}/id-two.${extensionOf(requirements.idTwoFile)}`, requirements.idTwoFile),
-    uploadFile(`${requirementsPath}/selfie.${extensionOf(requirements.selfieFile)}`, requirements.selfieFile),
-    uploadFile(
-      `${requirementsPath}/emergency-contact-id.${extensionOf(requirements.emergencyContact.idFile)}`,
-      requirements.emergencyContact.idFile
+  async function uploadDocument(
+    kind: "idOne" | "idTwo" | "selfie" | "emergencyId" | "signature",
+    file: File,
+    label: string,
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    let response: Response;
+    try {
+      response = await fetch(
+        `/api/bookings/${encodeURIComponent(bookingId)}/documents/upload` +
+          `?kind=${encodeURIComponent(kind)}&submissionId=${encodeURIComponent(submissionId)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            ...appCheckHeaders,
+          },
+          body: formData,
+        },
+      );
+    } catch {
+      throw new Error(
+        `${label} could not reach the upload server. Check your connection and try again.`,
+      );
+    }
+    const body = (await response.json().catch(() => null)) as
+      | { path?: unknown; error?: unknown }
+      | null;
+    if (!response.ok || typeof body?.path !== "string") {
+      throw new Error(
+        typeof body?.error === "string"
+          ? body.error
+          : `${label} could not be uploaded.`,
+      );
+    }
+    return body.path;
+  }
+
+  const uploadedFiles = {
+    idOne: await uploadDocument(
+      "idOne",
+      requirements.idOneFile,
+      "First valid ID",
     ),
-    uploadSignature(userId, bookingId, draft),
-  ]);
+    idTwo: await uploadDocument(
+      "idTwo",
+      requirements.idTwoFile,
+      "Second valid ID",
+    ),
+    selfie: await uploadDocument(
+      "selfie",
+      requirements.selfieFile,
+      "Selfie with ID",
+    ),
+    emergencyId: await uploadDocument(
+      "emergencyId",
+      requirements.emergencyContact.idFile,
+      "Emergency contact ID",
+    ),
+    signature: await uploadDocument(
+      "signature",
+      signatureFile,
+      "Electronic signature",
+    ),
+  };
 
-  const batch = writeBatch(db);
+  const submitResponse = await fetch(
+    `/api/bookings/${encodeURIComponent(bookingId)}/documents/submit`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+        ...appCheckHeaders,
+      },
+      body: JSON.stringify({
+        submissionId,
+        files: uploadedFiles,
+      facebookLink: requirements.facebookLink.trim(),
+      instagramLink: requirements.instagramLink.trim(),
+      emergencyContact: {
+        fullName: requirements.emergencyContact.fullName.trim(),
+        relationship: requirements.emergencyContact.relationship.trim(),
+        phone: requirements.emergencyContact.phone.trim(),
+        facebookLink: requirements.emergencyContact.facebookLink.trim(),
+      },
+      acknowledgements: {
+        infoAccurate: agreement.infoAccurate,
+        agreedToTerms: agreement.agreedToTerms,
+        understoodRentalRules: agreement.understoodRentalRules,
+        authorizedESignature: agreement.authorizedESignature,
+        readPrivacyNotice: agreement.readPrivacyNotice,
+        emergencyContactAuthorized: agreement.emergencyContactAuthorized,
+      },
+      signatureMethod: agreement.signatureMethod,
+      typedFullName: agreement.typedFullName.trim(),
+      }),
+    },
+  );
+  if (!submitResponse.ok) {
+    const body = (await submitResponse.json().catch(() => null)) as
+      | { error?: unknown }
+      | null;
+    throw new Error(
+      typeof body?.error === "string"
+        ? body.error
+        : "The documents could not be securely submitted.",
+    );
+  }
 
-  batch.update(doc(db, "bookings", bookingId), {
-    requirementsStatus: "submitted",
-    agreementStatus: "submitted_for_review",
-    updatedAt: serverTimestamp(),
+  const response = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/documents/agreement`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        ...appCheckHeaders,
+      },
   });
-
-  batch.set(doc(db, "bookings", bookingId, "requirements", "main"), {
-    bookingId,
-    userId,
-    idOneStoragePath: idOnePath,
-    idTwoStoragePath: idTwoPath,
-    selfieWithIdStoragePath: selfiePath,
-    facebookLink: requirements.facebookLink,
-    instagramLink: requirements.instagramLink,
-    emergencyContact: {
-      fullName: requirements.emergencyContact.fullName,
-      relationship: requirements.emergencyContact.relationship,
-      phone: requirements.emergencyContact.phone,
-      facebookLink: requirements.emergencyContact.facebookLink,
-      idStoragePath: emergencyIdPath,
-    },
-    status: "submitted",
-    submittedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  batch.set(doc(db, "bookings", bookingId, "agreement", "main"), {
-    bookingId,
-    userId,
-    bookingRef: bookingNumber,
-    generatedTermsVersion: TERMS_VERSION,
-    agreementSnapshot: {
-      customerName: draft.customerInfo.fullName,
-      productName: product.name,
-      startDate: Timestamp.fromDate(draft.startDate),
-      endDate: Timestamp.fromDate(draft.endDate),
-      dayCount,
-      fulfillmentMethod: draft.fulfillmentMethod,
-      customerLocation: draft.customerLocation,
-      pricePerDay: product.pricePerDay,
-      currency: product.currency,
-      includedAccessories: product.included,
-    },
-    acknowledgements: {
-      infoAccurate: draft.agreement.infoAccurate,
-      agreedToTerms: draft.agreement.agreedToTerms,
-      understoodRentalRules: draft.agreement.understoodRentalRules,
-      authorizedESignature: draft.agreement.authorizedESignature,
-      readPrivacyNotice: draft.agreement.readPrivacyNotice,
-      emergencyContactAuthorized: draft.agreement.emergencyContactAuthorized,
-    },
-    signature: {
-      method: draft.agreement.signatureMethod,
-      storagePath: signaturePath,
-      typedFullName: draft.agreement.typedFullName,
-      signedAt: serverTimestamp(),
-    },
-    status: "submitted_for_review",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  await batch.commit();
-
-  return { bookingId };
+  if (!response.ok) {
+    console.warn("Documents were submitted, but the signed agreement PDF is still being prepared.");
+  }
 }
 
-function extensionOf(file: File): string {
-  const parts = file.name.split(".");
-  if (parts.length > 1) return parts[parts.length - 1].toLowerCase();
-  if (file.type === "application/pdf") return "pdf";
+export async function submitBooking(
+  product: Product,
+  userId: string,
+  draft: ReservationDraft
+): Promise<SubmitBookingResult> {
+  const reservation = await createBookingReservation(product, draft);
+  await submitBookingDocuments(
+    reservation.bookingId,
+    draft,
+  );
+  return reservation;
+}
+
+function extensionFromContentType(contentType: string): string {
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
   return "jpg";
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const separatorIndex = dataUrl.indexOf(",");
+  if (!dataUrl.startsWith("data:") || separatorIndex < 0) {
+    throw new Error("The electronic signature is invalid. Please sign again.");
+  }
+
+  const header = dataUrl.slice(5, separatorIndex);
+  const encoded = dataUrl.slice(separatorIndex + 1);
+  const isBase64 = header.endsWith(";base64");
+  const contentType = header.replace(/;base64$/, "") || "image/png";
+
+  try {
+    if (isBase64) {
+      const binary = window.atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return new Blob([bytes], { type: contentType });
+    }
+
+    return new Blob([decodeURIComponent(encoded)], { type: contentType });
+  } catch {
+    throw new Error("The electronic signature is invalid. Please sign again.");
+  }
 }
