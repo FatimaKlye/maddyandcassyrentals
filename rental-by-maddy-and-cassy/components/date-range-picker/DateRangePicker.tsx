@@ -63,19 +63,7 @@ export default function DateRangePicker({
 
     if (isSameDay(day, startDate)) {
       setError(null);
-<<<<<<< HEAD
-      if (isSameDay(startDate, lastSelected)) {
-        onChange({ startDate: null, endDate: null });
-      } else {
-        const newEnd = subDays(lastSelected, 1);
-        onChange({
-          startDate,
-          endDate: isSameDay(newEnd, startDate) ? startDate : newEnd,
-        });
-      }
-=======
       onChange({ startDate: day, endDate: day });
->>>>>>> 551e8370a249ddaf05261c7a97e0c915219cb044
       return;
     }
 
