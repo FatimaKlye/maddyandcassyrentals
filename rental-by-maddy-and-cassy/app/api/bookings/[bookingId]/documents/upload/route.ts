@@ -47,6 +47,35 @@ function extensionFor(contentType: string): string {
   return "jpg";
 }
 
+async function savePrivateUpload(
+  path: string,
+  bytes: ArrayBuffer,
+  contentType: string,
+): Promise<void> {
+  const file = getAdminStorage().bucket().file(path);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await file.save(Buffer.from(bytes), {
+        resumable: false,
+        metadata: {
+          contentType,
+          cacheControl: "private, no-store, max-age=0",
+        },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ bookingId: string }> },
@@ -107,16 +136,7 @@ export async function POST(
     const path =
       `private/users/${user.uid}/bookings/${bookingId}/${uploadKind.folder}/` +
       `${uploadKind.fileName}-${submissionId}.${extensionFor(value.type)}`;
-    await getAdminStorage()
-      .bucket()
-      .file(path)
-      .save(Buffer.from(await value.arrayBuffer()), {
-        resumable: false,
-        metadata: {
-          contentType: value.type,
-          cacheControl: "private, no-store, max-age=0",
-        },
-      });
+    await savePrivateUpload(path, await value.arrayBuffer(), value.type);
 
     return NextResponse.json({ success: true, path });
   } catch (error) {

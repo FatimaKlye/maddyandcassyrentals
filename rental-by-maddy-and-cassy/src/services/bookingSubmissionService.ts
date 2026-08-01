@@ -1,4 +1,5 @@
-import { auth } from "@/src/lib/firebase/config";
+import { auth, storage } from "@/src/lib/firebase/config";
+import { ref, uploadBytes } from "firebase/storage";
 import type { Product } from "@/types/product";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
 import { getDayCount } from "@/src/types/reservationDraft";
@@ -149,6 +150,7 @@ export async function submitBookingDocuments(
   if (!currentUser) {
     throw new Error("Your session expired. Sign in again before submitting.");
   }
+  const userId = currentUser.uid;
 
   const signatureBlob = dataUrlToBlob(agreement.signatureDataUrl);
   const signatureFile = new File(
@@ -165,6 +167,24 @@ export async function submitBookingDocuments(
     file: File,
     label: string,
   ): Promise<string> {
+    const directUpload = async (): Promise<string> => {
+      const uploadTarget = {
+        idOne: { folder: "requirements", fileName: "id-one" },
+        idTwo: { folder: "requirements", fileName: "id-two" },
+        selfie: { folder: "requirements", fileName: "selfie" },
+        emergencyId: { folder: "requirements", fileName: "emergency-contact-id" },
+        signature: { folder: "signatures", fileName: "signature" },
+      }[kind];
+      const path =
+        `private/users/${userId}/bookings/${bookingId}/${uploadTarget.folder}/` +
+        `${uploadTarget.fileName}-${submissionId}.${extensionFromContentType(file.type)}`;
+      await uploadBytes(ref(storage, path), file, {
+        contentType: file.type,
+        cacheControl: "private, no-store, max-age=0",
+      });
+      return path;
+    };
+
     const formData = new FormData();
     formData.append("file", file);
     let response: Response;
@@ -182,21 +202,37 @@ export async function submitBookingDocuments(
         },
       );
     } catch {
-      throw new Error(
-        `${label} could not reach the upload server. Check your connection and try again.`,
-      );
+      try {
+        return await directUpload();
+      } catch (error) {
+        console.error("Direct private document upload failed", error);
+        throw new Error(
+          `${label} could not reach the upload server. Check your connection and try again.`,
+        );
+      }
     }
     const body = (await response.json().catch(() => null)) as
       | { path?: unknown; error?: unknown }
       | null;
-    if (!response.ok || typeof body?.path !== "string") {
-      throw new Error(
-        typeof body?.error === "string"
-          ? body.error
-          : `${label} could not be uploaded.`,
-      );
+    if (response.ok && typeof body?.path === "string") {
+      return body.path;
     }
-    return body.path;
+    // During local development the server's Admin Storage connection can be
+    // reset by the network. The same user-owned Storage path is safely
+    // writable from the browser under storage.rules, so use that path as a
+    // fallback only for server-side failures.
+    if (response.status >= 500) {
+      try {
+        return await directUpload();
+      } catch (error) {
+        console.error("Direct private document upload failed", error);
+      }
+    }
+    throw new Error(
+      typeof body?.error === "string"
+        ? body.error
+        : `${label} could not be uploaded.`,
+    );
   }
 
   const uploadedFiles = {
@@ -299,6 +335,7 @@ export async function submitBooking(
 function extensionFromContentType(contentType: string): string {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";
+  if (contentType === "application/pdf") return "pdf";
   return "jpg";
 }
 
