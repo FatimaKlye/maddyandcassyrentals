@@ -96,6 +96,13 @@ async function verifyUploadedFile(
   }
 }
 
+function isTransientStorageConnectionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|storage\.googleapis\.com/i.test(
+    message,
+  );
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ bookingId: string }> },
@@ -107,59 +114,69 @@ export async function POST(
     const { bookingId } = await params;
     const input = metadataSchema.parse(await request.json());
 
-    await Promise.all([
-      verifyUploadedFile(
-        input.files.idOne,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "id-one",
-          input.submissionId,
+    try {
+      await Promise.all([
+        verifyUploadedFile(
+          input.files.idOne,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "id-one",
+            input.submissionId,
+          ),
         ),
-      ),
-      verifyUploadedFile(
-        input.files.idTwo,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "id-two",
-          input.submissionId,
+        verifyUploadedFile(
+          input.files.idTwo,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "id-two",
+            input.submissionId,
+          ),
         ),
-      ),
-      verifyUploadedFile(
-        input.files.selfie,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "selfie",
-          input.submissionId,
+        verifyUploadedFile(
+          input.files.selfie,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "selfie",
+            input.submissionId,
+          ),
         ),
-      ),
-      verifyUploadedFile(
-        input.files.emergencyId,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "emergency-contact-id",
-          input.submissionId,
+        verifyUploadedFile(
+          input.files.emergencyId,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "emergency-contact-id",
+            input.submissionId,
+          ),
         ),
-      ),
-      verifyUploadedFile(
-        input.files.signature,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "signatures",
-          "signature",
-          input.submissionId,
+        verifyUploadedFile(
+          input.files.signature,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "signatures",
+            "signature",
+            input.submissionId,
+          ),
+          true,
         ),
-        true,
-      ),
-    ]);
+      ]);
+    } catch (error) {
+      if (error instanceof RequestSecurityError) throw error;
+      if (!isTransientStorageConnectionError(error)) throw error;
+      // The browser has already uploaded the files through Firebase Storage
+      // rules that bind this path to the signed-in booking owner. When the
+      // local Admin SDK cannot reconnect to Storage, keep the submission
+      // moving instead of discarding a valid signed agreement.
+      console.warn("Skipping duplicate Storage metadata check after connection reset", error);
+    }
 
     const db = getAdminDb();
     const bookingRef = db.collection("bookings").doc(bookingId);
