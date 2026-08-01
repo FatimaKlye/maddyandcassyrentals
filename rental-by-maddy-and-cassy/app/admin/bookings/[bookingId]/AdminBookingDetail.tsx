@@ -49,7 +49,8 @@ function formatDate(value: { toDate?: () => Date } | null | undefined, includeTi
   });
 }
 
-function formatStatus(value: string) {
+function formatStatus(value: string | null | undefined) {
+  if (!value) return "-";
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
