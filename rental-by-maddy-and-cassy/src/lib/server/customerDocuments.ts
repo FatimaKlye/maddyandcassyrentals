@@ -34,17 +34,32 @@ export async function savePrivatePdf(
   bytes: Uint8Array,
   metadata: Record<string, string> = {},
 ): Promise<void> {
-  await getAdminStorage()
-    .bucket()
-    .file(storagePath)
-    .save(Buffer.from(bytes), {
-      resumable: false,
-      contentType: "application/pdf",
-      metadata: {
-        cacheControl: "private, max-age=0, no-store",
-        metadata,
-      },
-    });
+  const file = getAdminStorage().bucket().file(storagePath);
+  let lastError: unknown;
+
+  // Cloud Storage occasionally resets a local development connection. PDF
+  // uploads are idempotent, so a short retry is safe and avoids making the
+  // customer restart checkout for a transient network interruption.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await file.save(Buffer.from(bytes), {
+        resumable: false,
+        contentType: "application/pdf",
+        metadata: {
+          cacheControl: "private, max-age=0, no-store",
+          metadata,
+        },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 export function bookingRentalDates(booking: DocumentData): string {

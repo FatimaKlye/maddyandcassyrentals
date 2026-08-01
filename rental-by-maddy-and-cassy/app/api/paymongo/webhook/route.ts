@@ -220,6 +220,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   const canFinalizeAgreement =
     agreementSnapshot.exists && booking.requirementsStatus === "verified";
 
+  let receiptReady = false;
+  let agreementReady = false;
   try {
     await generateAndSaveReceipt({
       booking,
@@ -229,25 +231,25 @@ export async function POST(request: Request): Promise<NextResponse> {
       storagePath: receiptPath,
       amount: expectedAmount,
     });
-    if (canFinalizeAgreement) {
+    receiptReady = true;
+  } catch (error) {
+    // Payment verification is the source of truth. A receipt upload can be
+    // retried later and must never cause a paid PayMongo event to be rejected.
+    console.error("Paid booking receipt generation failed", error);
+  }
+
+  if (canFinalizeAgreement) {
+    try {
       await generateAndSaveFinalAgreement({
         booking,
         agreement: agreementSnapshot.data() ?? {},
         paymentReference: providerPaymentId,
         storagePath: agreementPath,
       });
+      agreementReady = true;
+    } catch (error) {
+      console.error("Paid booking agreement generation failed", error);
     }
-  } catch (error) {
-    console.error("Paid booking document generation failed", error);
-    await eventRef.set(
-      {
-        status: "failed",
-        error: "Customer document generation failed.",
-        processedAt: Timestamp.now(),
-      },
-      { merge: true },
-    );
-    return json("Payment documents could not be finalized.", 500);
   }
 
   try {
@@ -308,20 +310,23 @@ export async function POST(request: Request): Promise<NextResponse> {
         amount: expectedAmount,
         currency: "PHP",
         storagePath: receiptPath,
+        generationStatus: receiptReady ? "ready" : "pending_retry",
         issuedAt: now,
       });
-      transaction.set(bookingRef.collection("documents").doc(`receipt-${receiptId}`), {
-        type: "receipt",
-        storagePath: receiptPath,
-        title: `Official Receipt ${receiptNumber}`,
-        generatedAt: now,
-      });
-      transaction.set(bookingRef.collection("documents").doc(`proof-${receiptId}`), {
-        type: "payment_proof",
-        storagePath: receiptPath,
-        title: `Verified PayMongo Payment ${providerPaymentId}`,
-        generatedAt: now,
-      });
+      if (receiptReady) {
+        transaction.set(bookingRef.collection("documents").doc(`receipt-${receiptId}`), {
+          type: "receipt",
+          storagePath: receiptPath,
+          title: `Official Receipt ${receiptNumber}`,
+          generatedAt: now,
+        });
+        transaction.set(bookingRef.collection("documents").doc(`proof-${receiptId}`), {
+          type: "payment_proof",
+          storagePath: receiptPath,
+          title: `Verified PayMongo Payment ${providerPaymentId}`,
+          generatedAt: now,
+        });
+      }
 
       const bookingUpdates: Record<string, unknown> = {
         paymentStatus: nextPaymentStatus,
@@ -331,14 +336,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         paymentReference: providerPaymentId,
         updatedAt: now,
       };
-      if (canFinalizeAgreement && booking.status === "approved") {
+      if (agreementReady && booking.status === "approved") {
         bookingUpdates.status = "confirmed";
         bookingUpdates.agreementStatus = "completed";
         bookingUpdates.confirmedAt = now;
       }
       transaction.update(bookingRef, bookingUpdates);
 
-      if (canFinalizeAgreement) {
+      if (agreementReady) {
         transaction.update(agreementRef, {
           status: "completed",
           finalAgreementPath: agreementPath,
@@ -361,11 +366,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       transaction.set(bookingRef.collection("statusHistory").doc(), {
         previousStatus: booking.status,
         newStatus:
-          canFinalizeAgreement && booking.status === "approved"
+          agreementReady && booking.status === "approved"
             ? "confirmed"
             : booking.status,
         changedBy: "system",
-        message: "PayMongo payment verified and receipt issued.",
+        message: receiptReady
+          ? "PayMongo payment verified and receipt issued."
+          : "PayMongo payment verified. Receipt generation is pending a document storage retry.",
         createdAt: now,
       });
       transaction.set(db.collection("users").doc(userId).collection("notifications").doc(), {
@@ -373,7 +380,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         bookingId,
         type: "payment_paid",
         title: "Reservation payment confirmed",
-        message: `Your payment for ${booking.bookingRef} was verified. Your rental dates are now secured and your receipt is ready.`,
+        message: receiptReady
+          ? `Your payment for ${booking.bookingRef} was verified. Your rental dates are now secured and your receipt is ready.`
+          : `Your payment for ${booking.bookingRef} was verified and your rental dates are secured. Your receipt will be prepared when document storage is available.`,
         actionUrl: `/account/bookings/${bookingId}`,
         isRead: false,
         createdAt: now,
@@ -391,6 +400,8 @@ export async function POST(request: Request): Promise<NextResponse> {
           amount: expectedAmount,
           paymentOption: session.paymentOption ?? "full",
           remainingBalance,
+          receiptReady,
+          agreementReady,
         },
         createdAt: now,
       });
@@ -411,7 +422,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   await sendPushNotification({
     userId,
     title: "Reservation payment confirmed",
-    body: `Your payment for ${booking.bookingRef} was verified. Your rental dates are secured and your receipt is ready.`,
+    body: receiptReady
+      ? `Your payment for ${booking.bookingRef} was verified. Your rental dates are secured and your receipt is ready.`
+      : `Your payment for ${booking.bookingRef} was verified and your rental dates are secured. Your receipt is still being prepared.`,
     actionUrl: `/account/bookings/${bookingId}`,
   }).catch((pushError) => console.error("Payment push notification failed", pushError));
 

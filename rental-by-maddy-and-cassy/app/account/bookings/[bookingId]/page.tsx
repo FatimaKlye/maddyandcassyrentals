@@ -18,6 +18,7 @@ import formStyles from "@/components/ui/Form.module.css";
 import styles from "./bookingDetail.module.css";
 import BookingPaymentPanel from "@/components/payment/BookingPaymentPanel";
 import { getBookingFileUrl } from "@/src/services/bookingDetailService";
+import { retryPendingFinancialDocuments } from "@/src/services/paymentService";
 import { useToast } from "@/components/ui/ToastProvider";
 
 const REQUIREMENTS_STATUS_LABEL: Record<string, string> = {
@@ -61,7 +62,19 @@ function BookingDetailContent() {
 
   async function loadDetails() {
     try {
-      const result = await getBookingDetails(params.bookingId);
+      let result = await getBookingDetails(params.bookingId);
+      const hasPendingFinancialDocuments = result
+        ? [...result.invoices, ...result.receipts].some(
+            (document) => document.generationStatus === "pending_retry",
+          )
+        : false;
+      if (result && user && hasPendingFinancialDocuments) {
+        await retryPendingFinancialDocuments(
+          params.bookingId,
+          await user.getIdToken(),
+        ).catch(() => undefined);
+        result = await getBookingDetails(params.bookingId);
+      }
       setDetails(result ?? "error");
     } catch {
       setDetails("error");

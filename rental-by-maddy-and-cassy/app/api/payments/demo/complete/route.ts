@@ -90,16 +90,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     const receiptPath =
       `private/users/${user.uid}/bookings/${bookingId}/documents/${receiptNumber}.pdf`;
 
-    if (paymentSnapshot.data()?.status !== "paid") {
-      await generateAndSaveReceipt({
-        booking,
-        receiptNumber,
-        paymentReference: demoReference,
-        paymentMethod: `Demo ${paymentMethod.toUpperCase()}`,
-        storagePath: receiptPath,
-        amount: expectedAmount,
-        isDemo: true,
-      });
+    let receiptReady = paymentSnapshot.data()?.status === "paid";
+    if (!receiptReady) {
+      try {
+        await generateAndSaveReceipt({
+          booking,
+          receiptNumber,
+          paymentReference: demoReference,
+          paymentMethod: `Demo ${paymentMethod.toUpperCase()}`,
+          storagePath: receiptPath,
+          amount: expectedAmount,
+          isDemo: true,
+        });
+        receiptReady = true;
+      } catch (error) {
+        // The payment record is the source of truth. A temporary document
+        // storage outage must not make a completed demo payment look failed.
+        console.error("Demo receipt PDF generation failed", error);
+      }
     }
 
     const now = Timestamp.now();
@@ -156,23 +164,26 @@ export async function POST(request: Request): Promise<NextResponse> {
         amount: expectedAmount,
         currency: "PHP",
         storagePath: receiptPath,
+        generationStatus: receiptReady ? "ready" : "pending_retry",
         isDemo: true,
         issuedAt: now,
       });
-      transaction.set(bookingRef.collection("documents").doc(`receipt-${paymentRecordId}`), {
-        type: "receipt",
-        storagePath: receiptPath,
-        title: `DEMO Receipt ${receiptNumber} - Not Valid`,
-        isDemo: true,
-        generatedAt: now,
-      });
-      transaction.set(bookingRef.collection("documents").doc(`proof-${paymentRecordId}`), {
-        type: "payment_proof",
-        storagePath: receiptPath,
-        title: `DEMO Payment Proof ${demoReference} - Not Valid`,
-        isDemo: true,
-        generatedAt: now,
-      });
+      if (receiptReady) {
+        transaction.set(bookingRef.collection("documents").doc(`receipt-${paymentRecordId}`), {
+          type: "receipt",
+          storagePath: receiptPath,
+          title: `DEMO Receipt ${receiptNumber} - Not Valid`,
+          isDemo: true,
+          generatedAt: now,
+        });
+        transaction.set(bookingRef.collection("documents").doc(`proof-${paymentRecordId}`), {
+          type: "payment_proof",
+          storagePath: receiptPath,
+          title: `DEMO Payment Proof ${demoReference} - Not Valid`,
+          isDemo: true,
+          generatedAt: now,
+        });
+      }
       transaction.update(bookingRef, {
         paymentStatus: nextPaymentStatus,
         amountPaid: newAmountPaid,
@@ -195,7 +206,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         type: "payment_paid",
         title: "Demo reservation payment completed",
         message:
-          `Your demo payment for ${booking.bookingRef} is complete. No real money was processed.`,
+          receiptReady
+            ? `Your demo payment for ${booking.bookingRef} is complete. No real money was processed.`
+            : `Your demo payment for ${booking.bookingRef} is complete. No real money was processed. The receipt will be prepared when document storage is available.`,
         actionUrl: `/account/bookings/${bookingId}`,
         isRead: false,
         createdAt: now,
@@ -212,6 +225,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           checkoutSessionId: sessionId,
           amount: expectedAmount,
           remainingBalance,
+          receiptReady,
         },
         createdAt: now,
       });
@@ -225,6 +239,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           ? "paid"
           : "partially_paid",
       demo: true,
+      receiptReady,
     });
   } catch (error) {
     if (error instanceof RequestSecurityError) {

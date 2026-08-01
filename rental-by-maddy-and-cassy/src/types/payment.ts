@@ -12,6 +12,7 @@ export type PaymentStatus =
 export type InvoiceStatus = "open" | "paid" | "void";
 
 export type PaymentOption = "deposit_50" | "full" | "balance";
+export type FinancialDocumentGenerationStatus = "ready" | "pending_retry";
 
 export interface PaymentRecord {
   id: string;
@@ -60,6 +61,7 @@ export interface BookingInvoice {
   paymentOption?: PaymentOption;
   isDemo?: boolean;
   storagePath: string;
+  generationStatus?: FinancialDocumentGenerationStatus;
   paymentId?: string;
   issuedAt: Timestamp;
   dueAt?: Timestamp;
@@ -79,6 +81,7 @@ export interface BookingReceipt {
   isDemo?: boolean;
   currency: "PHP";
   storagePath: string;
+  generationStatus?: FinancialDocumentGenerationStatus;
   issuedAt: Timestamp;
 }
 

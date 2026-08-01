@@ -215,6 +215,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       createdAt: now,
     });
 
+    let invoiceReady = true;
     try {
       await generateAndSaveInvoice({
         booking,
@@ -228,8 +229,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     } catch (error) {
       console.error("Invoice PDF generation failed", error);
-      await db.collection("paymentSessions").doc(checkout.id).delete();
-      throw new Error("INVOICE_GENERATION_FAILED");
+      invoiceReady = false;
     }
 
     const batch = db.batch();
@@ -274,19 +274,22 @@ export async function POST(request: Request): Promise<NextResponse> {
       paymentOption,
       isDemo: demoMode,
       storagePath: invoicePath,
+      generationStatus: invoiceReady ? "ready" : "pending_retry",
       paymentId: paymentRef.id,
       issuedAt: now,
       updatedAt: now,
     });
-    batch.set(bookingRef.collection("documents").doc(`invoice-${invoiceRef.id}`), {
-      type: "invoice",
-      storagePath: invoicePath,
-      title: demoMode
-        ? `DEMO Invoice ${invoiceNumber} - Not Valid`
-        : `Invoice ${invoiceNumber}`,
-      isDemo: demoMode,
-      generatedAt: now,
-    });
+    if (invoiceReady) {
+      batch.set(bookingRef.collection("documents").doc(`invoice-${invoiceRef.id}`), {
+        type: "invoice",
+        storagePath: invoicePath,
+        title: demoMode
+          ? `DEMO Invoice ${invoiceNumber} - Not Valid`
+          : `Invoice ${invoiceNumber}`,
+        isDemo: demoMode,
+        generatedAt: now,
+      });
+    }
     batch.update(bookingRef, {
       amountDue: totalAmount,
       balanceDue,
@@ -303,7 +306,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       bookingId,
       targetType: "payment",
       targetId: paymentRef.id,
-      metadata: { checkoutSessionId: checkout.id, amount, paymentOption, demo: demoMode },
+      metadata: {
+        checkoutSessionId: checkout.id,
+        amount,
+        paymentOption,
+        demo: demoMode,
+        invoiceReady,
+      },
       createdAt: now,
     });
     batch.set(db.collection("users").doc(user.uid).collection("notifications").doc(), {
@@ -325,6 +334,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       checkoutUrl: checkout.checkoutUrl,
       paymentId: paymentRef.id,
       invoiceNumber,
+      invoiceReady,
     });
   } catch (error) {
     if (error instanceof RequestSecurityError) {
@@ -332,9 +342,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     if (error instanceof PayMongoError) {
       return responseError(error.message, error.status);
-    }
-    if (error instanceof Error && error.message === "INVOICE_GENERATION_FAILED") {
-      return responseError("The invoice could not be prepared. Please try again.", 500);
     }
     console.error("Payment checkout creation failed", error);
     return responseError("The secure checkout could not be created. Please try again.", 500);

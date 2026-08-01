@@ -48,6 +48,22 @@ export async function createPaymentCheckout(
   return { checkoutUrl: body.checkoutUrl };
 }
 
+export async function retryPendingFinancialDocuments(
+  bookingId: string,
+  idToken: string,
+): Promise<void> {
+  await fetch(
+    `/api/bookings/${encodeURIComponent(bookingId)}/documents/retry`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        ...(await getAppCheckHeaders()),
+      },
+    },
+  );
+}
+
 export async function getBookingPayments(
   bookingId: string,
 ): Promise<PaymentRecord[]> {
