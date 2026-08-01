@@ -59,7 +59,7 @@ export default function DateRangePicker({
     // Nothing selected yet: this click becomes the (single-day) selection.
     if (!startDate) {
       setError(null);
-      onChange({ startDate: day, endDate: null });
+      onChange({ startDate: day, endDate: day });
       return;
     }
 
@@ -75,7 +75,7 @@ export default function DateRangePicker({
         const newEnd = subDays(lastSelected, 1);
         onChange({
           startDate,
-          endDate: isSameDay(newEnd, startDate) ? null : newEnd,
+          endDate: isSameDay(newEnd, startDate) ? startDate : newEnd,
         });
       }
       return;
