@@ -21,7 +21,6 @@ export type RefundStatus = "none" | "partial" | "full";
 
 /** payment_records.payment_kind values used by the checkout flow. */
 export type PaymentOption = "deposit_50" | "full" | "balance";
-export type FinancialDocumentGenerationStatus = "ready" | "pending_retry";
 
 export interface PaymentRecord {
   id: string;
@@ -81,7 +80,6 @@ export interface BookingInvoice {
   status: InvoiceStatus;
   currencyCode: string;
   subtotal: number;
-<<<<<<< HEAD
   depositAmount: number;
   deliveryFee: number;
   discountAmount: number;
@@ -98,20 +96,6 @@ export interface BookingInvoice {
   createdAt: string;
   updatedAt: string;
   lineItems?: InvoiceLineItem[];
-=======
-  total: number;
-  amountDueNow?: number;
-  remainingBalance?: number;
-  paymentOption?: PaymentOption;
-  isDemo?: boolean;
-  storagePath: string;
-  generationStatus?: FinancialDocumentGenerationStatus;
-  paymentId?: string;
-  issuedAt: Timestamp;
-  dueAt?: Timestamp;
-  paidAt?: Timestamp;
-  updatedAt: Timestamp;
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 }
 
 export interface BookingReceipt {
@@ -120,7 +104,6 @@ export interface BookingReceipt {
   paymentRecordId?: string;
   receiptNumber?: string;
   amount: number;
-<<<<<<< HEAD
   issuedAt: string;
   documentPath?: string;
   issuedBy?: string;
@@ -128,13 +111,6 @@ export interface BookingReceipt {
   reissuedFromId?: string;
   reissueReason?: string;
   createdAt: string;
-=======
-  isDemo?: boolean;
-  currency: "PHP";
-  storagePath: string;
-  generationStatus?: FinancialDocumentGenerationStatus;
-  issuedAt: Timestamp;
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 }
 
 export interface PaymentEventLog {

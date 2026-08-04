@@ -27,7 +27,6 @@ export async function createPaymentCheckout(
   return { checkoutUrl: body.checkoutUrl };
 }
 
-<<<<<<< HEAD
 export async function completeDemoPayment(
   sessionId: string,
   paymentMethod: string,
@@ -69,22 +68,6 @@ function mapPayment(row: Tables<"payment_records">): PaymentRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-=======
-export async function retryPendingFinancialDocuments(
-  bookingId: string,
-  idToken: string,
-): Promise<void> {
-  await fetch(
-    `/api/bookings/${encodeURIComponent(bookingId)}/documents/retry`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        ...(await getAppCheckHeaders()),
-      },
-    },
-  );
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 }
 
 export async function getBookingPayments(
