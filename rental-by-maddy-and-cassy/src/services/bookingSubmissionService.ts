@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/src/lib/supabase/database.types";
-=======
-import { auth, storage } from "@/src/lib/firebase/config";
-import { ref, uploadBytes } from "firebase/storage";
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 import type { Product } from "@/types/product";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
 import { getDayCount } from "@/src/types/reservationDraft";
@@ -137,15 +132,6 @@ export async function submitBookingDocuments(bookingId: string, draft: Reservati
     throw new Error("Complete and sign the rental agreement before submitting.");
   }
 
-<<<<<<< HEAD
-=======
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error("Your session expired. Sign in again before submitting.");
-  }
-  const userId = currentUser.uid;
-
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
   const signatureBlob = dataUrlToBlob(agreement.signatureDataUrl);
   const signatureFile = new File(
     [signatureBlob],
@@ -159,24 +145,6 @@ export async function submitBookingDocuments(bookingId: string, draft: Reservati
     file: File,
     label: string,
   ): Promise<string> {
-    const directUpload = async (): Promise<string> => {
-      const uploadTarget = {
-        idOne: { folder: "requirements", fileName: "id-one" },
-        idTwo: { folder: "requirements", fileName: "id-two" },
-        selfie: { folder: "requirements", fileName: "selfie" },
-        emergencyId: { folder: "requirements", fileName: "emergency-contact-id" },
-        signature: { folder: "signatures", fileName: "signature" },
-      }[kind];
-      const path =
-        `private/users/${userId}/bookings/${bookingId}/${uploadTarget.folder}/` +
-        `${uploadTarget.fileName}-${submissionId}.${extensionFromContentType(file.type)}`;
-      await uploadBytes(ref(storage, path), file, {
-        contentType: file.type,
-        cacheControl: "private, no-store, max-age=0",
-      });
-      return path;
-    };
-
     const formData = new FormData();
     formData.append("file", file);
     let response: Response;
@@ -187,45 +155,13 @@ export async function submitBookingDocuments(bookingId: string, draft: Reservati
         { method: "POST", credentials: "same-origin", body: formData },
       );
     } catch {
-<<<<<<< HEAD
       throw new Error(`${label} could not reach the upload server. Check your connection and try again.`);
     }
     const body = (await response.json().catch(() => null)) as { path?: unknown; error?: unknown } | null;
     if (!response.ok || typeof body?.path !== "string") {
       throw new Error(typeof body?.error === "string" ? body.error : `${label} could not be uploaded.`);
-=======
-      try {
-        return await directUpload();
-      } catch (error) {
-        console.error("Direct private document upload failed", error);
-        throw new Error(
-          `${label} could not reach the upload server. Check your connection and try again.`,
-        );
-      }
     }
-    const body = (await response.json().catch(() => null)) as
-      | { path?: unknown; error?: unknown }
-      | null;
-    if (response.ok && typeof body?.path === "string") {
-      return body.path;
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
-    }
-    // During local development the server's Admin Storage connection can be
-    // reset by the network. The same user-owned Storage path is safely
-    // writable from the browser under storage.rules, so use that path as a
-    // fallback only for server-side failures.
-    if (response.status >= 500) {
-      try {
-        return await directUpload();
-      } catch (error) {
-        console.error("Direct private document upload failed", error);
-      }
-    }
-    throw new Error(
-      typeof body?.error === "string"
-        ? body.error
-        : `${label} could not be uploaded.`,
-    );
+    return body.path;
   }
 
   const uploadedFiles = {
@@ -287,40 +223,4 @@ export async function submitBooking(
   return reservation;
 }
 
-<<<<<<< HEAD
 export { getDayCount };
-=======
-function extensionFromContentType(contentType: string): string {
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/webp") return "webp";
-  if (contentType === "application/pdf") return "pdf";
-  return "jpg";
-}
-
-function dataUrlToBlob(dataUrl: string): Blob {
-  const separatorIndex = dataUrl.indexOf(",");
-  if (!dataUrl.startsWith("data:") || separatorIndex < 0) {
-    throw new Error("The electronic signature is invalid. Please sign again.");
-  }
-
-  const header = dataUrl.slice(5, separatorIndex);
-  const encoded = dataUrl.slice(separatorIndex + 1);
-  const isBase64 = header.endsWith(";base64");
-  const contentType = header.replace(/;base64$/, "") || "image/png";
-
-  try {
-    if (isBase64) {
-      const binary = window.atob(encoded);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-      }
-      return new Blob([bytes], { type: contentType });
-    }
-
-    return new Blob([decodeURIComponent(encoded)], { type: contentType });
-  } catch {
-    throw new Error("The electronic signature is invalid. Please sign again.");
-  }
-}
->>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444

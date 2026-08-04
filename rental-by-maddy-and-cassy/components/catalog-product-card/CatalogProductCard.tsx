@@ -36,7 +36,7 @@ export default function CatalogProductCard({
       >
         <div className={styles.imageWrapper}>
           <Image
-            src={product.image}
+            src={product.image || "/images/product-placeholder.png"}
             alt={`${product.name} available for rent`}
             fill
             sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 280px"
