@@ -94,21 +94,21 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
 
     async function refreshBooking() {
       const booking = await getBookingById(supabase, activeBookingId);
-      if (!booking || booking.userId !== activeUser.id || booking.productId !== product.id || cancelled) {
+      if (!booking || booking.customerId !== activeUser.id || booking.productId !== product.id || cancelled) {
         setPaymentError("This reservation could not be resumed.");
         return;
       }
 
       const { data: payments } = await supabase
-        .from("payment_records")
-        .select("amount, status, provider_metadata")
+        .from("booking_payment_submissions")
+        .select("declared_amount, status, provider_metadata")
         .eq("booking_id", activeBookingId);
 
       const verifiedAmount = (payments ?? [])
-        .filter((p) => p.status === "paid" || p.status === "verified")
-        .reduce((sum, p) => sum + p.amount, 0);
+        .filter((p) => p.status === "verified")
+        .reduce((sum, p) => sum + p.declared_amount, 0);
       const hasPendingPayment = (payments ?? []).some((p) =>
-        ["pending", "submitted", "processing"].includes(p.status),
+        ["submitted", "under_review"].includes(p.status),
       );
       const demo = (payments ?? []).some(
         (p) => (p.provider_metadata as { demo?: boolean } | null)?.demo === true,

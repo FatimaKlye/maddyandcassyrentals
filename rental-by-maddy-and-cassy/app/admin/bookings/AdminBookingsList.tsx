@@ -66,7 +66,7 @@ export default function AdminBookingsList() {
       if (status && booking.status !== status) return false;
       if (!query) return true;
 
-      const user = usersById.get(booking.userId);
+      const user = usersById.get(booking.customerId);
       return [
         booking.bookingRef,
         booking.productSnapshot.name,
@@ -142,7 +142,7 @@ export default function AdminBookingsList() {
               </thead>
               <tbody>
                 {filteredBookings.map((booking) => {
-                  const user = usersById.get(booking.userId);
+                  const user = usersById.get(booking.customerId);
                   return (
                     <tr key={booking.id}>
                       <td>

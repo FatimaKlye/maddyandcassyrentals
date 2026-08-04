@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { enforceRateLimit, requireActiveAdmin, RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { getBookingById } from "@/src/services/bookingService";
 
 export const runtime = "nodejs";
 
 const REVIEW_STATUSES = new Set(["approved", "rejected"]);
 
+// There is no more booking_documents/requirement_document_reviews table: a
+// "documentId" here is a booking_requirement_submissions.id — see
+// mapRequirementToDocument in bookingDetailService.ts, which is what
+// RequirementsReviewPanel.tsx renders these ids from.
 export async function PATCH(request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
   try {
     enforceRateLimit(request, "admin-document-review", 60, 60_000);
@@ -29,17 +34,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bo
       return NextResponse.json({ error: "Review notes must be 1,000 characters or fewer." }, { status: 400 });
     }
 
-    const { data: document } = await supabase
-      .from("booking_documents")
-      .select("id, booking_id, user_id, document_type")
+    const { data: submission } = await supabase
+      .from("booking_requirement_submissions")
+      .select(
+        "id, review_status, booking_requirement_id, booking_requirements(id, booking_id), customer_documents(document_type, owner_user_id)",
+      )
       .eq("id", documentId)
-      .eq("booking_id", bookingId)
       .maybeSingle();
-    if (!document) return NextResponse.json({ error: "The document could not be found." }, { status: 404 });
+    if (!submission || submission.booking_requirements?.booking_id !== bookingId) {
+      return NextResponse.json({ error: "The document could not be found." }, { status: 404 });
+    }
 
     const now = new Date().toISOString();
     await supabase
-      .from("booking_documents")
+      .from("booking_requirement_submissions")
       .update({
         review_status: status,
         review_notes: reason || null,
@@ -48,43 +56,39 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bo
       })
       .eq("id", documentId);
 
-    await supabase.from("requirement_document_reviews").insert({
-      booking_document_id: documentId,
-      status,
+    await supabase.from("document_review_events").insert({
+      submission_id: documentId,
+      from_status: submission.review_status,
+      to_status: status,
       notes: reason || null,
       reviewed_by: user.id,
-      reviewed_at: now,
     });
 
-    const { data: allDocuments } = await supabase
-      .from("booking_documents")
-      .select("review_status")
-      .eq("booking_id", bookingId);
+    await supabase
+      .from("booking_requirements")
+      .update({ status })
+      .eq("id", submission.booking_requirement_id);
 
-    const statuses = (allDocuments ?? []).map((d) => d.review_status);
-    const requirementsStatus = statuses.some((s) => s === "rejected")
-      ? "rejected"
-      : statuses.length > 0 && statuses.every((s) => s === "approved")
-        ? "approved"
-        : "pending_review";
+    const booking = await getBookingById(supabase, bookingId);
+    const requirementsStatus = booking?.requirementsStatus ?? "pending_review";
 
-    await supabase.from("bookings").update({ requirements_status: requirementsStatus }).eq("id", bookingId);
-
-    await supabase.from("notifications").insert({
-      user_id: document.user_id,
-      booking_id: bookingId,
-      type: "requirements_reviewed",
-      title: status === "approved" ? "Verification document approved" : "Document replacement requested",
-      message:
-        status === "approved"
-          ? `Your ${document.document_type.replace(/_/g, " ")} was approved.`
-          : reason,
-      action_url: `/account/bookings/${bookingId}`,
-    });
+    const documentType = submission.customer_documents?.document_type ?? "document";
+    const ownerUserId = submission.customer_documents?.owner_user_id;
+    if (ownerUserId) {
+      await supabase.from("notifications").insert({
+        user_id: ownerUserId,
+        booking_id: bookingId,
+        notification_type: "requirements_reviewed",
+        title: status === "approved" ? "Verification document approved" : "Document replacement requested",
+        message:
+          status === "approved" ? `Your ${documentType.replace(/_/g, " ")} was approved.` : reason,
+        action_url: `/account/bookings/${bookingId}`,
+      });
+    }
 
     await supabase.rpc("log_audit_event", {
       p_action: "verification.document_reviewed",
-      p_entity_type: "booking_document",
+      p_entity_type: "requirement_submission",
       p_entity_id: documentId,
       p_booking_id: bookingId,
       p_new_values: { status, reason },

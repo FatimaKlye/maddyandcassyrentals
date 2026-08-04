@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/src/lib/supabase/database.types";
-import type { BookingInvoice, BookingReceipt, PaymentOption, PaymentRecord } from "@/src/types/payment";
+import type { BookingReceipt, PaymentOption, PaymentRecord } from "@/src/types/payment";
 
 export type { PaymentOption };
 
@@ -46,23 +46,25 @@ export async function completeDemoPayment(
   return { bookingId: body.bookingId };
 }
 
-function mapPayment(row: Tables<"payment_records">): PaymentRecord {
+/** Shared row -> view-model mapping for public.booking_payment_submissions, reused by bookingDetailService.ts and adminReadService.ts. */
+export function mapPaymentSubmission(row: Tables<"booking_payment_submissions">): PaymentRecord {
   return {
     id: row.id,
     bookingId: row.booking_id,
-    userId: row.user_id,
-    paymentKind: row.payment_kind,
-    amount: row.amount,
+    stage: row.stage,
+    amount: row.declared_amount,
     currency: "PHP",
-    status: row.status as PaymentRecord["status"],
-    paymentType: row.payment_type as PaymentRecord["paymentType"],
+    status: row.status,
     paymentMethod: row.payment_method ?? undefined,
     externalReference: row.external_reference ?? undefined,
-    proofStoragePath: row.proof_storage_path ?? undefined,
-    paymongoPaymentId: row.paymongo_payment_id ?? undefined,
+    proofDocumentId: row.proof_document_id ?? undefined,
     paymongoCheckoutSessionId: row.paymongo_checkout_session_id ?? undefined,
-    refundStatus: row.refund_status as PaymentRecord["refundStatus"],
-    refundAmount: row.refund_amount,
+    paymongoPaymentId: row.paymongo_payment_id ?? undefined,
+    idempotencyKey: row.idempotency_key ?? undefined,
+    providerMetadata: (row.provider_metadata as Record<string, unknown>) ?? {},
+    reviewNotes: row.review_notes ?? undefined,
+    reviewedBy: row.reviewed_by ?? undefined,
+    reviewedAt: row.reviewed_at ?? undefined,
     submittedAt: row.submitted_at,
     completedAt: row.completed_at ?? undefined,
     createdAt: row.created_at,
@@ -75,44 +77,12 @@ export async function getBookingPayments(
   bookingId: string,
 ): Promise<PaymentRecord[]> {
   const { data, error } = await supabase
-    .from("payment_records")
+    .from("booking_payment_submissions")
     .select("*")
     .eq("booking_id", bookingId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(mapPayment);
-}
-
-export async function getBookingInvoices(
-  supabase: SupabaseClient<Database>,
-  bookingId: string,
-): Promise<BookingInvoice[]> {
-  const { data, error } = await supabase
-    .from("booking_invoices")
-    .select("*")
-    .eq("booking_id", bookingId)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(
-    (row): BookingInvoice => ({
-      id: row.id,
-      bookingId: row.booking_id,
-      invoiceNumber: row.invoice_number ?? undefined,
-      status: row.status as BookingInvoice["status"],
-      currencyCode: row.currency_code,
-      subtotal: row.subtotal,
-      depositAmount: row.deposit_amount,
-      deliveryFee: row.delivery_fee,
-      discountAmount: row.discount_amount,
-      totalAmount: row.total_amount,
-      amountPaid: row.amount_paid,
-      balanceDue: row.balance_due,
-      issuedAt: row.issued_at ?? undefined,
-      documentPath: row.document_path ?? undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }),
-  );
+  return (data ?? []).map(mapPaymentSubmission);
 }
 
 export async function getBookingReceipts(
@@ -129,12 +99,12 @@ export async function getBookingReceipts(
     (row): BookingReceipt => ({
       id: row.id,
       bookingId: row.booking_id,
-      paymentRecordId: row.payment_record_id ?? undefined,
-      receiptNumber: row.receipt_number ?? undefined,
+      paymentSubmissionId: row.payment_submission_id ?? undefined,
+      receiptNumber: row.receipt_number,
       amount: row.amount,
       issuedAt: row.issued_at,
       documentPath: row.document_path ?? undefined,
-      isReissue: row.is_reissue,
+      issuedBy: row.issued_by ?? undefined,
       createdAt: row.created_at,
     }),
   );

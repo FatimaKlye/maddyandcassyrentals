@@ -78,7 +78,7 @@ function BookingDetailContent() {
     );
   }
 
-  if (details === "error" || details.booking.userId !== user.id) {
+  if (details === "error" || details.booking.customerId !== user.id) {
     return <p className={formStyles.errorText}>We couldn&apos;t find that booking.</p>;
   }
 

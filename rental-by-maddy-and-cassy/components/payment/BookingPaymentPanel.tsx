@@ -29,13 +29,13 @@ export default function BookingPaymentPanel({
   )[0];
   const isDemoPayment = payments.some((p) => (p.providerMetadata as { demo?: boolean } | undefined)?.demo === true);
   const amountPaid = payments
-    .filter((p) => p.status === "paid" || p.status === "verified")
+    .filter((p) => p.status === "verified")
     .reduce((sum, p) => sum + p.amount, 0);
   const totalAmount = booking.totalAmount;
   const balanceDue = Math.max(0, totalAmount - amountPaid);
   const paymentStatus: "unpaid" | "pending" | "partially_paid" | "paid" =
     amountPaid <= 0
-      ? latestPayment && ["pending", "submitted", "processing"].includes(latestPayment.status)
+      ? latestPayment && ["submitted", "under_review"].includes(latestPayment.status)
         ? "pending"
         : "unpaid"
       : balanceDue <= 0.01

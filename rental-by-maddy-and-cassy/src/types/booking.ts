@@ -1,19 +1,16 @@
-import type { PaymentStatus } from "@/src/types/payment";
+import type { Database } from "@/src/lib/supabase/database.types";
 
-// Mirrors public.bookings and its related tables exactly (see
-// maddy_cassy_supabase_schema.sql). Booking status values and transitions
-// are enforced server-side by public.create_booking / admin_set_booking_status
-// / confirm_booking — this file only mirrors that vocabulary for the client.
+// Mirrors public.bookings joined with its normalized child tables
+// (booking_items, booking_fulfillments, booking_requirements,
+// booking_agreements, the booking_totals view) plus a profiles snapshot for
+// the customer — see src/services/bookingService.ts for the assembly. The
+// 2026-08-04 schema normalization removed the flat product_snapshot /
+// customer_snapshot / rental_start_date / rental_end_date / requirements_status
+// columns that used to live directly on bookings.
 
-export type BookingStatus =
-  | "pending"
-  | "approved"
-  | "confirmed"
-  | "released"
-  | "returned"
-  | "cancelled";
+export type BookingStatus = Database["public"]["Enums"]["booking_status"];
 
-export type FulfillmentMethod = "pickup" | "delivery";
+export type FulfillmentMethod = Database["public"]["Enums"]["fulfillment_method"];
 
 export interface BookingProductSnapshot {
   name: string;
@@ -34,23 +31,26 @@ export interface BookingCustomerSnapshot {
   instagramLink: string;
 }
 
+/**
+ * Derived, not stored: summarized from public.booking_requirements rows for
+ * this booking (there is no requirements_status column on bookings anymore).
+ */
 export type RequirementsStatus =
   | "not_submitted"
   | "pending_review"
   | "approved"
   | "rejected";
 
-export type AgreementStatus =
-  | "not_created"
-  | "awaiting_customer_signature"
-  | "awaiting_business_signature"
-  | "completed"
-  | "rejected";
+/**
+ * Derived from public.booking_agreements.status; "not_created" covers the
+ * case where no booking_agreements row exists yet for this booking.
+ */
+export type AgreementStatus = Database["public"]["Enums"]["agreement_status"] | "not_created";
 
 export interface Booking {
   id: string;
   bookingRef: string;
-  userId: string;
+  customerId: string;
   productId: string;
   inventoryUnitId: string | null;
   status: BookingStatus;
@@ -70,9 +70,10 @@ export interface Booking {
   customerSnapshot: BookingCustomerSnapshot;
   requirementsStatus: RequirementsStatus;
   agreementStatus: AgreementStatus;
-  paymentStatus?: PaymentStatus;
   approvedAt?: string;
   confirmedAt?: string;
+  rejectedAt?: string;
+  readyForReleaseAt?: string;
   releasedAt?: string;
   returnedAt?: string;
   cancelledAt?: string;
@@ -89,7 +90,7 @@ export interface EmergencyContact {
   address?: string;
 }
 
-/** One row of public.booking_documents — a single uploaded verification file. */
+/** One row of public.customer_documents, submitted against a booking_requirement. */
 export type BookingDocumentType =
   | "government_id"
   | "secondary_id"
@@ -100,10 +101,16 @@ export type BookingDocumentType =
 
 export type RequirementReviewStatus = "pending" | "approved" | "rejected";
 
+/**
+ * Assembled from public.booking_requirements + the customer_documents row
+ * attached via its latest public.booking_requirement_submissions entry (see
+ * mapRequirementToDocument in bookingDetailService.ts). There is no more
+ * booking_documents table.
+ */
 export interface BookingDocument {
   id: string;
   bookingId: string;
-  userId: string;
+  requirementId: string;
   documentType: BookingDocumentType | string;
   requirementKey?: string;
   storageBucket: string;
@@ -119,10 +126,10 @@ export interface BookingDocument {
   updatedAt: string;
 }
 
-/** public.requirement_document_reviews — review history entry for one document. */
+/** One row of public.document_review_events — review history entry for one submission. */
 export interface RequirementDocumentReview {
   id: string;
-  bookingDocumentId: string;
+  submissionId: string;
   status: RequirementReviewStatus;
   notes?: string;
   reviewedBy?: string;
@@ -154,17 +161,17 @@ export type AcknowledgementKey =
 
 export interface AgreementAcknowledgement {
   id: string;
-  agreementId: string;
+  agreementVersionId: string;
   userId: string;
   acknowledgementKey: AcknowledgementKey | string;
   acknowledged: boolean;
   acknowledgedAt?: string;
 }
 
-/** One row of public.agreement_signatures (unique per agreement + role). */
+/** One row of public.agreement_signatures (unique per agreement version + role). */
 export interface AgreementSignature {
   id: string;
-  agreementId: string;
+  agreementVersionId: string;
   signerUserId?: string;
   signerRole: "customer" | "business";
   signerName: string;
@@ -175,40 +182,28 @@ export interface AgreementSignature {
   signedAt: string;
 }
 
-/** public.booking_agreements — the current version; see booking_agreement_versions for history. */
+/**
+ * public.booking_agreements joined with its current public.agreement_versions
+ * row — the "generated_at"/"agreement_snapshot"/document paths that used to
+ * live directly on booking_agreements now live one level down, on
+ * agreement_versions (see mapAgreement in bookingDetailService.ts).
+ */
 export interface AgreementDoc {
   id: string;
   bookingId: string;
-  status: AgreementStatus;
-  agreementVersion?: string;
-  versionNumber: number;
-  agreementSnapshot: AgreementSnapshot;
+  status: Database["public"]["Enums"]["agreement_status"];
+  currentVersionId?: string;
+  versionNumber?: number;
+  agreementSnapshot?: AgreementSnapshot;
   generatedDocumentPath?: string;
   finalDocumentPath?: string;
   generatedAt?: string;
   completedAt?: string;
   createdBy?: string;
-  updatedBy?: string;
   createdAt: string;
   updatedAt: string;
   acknowledgements?: AgreementAcknowledgement[];
   signatures?: AgreementSignature[];
-}
-
-export interface AgreementVersion {
-  id: string;
-  agreementId: string;
-  bookingId: string;
-  versionNumber: number;
-  status: string;
-  agreementVersion?: string;
-  agreementSnapshot: AgreementSnapshot;
-  generatedDocumentPath?: string;
-  finalDocumentPath?: string;
-  generatedAt?: string;
-  completedAt?: string;
-  archivedAt: string;
-  archivedReason?: string;
 }
 
 export interface StatusHistoryEntry {

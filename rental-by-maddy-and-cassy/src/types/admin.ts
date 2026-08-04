@@ -1,15 +1,16 @@
 /**
- * public.admins — authoritative source of truth for admin authorization,
- * enforced by private.is_active_admin() in RLS policies. Never written by
- * client code directly; only through app/api/admin/users routes guarded by
- * requireActiveAdmin().
+ * There is no more public.admins table — authorization is granted by a
+ * public.user_roles row with role = 'admin', enforced by private.is_admin()
+ * (see private.is_active_admin() in RLS policies and requireActiveAdmin()
+ * server-side). This shape is assembled by joining user_roles with profiles
+ * (for account_status) — never written by client code directly; only through
+ * app/api/admin/users routes guarded by requireActiveAdmin().
  */
 export interface Admin {
   userId: string;
   isActive: boolean;
   createdBy?: string;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface AuditLogEntry {

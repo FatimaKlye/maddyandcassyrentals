@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { getBookingById } from "@/src/services/bookingService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,22 +44,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       throw new RequestSecurityError("The upload session is invalid.", 400);
     }
 
-    const { data: booking } = await supabase
-      .from("bookings")
-      .select("user_id, requirements_status")
-      .eq("id", bookingId)
-      .maybeSingle();
+    const booking = await getBookingById(supabase, bookingId);
     if (!booking) return errorResponse("The booking could not be found.", 404);
-    if (booking.user_id !== user.id) return errorResponse("You do not have access to this booking.", 403);
-    if (booking.requirements_status !== "not_submitted") {
+    if (booking.customerId !== user.id) return errorResponse("You do not have access to this booking.", 403);
+    if (booking.requirementsStatus !== "not_submitted") {
       return errorResponse("Verification documents have already been submitted.", 409);
     }
 
     const { data: verifiedPayment } = await supabase
-      .from("payment_records")
+      .from("booking_payment_submissions")
       .select("id")
       .eq("booking_id", bookingId)
-      .in("status", ["paid", "verified"])
+      .eq("status", "verified")
       .limit(1)
       .maybeSingle();
     if (!verifiedPayment) {

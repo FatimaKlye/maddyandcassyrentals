@@ -4,6 +4,7 @@ import { fulfillVerifiedPayment } from "@/src/lib/server/paymentFulfillment";
 import { sendPushNotification } from "@/src/lib/webpush/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import { toJson } from "@/src/lib/supabase/types";
+import { getBookingById } from "@/src/services/bookingService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,7 +113,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const { data: payment } = await admin
-    .from("payment_records")
+    .from("booking_payment_submissions")
     .select("*")
     .eq("paymongo_checkout_session_id", checkoutSessionId)
     .maybeSingle();
@@ -133,7 +134,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return json("Webhook mode does not match the checkout session.", 409);
   }
 
-  if (payment.status === "paid" || payment.status === "verified") {
+  if (payment.status === "verified") {
     await markEvent({ processing_status: "processed", payment_record_id: payment.id });
     return json("Payment already recorded.", 200);
   }
@@ -144,7 +145,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const providerPaymentId = stringValue(paidPayment.id, checkoutSessionId);
   const providerAmount = typeof paidAttributes.amount === "number" ? paidAttributes.amount / 100 : null;
 
-  if (providerAmount !== null && Math.abs(providerAmount - payment.amount) > 0.001) {
+  if (providerAmount !== null && Math.abs(providerAmount - payment.declared_amount) > 0.001) {
     await markEvent({
       processing_status: "failed",
       error_message: "Payment amount mismatch.",
@@ -158,7 +159,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     const result = await fulfillVerifiedPayment(admin, {
-      paymentRecordId: payment.id,
+      paymentSubmissionId: payment.id,
       providerPaymentId,
       paymentMethod,
       providerStatus: stringValue(paidAttributes.status, "paid"),
@@ -168,14 +169,17 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     await markEvent({ processing_status: "processed", payment_record_id: payment.id });
 
-    await sendPushNotification(admin, {
-      userId: payment.user_id,
-      title: "Payment confirmed",
-      body: result.bookingConfirmed
-        ? "Your booking is confirmed — your rental dates are secured."
-        : "Your payment was verified and your receipt is ready.",
-      actionUrl: `/account/bookings/${result.bookingId}`,
-    }).catch((error) => console.error("Payment push notification failed", error));
+    const booking = await getBookingById(admin, payment.booking_id);
+    if (booking) {
+      await sendPushNotification(admin, {
+        userId: booking.customerId,
+        title: "Payment confirmed",
+        body: result.bookingConfirmed
+          ? "Your booking is confirmed — your rental dates are secured."
+          : "Your payment was verified and your receipt is ready.",
+        actionUrl: `/account/bookings/${result.bookingId}`,
+      }).catch((error) => console.error("Payment push notification failed", error));
+    }
 
     return json("Payment recorded.", 200);
   } catch (error) {

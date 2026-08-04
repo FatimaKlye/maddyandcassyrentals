@@ -1,21 +1,30 @@
 /**
  * One-time backfill: Firestore `inventory` + `inventoryUnits` -> Supabase
- * `inventory_units` (authoritative). `product_availability_summary` is never
- * written directly here — inserting into inventory_units fires
- * private.inventory_availability_trigger(), which recalculates it. The
- * Firestore `inventory` collection is used only as a validation source: after
- * import, its totals are diffed against the trigger-recalculated summary and
- * any mismatch is reported.
+ * `inventory_units` (authoritative). The 2026-08-04 schema normalization
+ * dropped both `products.firebase_id` and `inventory_units.firebase_id`, so
+ * this script can no longer look up the destination product by a stored
+ * Firebase id, and can no longer upsert on a firebase_id conflict target —
+ * units are now deduped by (product_id, unit_code) instead. It also dropped
+ * the materialized `product_availability_summary` table (see
+ * private.refresh_product_availability(), which still references it but is
+ * only wired to the legacy schema's trigger, not the current one) — the
+ * post-import validation step below counts public.inventory_units directly
+ * instead.
  *
  * Usage:
  *   npx tsx scripts/migrateFirebaseInventory.ts \
  *     --inventory=data/firebase-export/inventory.json \
  *     --units=data/firebase-export/inventoryUnits.json \
+ *     --product-map=data/firebase-export/product-map.json \
  *     [--dry-run]
  *
  * Expected JSON shape for each export file (either form accepted):
  *   { "<firestoreDocId>": { ...fields }, ... }          // object map
  *   [ { "id": "<firestoreDocId>", ...fields }, ... ]     // array
+ *
+ * --product-map is required and must be a flat object mapping the Firestore
+ * product doc id to the destination public.products.id (uuid):
+ *   { "<firestoreProductId>": "<supabase-product-uuid>", ... }
  *
  * inventory doc fields:       availableUnits, totalUnits, updatedAt,
  *                             bookedDateCounts: { rentedUnits, reservedUnits }
@@ -29,6 +38,13 @@ import { readFileSync } from "node:fs";
 import { createAdminClient } from "../src/lib/supabase/admin";
 
 const ALLOWED_STATUSES = new Set(["available", "reserved", "rented", "maintenance", "inactive"]);
+
+/** Old Firestore inventory-unit statuses collapse onto the new 3-value lifecycle enum. */
+function toLifecycleStatus(status: string): "active" | "maintenance" | "retired" {
+  if (status === "maintenance") return "maintenance";
+  if (status === "inactive") return "retired";
+  return "active"; // available / reserved / rented all mean "the physical unit exists and is usable"
+}
 
 interface FirebaseInventoryDoc {
   availableUnits?: number;
@@ -58,9 +74,17 @@ function parseArgs() {
     const [key, ...rest] = raw.replace(/^--/, "").split("=");
     args.set(key, rest.join("="));
   }
+  const productMapPath = args.get("product-map");
+  if (!productMapPath) {
+    throw new Error(
+      "--product-map=<file> is required: products.firebase_id no longer exists, so the Firestore " +
+        "product id -> Supabase product uuid mapping must be supplied explicitly.",
+    );
+  }
   return {
     inventoryPath: args.get("inventory") ?? "data/firebase-export/inventory.json",
     unitsPath: args.get("units") ?? "data/firebase-export/inventoryUnits.json",
+    productMapPath,
     dryRun: args.get("dry-run") === "true",
   };
 }
@@ -75,6 +99,11 @@ function loadDocs<T>(path: string): Array<[string, T]> {
     });
   }
   return Object.entries(raw as Record<string, T>);
+}
+
+function loadProductMap(path: string): Map<string, string> {
+  const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, string>;
+  return new Map(Object.entries(raw));
 }
 
 /** Accepts ISO strings, epoch numbers, or Firestore Timestamp-shaped objects; returns an ISO string or null. */
@@ -102,31 +131,30 @@ function toDateOnly(value: unknown): string | null {
 }
 
 async function main() {
-  const { inventoryPath, unitsPath, dryRun } = parseArgs();
+  const { inventoryPath, unitsPath, productMapPath, dryRun } = parseArgs();
   const supabase = createAdminClient();
 
-  console.log(`Loading ${unitsPath} and ${inventoryPath}${dryRun ? " (dry run)" : ""}...`);
+  console.log(
+    `Loading ${unitsPath}, ${inventoryPath}, and ${productMapPath}${dryRun ? " (dry run)" : ""}...`,
+  );
   const unitDocs = loadDocs<FirebaseInventoryUnitDoc>(unitsPath);
   const inventoryDocs = loadDocs<FirebaseInventoryDoc>(inventoryPath);
+  const productIdByFirebaseId = loadProductMap(productMapPath);
 
-  const { data: products, error: productsError } = await supabase
-    .from("products")
-    .select("id, firebase_id");
-  if (productsError) throw productsError;
+  const { data: existingUnits, error: existingUnitsError } = await supabase
+    .from("inventory_units")
+    .select("product_id, unit_code");
+  if (existingUnitsError) throw existingUnitsError;
+  const existingKeys = new Set((existingUnits ?? []).map((u) => `${u.product_id}:${u.unit_code}`));
 
-  const productIdByFirebaseId = new Map<string, string>();
-  for (const p of products ?? []) {
-    if (p.firebase_id) productIdByFirebaseId.set(p.firebase_id, p.id);
-  }
-
-  // ---- Transform + upsert inventory_units ----
+  // ---- Transform + insert new inventory_units (deduped by product_id + unit_code) ----
   const skippedUnits: Array<{ firebaseId: string; reason: string }> = [];
+  const seenKeys = new Set<string>();
   const rows: Array<{
-    firebase_id: string;
     product_id: string;
     unit_code: string;
     serial_number: string | null;
-    status: string;
+    lifecycle_status: "active" | "maintenance" | "retired";
     condition_notes: string | null;
     acquired_at: string | null;
     created_at: string;
@@ -136,7 +164,7 @@ async function main() {
   for (const [firebaseId, doc] of unitDocs) {
     const productId = doc.productId ? productIdByFirebaseId.get(doc.productId) : undefined;
     if (!productId) {
-      skippedUnits.push({ firebaseId, reason: `no product found for productId "${doc.productId}"` });
+      skippedUnits.push({ firebaseId, reason: `no product mapping for productId "${doc.productId}"` });
       continue;
     }
     if (!doc.status || !ALLOWED_STATUSES.has(doc.status)) {
@@ -148,15 +176,21 @@ async function main() {
       continue;
     }
 
+    const key = `${productId}:${doc.unitCode}`;
+    if (existingKeys.has(key) || seenKeys.has(key)) {
+      skippedUnits.push({ firebaseId, reason: `duplicate unit_code "${doc.unitCode}" for this product` });
+      continue;
+    }
+    seenKeys.add(key);
+
     const createdAt = toIso(doc.createdAt) ?? new Date().toISOString();
     const updatedAt = toIso(doc.updatedAt) ?? createdAt;
 
     rows.push({
-      firebase_id: firebaseId,
       product_id: productId,
       unit_code: doc.unitCode,
       serial_number: doc.serialNumber ?? null,
-      status: doc.status,
+      lifecycle_status: toLifecycleStatus(doc.status),
       condition_notes: doc.conditionNotes ?? null,
       acquired_at: toDateOnly(doc.acquiredAt),
       created_at: createdAt,
@@ -174,26 +208,32 @@ async function main() {
     const chunkSize = 500;
     for (let i = 0; i < rows.length; i += chunkSize) {
       const chunk = rows.slice(i, i + chunkSize);
-      const { error } = await supabase
-        .from("inventory_units")
-        .upsert(chunk, { onConflict: "firebase_id" });
+      const { error } = await supabase.from("inventory_units").insert(chunk);
       if (error) throw error;
-      console.log(`Upserted rows ${i + 1}-${i + chunk.length} of ${rows.length}.`);
+      console.log(`Inserted rows ${i + 1}-${i + chunk.length} of ${rows.length}.`);
     }
   } else if (dryRun) {
-    console.log("Dry run: skipping upsert.");
+    console.log("Dry run: skipping insert.");
   }
 
   // ---- Validate against Firestore-reported inventory totals ----
-  // product_availability_summary is never written here; it was already
-  // recalculated by private.inventory_availability_trigger() as a side
-  // effect of the upsert above (AFTER INSERT/UPDATE on inventory_units).
-  const { data: summaries, error: summaryError } = await supabase
-    .from("product_availability_summary")
-    .select("product_id, total_units, available_units, reserved_units, rented_units, maintenance_units");
-  if (summaryError) throw summaryError;
+  // There is no more product_availability_summary table to read back — the
+  // new schema computes availability live via get_product_availability(), so
+  // this validation instead re-queries inventory_units directly and compares
+  // active-unit counts. Firestore's reserved/rented breakdown has no
+  // equivalent post-import (that requires date-scoped unit_reservations data,
+  // which this backfill does not create), so only totalUnits is checked.
+  const { data: allUnits, error: allUnitsError } = await supabase
+    .from("inventory_units")
+    .select("product_id, lifecycle_status");
+  if (allUnitsError) throw allUnitsError;
 
-  const summaryByProductId = new Map((summaries ?? []).map((s) => [s.product_id, s]));
+  const activeCountByProductId = new Map<string, number>();
+  for (const unit of allUnits ?? []) {
+    if (unit.lifecycle_status === "retired") continue;
+    activeCountByProductId.set(unit.product_id, (activeCountByProductId.get(unit.product_id) ?? 0) + 1);
+  }
+
   const mismatches: string[] = [];
   const notFound: string[] = [];
 
@@ -203,31 +243,15 @@ async function main() {
       notFound.push(firebaseId);
       continue;
     }
-    const summary = summaryByProductId.get(productId);
-    if (!summary) {
-      mismatches.push(`${firebaseId}: no product_availability_summary row (no units imported)`);
-      continue;
-    }
-
-    const expected = {
-      total_units: doc.totalUnits ?? 0,
-      available_units: doc.availableUnits ?? 0,
-      reserved_units: doc.bookedDateCounts?.reservedUnits ?? 0,
-      rented_units: doc.bookedDateCounts?.rentedUnits ?? 0,
-    };
-
-    for (const [field, expectedValue] of Object.entries(expected)) {
-      const actualValue = summary[field as keyof typeof expected];
-      if (actualValue !== expectedValue) {
-        mismatches.push(
-          `${firebaseId} (${field}): Firebase=${expectedValue} vs imported=${actualValue}`,
-        );
-      }
+    const actualTotal = activeCountByProductId.get(productId) ?? 0;
+    const expectedTotal = doc.totalUnits ?? 0;
+    if (actualTotal !== expectedTotal) {
+      mismatches.push(`${firebaseId} (totalUnits): Firebase=${expectedTotal} vs imported=${actualTotal}`);
     }
   }
 
   console.log(`\nValidation against ${inventoryDocs.length} Firebase inventory docs:`);
-  console.log(`  ${notFound.length} inventory doc(s) had no matching product.`);
+  console.log(`  ${notFound.length} inventory doc(s) had no matching product mapping.`);
   if (notFound.length) console.log(`    ${notFound.join(", ")}`);
   console.log(`  ${mismatches.length} field mismatch(es).`);
   for (const m of mismatches) console.log(`    - ${m}`);

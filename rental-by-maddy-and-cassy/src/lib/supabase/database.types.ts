@@ -490,12 +490,18 @@ export type Database = {
       booking_payment_submissions: {
         Row: {
           booking_id: string
+          completed_at: string | null
           created_at: string
+          currency_code: string
           declared_amount: number
           external_reference: string | null
           id: string
+          idempotency_key: string | null
           payment_method: string | null
+          paymongo_checkout_session_id: string | null
+          paymongo_payment_id: string | null
           proof_document_id: string | null
+          provider_metadata: Json
           review_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -506,12 +512,18 @@ export type Database = {
         }
         Insert: {
           booking_id: string
+          completed_at?: string | null
           created_at?: string
+          currency_code?: string
           declared_amount: number
           external_reference?: string | null
           id?: string
+          idempotency_key?: string | null
           payment_method?: string | null
+          paymongo_checkout_session_id?: string | null
+          paymongo_payment_id?: string | null
           proof_document_id?: string | null
+          provider_metadata?: Json
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -522,12 +534,18 @@ export type Database = {
         }
         Update: {
           booking_id?: string
+          completed_at?: string | null
           created_at?: string
+          currency_code?: string
           declared_amount?: number
           external_reference?: string | null
           id?: string
+          idempotency_key?: string | null
           payment_method?: string | null
+          paymongo_checkout_session_id?: string | null
+          paymongo_payment_id?: string | null
           proof_document_id?: string | null
+          provider_metadata?: Json
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1094,6 +1112,53 @@ export type Database = {
           },
         ]
       }
+      paymongo_webhook_events: {
+        Row: {
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json
+          payment_record_id: string | null
+          processed_at: string | null
+          processing_status: string
+          provider_event_id: string
+          received_at: string
+          signature_valid: boolean
+        }
+        Insert: {
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          payment_record_id?: string | null
+          processed_at?: string | null
+          processing_status?: string
+          provider_event_id: string
+          received_at?: string
+          signature_valid?: boolean
+        }
+        Update: {
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          payment_record_id?: string | null
+          processed_at?: string | null
+          processing_status?: string
+          provider_event_id?: string
+          received_at?: string
+          signature_valid?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paymongo_webhook_events_payment_record_id_fkey"
+            columns: ["payment_record_id"]
+            isOneToOne: false
+            referencedRelation: "booking_payment_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_images: {
         Row: {
           alt_text: string | null
@@ -1556,7 +1621,25 @@ export type Database = {
     Functions: {
       admin_set_booking_status: {
         Args: { p_booking_id: string; p_new_status: string; p_note?: string }
-        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+        Returns: {
+          admin_notes: string | null
+          approved_at: string | null
+          booking_reference: string
+          cancelled_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          currency_code: string
+          customer_id: string
+          customer_notes: string | null
+          id: string
+          ready_for_release_at: string | null
+          rejected_at: string | null
+          released_at: string | null
+          rental_period: unknown
+          returned_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
+          updated_at: string
+        }
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1566,7 +1649,25 @@ export type Database = {
       }
       cancel_own_booking: {
         Args: { p_booking_id: string; p_note?: string }
-        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+        Returns: {
+          admin_notes: string | null
+          approved_at: string | null
+          booking_reference: string
+          cancelled_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          currency_code: string
+          customer_id: string
+          customer_notes: string | null
+          id: string
+          ready_for_release_at: string | null
+          rejected_at: string | null
+          released_at: string | null
+          rental_period: unknown
+          returned_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
+          updated_at: string
+        }
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1576,7 +1677,25 @@ export type Database = {
       }
       confirm_booking: {
         Args: { p_booking_id: string; p_note?: string }
-        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+        Returns: {
+          admin_notes: string | null
+          approved_at: string | null
+          booking_reference: string
+          cancelled_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          currency_code: string
+          customer_id: string
+          customer_notes: string | null
+          id: string
+          ready_for_release_at: string | null
+          rejected_at: string | null
+          released_at: string | null
+          rental_period: unknown
+          returned_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
+          updated_at: string
+        }
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1598,7 +1717,25 @@ export type Database = {
           p_rental_end_date: string
           p_rental_start_date: string
         }
-        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+        Returns: {
+          admin_notes: string | null
+          approved_at: string | null
+          booking_reference: string
+          cancelled_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          currency_code: string
+          customer_id: string
+          customer_notes: string | null
+          id: string
+          ready_for_release_at: string | null
+          rejected_at: string | null
+          released_at: string | null
+          rental_period: unknown
+          returned_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
+          updated_at: string
+        }
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1647,7 +1784,25 @@ export type Database = {
       }
       system_confirm_booking: {
         Args: { p_booking_id: string; p_note?: string }
-        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+        Returns: {
+          admin_notes: string | null
+          approved_at: string | null
+          booking_reference: string
+          cancelled_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          currency_code: string
+          customer_id: string
+          customer_notes: string | null
+          id: string
+          ready_for_release_at: string | null
+          rejected_at: string | null
+          released_at: string | null
+          rental_period: unknown
+          returned_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
+          updated_at: string
+        }
         SetofOptions: {
           from: "*"
           to: "bookings"

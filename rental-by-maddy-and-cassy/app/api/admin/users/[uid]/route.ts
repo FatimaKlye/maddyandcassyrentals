@@ -18,13 +18,24 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ u
       return errorResponse("You cannot delete the account you are currently using.", 409);
     }
 
-    const { data: targetAdmin } = await supabase
-      .from("admins")
-      .select("user_id, is_active")
+    // There is no more public.admins table — "protected admin" now means a
+    // user_roles row with role = 'admin' whose profile is still active,
+    // mirroring private.is_admin()'s exact check.
+    const { data: targetAdminRole } = await supabase
+      .from("user_roles")
+      .select("user_id")
       .eq("user_id", targetUid)
+      .eq("role", "admin")
       .maybeSingle();
-    if (targetAdmin?.is_active) {
-      return errorResponse("Administrator accounts are protected and cannot be deleted from customer management.", 409);
+    if (targetAdminRole) {
+      const { data: targetProfile } = await supabase
+        .from("profiles")
+        .select("account_status")
+        .eq("id", targetUid)
+        .maybeSingle();
+      if (targetProfile?.account_status === "active") {
+        return errorResponse("Administrator accounts are protected and cannot be deleted from customer management.", 409);
+      }
     }
 
     const admin = createAdminClient();
@@ -35,8 +46,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ u
 
     // profiles.id references auth.users(id) on delete cascade, so the
     // profile row (and its notifications/push subscriptions) are removed
-    // automatically. Booking and payment history remain, keyed by user_id,
-    // for business record-keeping.
+    // automatically. Booking and payment history remain, keyed by
+    // customer_id, for business record-keeping.
     await admin.rpc("log_audit_event", {
       p_action: "account.deleted",
       p_entity_type: "user",
@@ -72,8 +83,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ui
     const { data: target } = await supabase.from("profiles").select("*").eq("id", targetUid).maybeSingle();
     if (!target) return errorResponse("This user account no longer exists.", 404);
 
+    // There is no more profiles.display_role column — the current role is
+    // derived from whether a user_roles row with role = 'admin' exists.
+    const { data: currentAdminRole } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("user_id", targetUid)
+      .eq("role", "admin")
+      .maybeSingle();
+    const currentRole: "admin" | "customer" = currentAdminRole ? "admin" : "customer";
+
     const accountStatus = body.accountStatus === "active" || body.accountStatus === "suspended" ? body.accountStatus : target.account_status;
-    const role = body.role === "admin" || body.role === "customer" ? body.role : target.display_role;
+    const role = body.role === "admin" || body.role === "customer" ? body.role : currentRole;
     if (user.id === targetUid && (accountStatus !== "active" || role !== "admin")) {
       return errorResponse("You cannot suspend or demote the account you are using.", 409);
     }
@@ -88,25 +109,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ui
         phone_number: clean(body.phoneNumber, 50, target.phone_number ?? ""),
         full_address: clean(body.fullAddress, 500, target.full_address ?? ""),
         account_status: accountStatus,
-        display_role: role,
       })
       .eq("id", targetUid);
     if (profileError) throw new Error(profileError.message);
 
     if (role === "admin") {
-      await supabase.from("admins").upsert(
-        { user_id: targetUid, is_active: accountStatus === "active", created_by: user.id },
-        { onConflict: "user_id" },
-      );
+      await supabase
+        .from("user_roles")
+        .upsert({ user_id: targetUid, role: "admin", created_by: user.id }, { onConflict: "user_id,role" });
     } else {
-      await supabase.from("admins").update({ is_active: false }).eq("user_id", targetUid);
+      await supabase.from("user_roles").delete().eq("user_id", targetUid).eq("role", "admin");
     }
 
     await supabase.rpc("log_audit_event", {
       p_action: "account.updated",
       p_entity_type: "user",
       p_entity_id: targetUid,
-      p_previous_values: { accountStatus: target.account_status, role: target.display_role },
+      p_previous_values: { accountStatus: target.account_status, role: currentRole },
       p_new_values: { accountStatus, role },
     });
 

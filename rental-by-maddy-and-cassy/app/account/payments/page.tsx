@@ -94,9 +94,9 @@ export default function PaymentHistoryPage() {
                 <small>
                   {(payment.providerMetadata as { demo?: boolean } | undefined)?.demo
                     ? "Demo checkout preview — no charge"
-                    : payment.paymentKind === "deposit_50"
+                    : payment.stage === "down_payment"
                       ? "50% reservation payment"
-                      : payment.paymentKind === "balance"
+                      : payment.stage === "balance"
                         ? "Remaining balance"
                         : "Full payment"}
                 </small>

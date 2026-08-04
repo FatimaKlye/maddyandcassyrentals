@@ -134,7 +134,7 @@ export async function generateAndSaveFinalAgreement(
     fulfillmentMethod: booking.fulfillmentMethod,
     customerLocation: booking.location || "",
     includedAccessories: booking.productSnapshot.included ?? [],
-    termsVersion: agreement.agreementVersion || "2026-01",
+    termsVersion: agreement.versionNumber ? `v${agreement.versionNumber}` : "2026-01",
     signedAt: customerSignature ? formatManilaDate(customerSignature.signedAt, true) : "",
     typedFullName: customerSignature?.signerName || booking.customerSnapshot.fullName || "Customer",
     signatureBytes,

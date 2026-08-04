@@ -11,7 +11,6 @@ export type {
   AgreementStatus,
   EmergencyContact,
   AgreementDoc,
-  AgreementVersion,
   AgreementSnapshot,
   AcknowledgementKey,
   AgreementAcknowledgement,
@@ -23,30 +22,25 @@ export type {
   RequirementReviewStatus,
 } from "@/src/types/booking";
 export type {
-  PaymentStatus,
-  PaymentType,
-  RefundStatus,
+  PaymentSubmissionStatus,
+  PaymentStage,
+  PaymentOption,
   PaymentRecord,
-  InvoiceStatus,
-  InvoiceLineItem,
-  BookingInvoice,
   BookingReceipt,
-  PaymentEventLog,
   PayMongoWebhookEvent,
 } from "@/src/types/payment";
 export type { UserNotification, NotificationType } from "@/src/types/notification";
 export type { Admin, AuditLogEntry } from "@/src/types/admin";
 export type {
   InventoryUnit,
-  InventoryUnitStatus,
+  InventoryUnitLifecycleStatus,
   AvailabilityCalendarEntry,
-  CalendarEntryStatus,
   ProductAvailabilitySummary,
 } from "@/src/types/inventoryUnit";
 export type { WebsiteContent } from "@/src/types/websiteContent";
 
-// Legacy display-only role. Authorization decisions must go through the
-// admins table (see private.is_active_admin() in the Supabase schema) —
+// Legacy display-only role. Authorization decisions must go through
+// public.user_roles (see private.is_admin() in the Supabase schema) —
 // this field is kept for UI labeling only.
 export type UserRole = "customer" | "admin";
 
@@ -71,7 +65,11 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-/** public.reviews */
+/**
+ * public.reviews, joined through booking_items (bookingId/productId/userId
+ * are resolved via booking_item_id -> booking_items.product_id /
+ * booking_items.booking_id -> bookings.customer_id — see reviewService.ts).
+ */
 export interface Review {
   id: string;
   bookingId: string;
@@ -81,6 +79,6 @@ export interface Review {
   comment?: string;
   status: "pending" | "approved" | "rejected";
   createdAt: string;
-  reviewedAt?: string;
-  reviewedBy?: string;
+  moderatedAt?: string;
+  moderatedBy?: string;
 }

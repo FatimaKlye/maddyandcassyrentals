@@ -1,131 +1,60 @@
-// Mirrors public.payment_records / public.payment_event_logs / public.booking_invoices /
-// public.booking_receipts (see maddy_cassy_supabase_schema.sql and the
-// PayMongo-gap migration). Field names are camelCase; values match the
-// Postgres check-constraint vocabulary exactly since RLS policies and the
-// booking-confirmation RPC key off these exact strings.
+import type { Database } from "@/src/lib/supabase/database.types";
 
-export type PaymentStatus =
-  | "pending"
-  | "submitted"
-  | "processing"
-  | "verified"
-  | "paid"
-  | "failed"
-  | "expired"
-  | "cancelled"
-  | "refunded"
-  | "rejected";
+// Mirrors public.booking_payment_submissions / public.booking_receipts /
+// public.paymongo_webhook_events. The 2026-08-04 schema normalization dropped
+// payment_records, booking_invoices, invoice_line_items, and payment_event_logs
+// outright — there is no invoice concept anymore, and audit_logs
+// (entity_type = 'payment_submission') is the closest equivalent to the old
+// payment_event_logs table.
 
-export type PaymentType = "online" | "manual_proof";
-export type RefundStatus = "none" | "partial" | "full";
+export type PaymentSubmissionStatus = Database["public"]["Enums"]["payment_submission_status"];
+export type PaymentStage = Database["public"]["Enums"]["payment_stage"];
 
-/** payment_records.payment_kind values used by the checkout flow. */
+/**
+ * Client-facing checkout choice offered on the reservation/payment flow.
+ * Mapped to a payment_stage value server-side — see paymentOptionToStage()
+ * in app/api/payments/checkout/route.ts.
+ */
 export type PaymentOption = "deposit_50" | "full" | "balance";
 
+/** One row of public.booking_payment_submissions. */
 export interface PaymentRecord {
   id: string;
   bookingId: string;
-  userId: string;
-  paymentKind: string;
+  stage: PaymentStage;
   amount: number;
   currency: "PHP";
-  status: PaymentStatus;
-  paymentType: PaymentType;
+  status: PaymentSubmissionStatus;
   paymentMethod?: string;
   externalReference?: string;
-  proofStoragePath?: string;
-  paymongoPaymentId?: string;
+  proofDocumentId?: string;
   paymongoCheckoutSessionId?: string;
-  paymongoPaymentIntentId?: string;
-  paymongoSourceId?: string;
-  providerStatus?: string;
-  providerMetadata?: Record<string, unknown>;
+  paymongoPaymentId?: string;
   idempotencyKey?: string;
-  failureCode?: string;
-  failureMessage?: string;
-  refundStatus: RefundStatus;
-  refundAmount: number;
+  providerMetadata: Record<string, unknown>;
+  reviewNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
   submittedAt: string;
   completedAt?: string;
-  verifiedBy?: string;
-  verifiedAt?: string;
-  rejectionReason?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type InvoiceStatus =
-  | "draft"
-  | "issued"
-  | "partially_paid"
-  | "paid"
-  | "void"
-  | "cancelled"
-  | "refunded";
-
-export interface InvoiceLineItem {
-  id: string;
-  invoiceId: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-  sortOrder: number;
-}
-
-export interface BookingInvoice {
-  id: string;
-  bookingId: string;
-  invoiceNumber?: string;
-  status: InvoiceStatus;
-  currencyCode: string;
-  subtotal: number;
-  depositAmount: number;
-  deliveryFee: number;
-  discountAmount: number;
-  totalAmount: number;
-  amountPaid: number;
-  balanceDue: number;
-  issuedAt?: string;
-  dueAt?: string;
-  documentPath?: string;
-  voidReason?: string;
-  voidedBy?: string;
-  voidedAt?: string;
-  createdBy?: string;
-  createdAt: string;
-  updatedAt: string;
-  lineItems?: InvoiceLineItem[];
-}
-
+/** One row of public.booking_receipts. */
 export interface BookingReceipt {
   id: string;
   bookingId: string;
-  paymentRecordId?: string;
-  receiptNumber?: string;
+  paymentSubmissionId?: string;
+  receiptNumber: string;
   amount: number;
   issuedAt: string;
   documentPath?: string;
   issuedBy?: string;
-  isReissue: boolean;
-  reissuedFromId?: string;
-  reissueReason?: string;
   createdAt: string;
 }
 
-export interface PaymentEventLog {
-  id: string;
-  paymentRecordId: string;
-  eventType: string;
-  fromStatus?: string;
-  toStatus?: string;
-  details: Record<string, unknown>;
-  actorUserId?: string;
-  providerEventId?: string;
-  isManualCorrection: boolean;
-  createdAt: string;
-}
-
+/** One row of public.paymongo_webhook_events. */
 export interface PayMongoWebhookEvent {
   id: string;
   providerEventId: string;
@@ -134,7 +63,7 @@ export interface PayMongoWebhookEvent {
   signatureValid: boolean;
   processingStatus: "pending" | "processed" | "ignored" | "failed";
   errorMessage?: string;
-  paymentRecordId?: string;
+  paymentSubmissionId?: string;
   receivedAt: string;
   processedAt?: string;
 }

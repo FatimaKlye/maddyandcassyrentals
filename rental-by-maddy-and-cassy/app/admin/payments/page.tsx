@@ -56,7 +56,7 @@ export default function AdminPaymentsPage() {
     [data],
   );
   const paidRevenue = payments
-    .filter((payment) => payment.status === "paid")
+    .filter((payment) => payment.status === "verified")
     .reduce((sum, payment) => sum + payment.amount, 0);
 
   return (
@@ -86,13 +86,17 @@ export default function AdminPaymentsPage() {
               <article>
                 <span>Successful Payments</span>
                 <strong>
-                  {payments.filter((payment) => payment.status === "paid").length}
+                  {payments.filter((payment) => payment.status === "verified").length}
                 </strong>
               </article>
               <article>
                 <span>Pending Checkouts</span>
                 <strong>
-                  {payments.filter((payment) => payment.status === "pending").length}
+                  {
+                    payments.filter(
+                      (payment) => payment.status === "submitted" || payment.status === "under_review",
+                    ).length
+                  }
                 </strong>
               </article>
               <article>
@@ -141,7 +145,7 @@ export default function AdminPaymentsPage() {
                               {payment.status}
                             </span>
                           </td>
-                          <td>{payment.paymentType === "manual_proof" ? "Manual" : "PayMongo"}</td>
+                          <td>{payment.proofDocumentId ? "Manual" : "PayMongo"}</td>
                           <td>{payment.paymentMethod || "—"}</td>
                           <td>{formatDate(payment.createdAt)}</td>
                         </tr>
@@ -193,8 +197,8 @@ export default function AdminPaymentsPage() {
                               </span>
                             </td>
                             <td>
-                              {event.paymentRecordId ? (
-                                <span>{event.paymentRecordId.slice(0, 8)}</span>
+                              {event.paymentSubmissionId ? (
+                                <span>{event.paymentSubmissionId.slice(0, 8)}</span>
                               ) : (
                                 "—"
                               )}

@@ -1,24 +1,15 @@
 "use client";
 
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/src/lib/supabase/client";
-import type { Tables } from "@/src/lib/supabase/database.types";
+import type { Database } from "@/src/lib/supabase/database.types";
 import type { Admin } from "@/src/types/admin";
 
-function mapAdmin(row: Tables<"admins">): Admin {
-  return {
-    userId: row.user_id,
-    isActive: row.is_active,
-    createdBy: row.created_by ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 /**
- * Authoritative admin-authorization check, backed by public.admins via the
- * private.is_active_admin() RPC. RLS additionally guarantees a non-admin
- * caller can never observe another user's admins row.
+ * Authoritative admin-authorization check, backed by public.user_roles /
+ * public.profiles via the private.is_active_admin() -> private.is_admin()
+ * RPC chain. RLS additionally guarantees a non-admin caller can never
+ * observe another user's user_roles row.
  */
 export async function isActiveAdmin(): Promise<boolean> {
   const { data, error } = await createClient().rpc("is_active_admin");
@@ -31,19 +22,57 @@ export async function checkActiveAdmin(user: User): Promise<boolean> {
   return isActiveAdmin();
 }
 
+/**
+ * There is no more public.admins table — a user is an admin iff they have a
+ * public.user_roles row with role = 'admin', and "active" mirrors
+ * private.is_admin()'s exact check: the matching profiles row must have
+ * account_status = 'active'. user_roles has no FK declared toward profiles
+ * (its user_id references auth.users), so the two are fetched separately.
+ */
+async function mapAdminRows(
+  supabase: SupabaseClient<Database>,
+  roleRows: { user_id: string; created_by: string | null; created_at: string }[],
+): Promise<Admin[]> {
+  if (!roleRows.length) return [];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, account_status")
+    .in(
+      "id",
+      roleRows.map((row) => row.user_id),
+    );
+  const activeIds = new Set(
+    (profiles ?? []).filter((profile) => profile.account_status === "active").map((profile) => profile.id),
+  );
+
+  return roleRows.map((row) => ({
+    userId: row.user_id,
+    isActive: activeIds.has(row.user_id),
+    createdBy: row.created_by ?? undefined,
+    createdAt: row.created_at,
+  }));
+}
+
 export async function getAdminProfile(uid: string): Promise<Admin | null> {
-  const { data, error } = await createClient()
-    .from("admins")
-    .select("*")
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("user_id, created_by, created_at")
     .eq("user_id", uid)
+    .eq("role", "admin")
     .maybeSingle();
 
   if (error || !data) return null;
-  return mapAdmin(data);
+  const [admin] = await mapAdminRows(supabase, [data]);
+  return admin ?? null;
 }
 
 export async function getAllAdmins(): Promise<Admin[]> {
-  const { data, error } = await createClient().from("admins").select("*");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("user_id, created_by, created_at")
+    .eq("role", "admin");
   if (error) throw new Error(error.message);
-  return (data ?? []).map(mapAdmin);
+  return mapAdminRows(supabase, data ?? []);
 }

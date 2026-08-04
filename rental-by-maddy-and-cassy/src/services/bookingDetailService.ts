@@ -1,63 +1,102 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/src/lib/supabase/database.types";
 import { createSignedUrl, type StorageBucket } from "@/src/lib/supabase/storage";
-import { mapBooking } from "@/src/services/bookingService";
+import { getBookingById } from "@/src/services/bookingService";
+import { mapPaymentSubmission } from "@/src/services/paymentService";
 import type {
   AgreementDoc,
   AgreementSignature,
+  Booking,
   BookingDocument,
   EmergencyContact,
+  RequirementReviewStatus,
   StatusHistoryEntry,
 } from "@/src/types/booking";
-import type { BookingInvoice, BookingReceipt, PaymentRecord } from "@/src/types/payment";
-import type { Booking } from "@/src/types/booking";
+import type { BookingReceipt, PaymentRecord } from "@/src/types/payment";
 
-function mapDocument(row: Tables<"booking_documents">): BookingDocument {
+// There is no more booking_documents table: a document is now assembled from
+// booking_requirements + its latest booking_requirement_submissions row +
+// the customer_documents row that submission points to. There is also no
+// more booking_invoices/invoice_line_items table.
+
+type RequirementSubmissionRow = Pick<
+  Tables<"booking_requirement_submissions">,
+  "id" | "review_status" | "review_notes" | "reviewed_by" | "reviewed_at" | "submitted_at"
+> & {
+  customer_documents: Pick<
+    Tables<"customer_documents">,
+    | "document_type"
+    | "storage_bucket"
+    | "storage_path"
+    | "original_filename"
+    | "mime_type"
+    | "file_size_bytes"
+    | "created_at"
+    | "updated_at"
+  > | null;
+};
+
+type RequirementRow = Pick<
+  Tables<"booking_requirements">,
+  "id" | "booking_id" | "document_type_snapshot" | "requirement_key_snapshot" | "created_at" | "updated_at"
+> & {
+  booking_requirement_submissions: RequirementSubmissionRow[] | null;
+};
+
+/** Picks the most recently submitted attempt for a requirement, if any exists yet. */
+export function mapRequirementToDocument(requirement: RequirementRow): BookingDocument | null {
+  const submissions = requirement.booking_requirement_submissions ?? [];
+  const latest = [...submissions].sort(
+    (a, b) => Date.parse(b.submitted_at) - Date.parse(a.submitted_at),
+  )[0];
+  if (!latest) return null;
+
+  const document = latest.customer_documents;
   return {
-    id: row.id,
-    bookingId: row.booking_id,
-    userId: row.user_id,
-    documentType: row.document_type,
-    requirementKey: row.requirement_key ?? undefined,
-    storageBucket: row.storage_bucket,
-    storagePath: row.storage_path,
-    originalFilename: row.original_filename ?? undefined,
-    mimeType: row.mime_type ?? undefined,
-    fileSizeBytes: row.file_size_bytes ?? undefined,
-    reviewStatus: row.review_status as BookingDocument["reviewStatus"],
-    reviewNotes: row.review_notes ?? undefined,
-    reviewedBy: row.reviewed_by ?? undefined,
-    reviewedAt: row.reviewed_at ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    id: latest.id,
+    bookingId: requirement.booking_id,
+    requirementId: requirement.id,
+    documentType: document?.document_type ?? requirement.document_type_snapshot,
+    requirementKey: requirement.requirement_key_snapshot,
+    storageBucket: document?.storage_bucket ?? "",
+    storagePath: document?.storage_path ?? "",
+    originalFilename: document?.original_filename ?? undefined,
+    mimeType: document?.mime_type ?? undefined,
+    fileSizeBytes: document?.file_size_bytes ?? undefined,
+    reviewStatus: latest.review_status as RequirementReviewStatus,
+    reviewNotes: latest.review_notes ?? undefined,
+    reviewedBy: latest.reviewed_by ?? undefined,
+    reviewedAt: latest.reviewed_at ?? undefined,
+    createdAt: document?.created_at ?? latest.submitted_at,
+    updatedAt: document?.updated_at ?? latest.submitted_at,
   };
 }
 
 function mapAgreement(
   row: Tables<"booking_agreements">,
+  currentVersion: Tables<"agreement_versions"> | undefined,
   signatures: Tables<"agreement_signatures">[],
 ): AgreementDoc {
   return {
     id: row.id,
     bookingId: row.booking_id,
-    status: row.status as AgreementDoc["status"],
-    agreementVersion: row.agreement_version ?? undefined,
-    versionNumber: row.version_number,
-    agreementSnapshot: row.agreement_snapshot as unknown as AgreementDoc["agreementSnapshot"],
-    generatedDocumentPath: row.generated_document_path ?? undefined,
-    finalDocumentPath: row.final_document_path ?? undefined,
-    generatedAt: row.generated_at ?? undefined,
-    completedAt: row.completed_at ?? undefined,
+    status: row.status,
+    currentVersionId: currentVersion?.id,
+    versionNumber: currentVersion?.version_number,
+    agreementSnapshot: currentVersion?.agreement_snapshot as unknown as AgreementDoc["agreementSnapshot"],
+    generatedDocumentPath: currentVersion?.generated_document_path ?? undefined,
+    finalDocumentPath: currentVersion?.final_document_path ?? undefined,
+    generatedAt: currentVersion?.generated_at ?? undefined,
+    completedAt: currentVersion?.completed_at ?? row.completed_at ?? undefined,
     createdBy: row.created_by ?? undefined,
-    updatedBy: row.updated_by ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     signatures: signatures.map(
       (signature): AgreementSignature => ({
         id: signature.id,
-        agreementId: signature.agreement_id,
+        agreementVersionId: signature.agreement_version_id,
         signerUserId: signature.signer_user_id ?? undefined,
-        signerRole: signature.signer_role as AgreementSignature["signerRole"],
+        signerRole: signature.signer_role,
         signerName: signature.signer_name,
         signaturePath: signature.signature_path ?? undefined,
         signatureData: (signature.signature_data as Record<string, unknown>) ?? {},
@@ -69,89 +108,12 @@ function mapAgreement(
   };
 }
 
-function mapPayment(row: Tables<"payment_records">): PaymentRecord {
-  return {
-    id: row.id,
-    bookingId: row.booking_id,
-    userId: row.user_id,
-    paymentKind: row.payment_kind,
-    amount: row.amount,
-    currency: "PHP",
-    status: row.status as PaymentRecord["status"],
-    paymentType: row.payment_type as PaymentRecord["paymentType"],
-    paymentMethod: row.payment_method ?? undefined,
-    externalReference: row.external_reference ?? undefined,
-    proofStoragePath: row.proof_storage_path ?? undefined,
-    paymongoPaymentId: row.paymongo_payment_id ?? undefined,
-    paymongoCheckoutSessionId: row.paymongo_checkout_session_id ?? undefined,
-    paymongoPaymentIntentId: row.paymongo_payment_intent_id ?? undefined,
-    paymongoSourceId: row.paymongo_source_id ?? undefined,
-    providerStatus: row.provider_status ?? undefined,
-    providerMetadata: (row.provider_metadata as Record<string, unknown>) ?? {},
-    idempotencyKey: row.idempotency_key ?? undefined,
-    failureCode: row.failure_code ?? undefined,
-    failureMessage: row.failure_message ?? undefined,
-    refundStatus: row.refund_status as PaymentRecord["refundStatus"],
-    refundAmount: row.refund_amount,
-    submittedAt: row.submitted_at,
-    completedAt: row.completed_at ?? undefined,
-    verifiedBy: row.verified_by ?? undefined,
-    verifiedAt: row.verified_at ?? undefined,
-    rejectionReason: row.rejection_reason ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapInvoice(row: Tables<"booking_invoices">): BookingInvoice {
-  return {
-    id: row.id,
-    bookingId: row.booking_id,
-    invoiceNumber: row.invoice_number ?? undefined,
-    status: row.status as BookingInvoice["status"],
-    currencyCode: row.currency_code,
-    subtotal: row.subtotal,
-    depositAmount: row.deposit_amount,
-    deliveryFee: row.delivery_fee,
-    discountAmount: row.discount_amount,
-    totalAmount: row.total_amount,
-    amountPaid: row.amount_paid,
-    balanceDue: row.balance_due,
-    issuedAt: row.issued_at ?? undefined,
-    dueAt: row.due_at ?? undefined,
-    documentPath: row.document_path ?? undefined,
-    voidReason: row.void_reason ?? undefined,
-    voidedBy: row.voided_by ?? undefined,
-    voidedAt: row.voided_at ?? undefined,
-    createdBy: row.created_by ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapReceipt(row: Tables<"booking_receipts">): BookingReceipt {
-  return {
-    id: row.id,
-    bookingId: row.booking_id,
-    paymentRecordId: row.payment_record_id ?? undefined,
-    receiptNumber: row.receipt_number ?? undefined,
-    amount: row.amount,
-    issuedAt: row.issued_at,
-    documentPath: row.document_path ?? undefined,
-    issuedBy: row.issued_by ?? undefined,
-    isReissue: row.is_reissue,
-    reissuedFromId: row.reissued_from_id ?? undefined,
-    reissueReason: row.reissue_reason ?? undefined,
-    createdAt: row.created_at,
-  };
-}
-
 function mapStatusHistory(row: Tables<"booking_status_history">): StatusHistoryEntry {
   return {
     id: row.id,
     bookingId: row.booking_id,
-    fromStatus: (row.from_status as StatusHistoryEntry["fromStatus"]) ?? null,
-    toStatus: row.to_status as StatusHistoryEntry["toStatus"],
+    fromStatus: row.from_status,
+    toStatus: row.to_status,
     note: row.note ?? undefined,
     changedByUserId: row.changed_by ?? undefined,
     createdAt: row.created_at,
@@ -160,7 +122,6 @@ function mapStatusHistory(row: Tables<"booking_status_history">): StatusHistoryE
 
 function mapEmergencyContact(row: Tables<"booking_emergency_contacts">): EmergencyContact {
   return {
-    id: row.id,
     bookingId: row.booking_id,
     fullName: row.full_name,
     relationship: row.relationship,
@@ -176,7 +137,6 @@ export interface BookingDetails {
   statusHistory: StatusHistoryEntry[];
   documents: BookingDocument[];
   payments: PaymentRecord[];
-  invoices: BookingInvoice[];
   receipts: BookingReceipt[];
 }
 
@@ -184,21 +144,15 @@ export async function getBookingDetails(
   supabase: SupabaseClient<Database>,
   bookingId: string,
 ): Promise<BookingDetails | null> {
-  const { data: bookingRow, error: bookingError } = await supabase
-    .from("bookings")
-    .select("*")
-    .eq("id", bookingId)
-    .maybeSingle();
-
-  if (bookingError || !bookingRow) return null;
+  const booking = await getBookingById(supabase, bookingId);
+  if (!booking) return null;
 
   const [
     { data: emergencyContact },
     { data: agreementRow },
     { data: statusHistory },
-    { data: documents },
+    { data: requirements },
     { data: payments },
-    { data: invoices },
     { data: receipts },
   ] = await Promise.all([
     supabase.from("booking_emergency_contacts").select("*").eq("booking_id", bookingId).maybeSingle(),
@@ -208,30 +162,70 @@ export async function getBookingDetails(
       .select("*")
       .eq("booking_id", bookingId)
       .order("created_at", { ascending: true }),
-    supabase.from("booking_documents").select("*").eq("booking_id", bookingId),
-    supabase.from("payment_records").select("*").eq("booking_id", bookingId).order("created_at", { ascending: false }),
-    supabase.from("booking_invoices").select("*").eq("booking_id", bookingId).order("created_at", { ascending: false }),
+    supabase
+      .from("booking_requirements")
+      .select(
+        `
+          id, booking_id, document_type_snapshot, requirement_key_snapshot, created_at, updated_at,
+          booking_requirement_submissions(
+            id, review_status, review_notes, reviewed_by, reviewed_at, submitted_at,
+            customer_documents(document_type, storage_bucket, storage_path, original_filename, mime_type, file_size_bytes, created_at, updated_at)
+          )
+        `,
+      )
+      .eq("booking_id", bookingId),
+    supabase
+      .from("booking_payment_submissions")
+      .select("*")
+      .eq("booking_id", bookingId)
+      .order("created_at", { ascending: false }),
     supabase.from("booking_receipts").select("*").eq("booking_id", bookingId).order("created_at", { ascending: false }),
   ]);
 
   let agreement: AgreementDoc | null = null;
   if (agreementRow) {
-    const { data: signatures } = await supabase
-      .from("agreement_signatures")
+    const { data: versions } = await supabase
+      .from("agreement_versions")
       .select("*")
-      .eq("agreement_id", agreementRow.id);
-    agreement = mapAgreement(agreementRow, signatures ?? []);
+      .eq("agreement_id", agreementRow.id)
+      .order("version_number", { ascending: false });
+    const currentVersion = versions?.[0];
+
+    let signatures: Tables<"agreement_signatures">[] = [];
+    if (currentVersion) {
+      const { data } = await supabase
+        .from("agreement_signatures")
+        .select("*")
+        .eq("agreement_version_id", currentVersion.id);
+      signatures = data ?? [];
+    }
+    agreement = mapAgreement(agreementRow, currentVersion, signatures);
   }
 
+  const documents = ((requirements ?? []) as unknown as RequirementRow[])
+    .map(mapRequirementToDocument)
+    .filter((document): document is BookingDocument => document !== null);
+
   return {
-    booking: mapBooking(bookingRow),
+    booking,
     emergencyContact: emergencyContact ? mapEmergencyContact(emergencyContact) : null,
     agreement,
     statusHistory: (statusHistory ?? []).map(mapStatusHistory),
-    documents: (documents ?? []).map(mapDocument),
-    payments: (payments ?? []).map(mapPayment),
-    invoices: (invoices ?? []).map(mapInvoice),
-    receipts: (receipts ?? []).map(mapReceipt),
+    documents,
+    payments: (payments ?? []).map(mapPaymentSubmission),
+    receipts: (receipts ?? []).map(
+      (row): BookingReceipt => ({
+        id: row.id,
+        bookingId: row.booking_id,
+        paymentSubmissionId: row.payment_submission_id ?? undefined,
+        receiptNumber: row.receipt_number,
+        amount: row.amount,
+        issuedAt: row.issued_at,
+        documentPath: row.document_path ?? undefined,
+        issuedBy: row.issued_by ?? undefined,
+        createdAt: row.created_at,
+      }),
+    ),
   };
 }
 

@@ -3,6 +3,7 @@ import { isDemoPaymentEnabled } from "@/src/lib/paymongo/demo";
 import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
 import { fulfillVerifiedPayment } from "@/src/lib/server/paymentFulfillment";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { getBookingById } from "@/src/services/bookingService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,23 +41,25 @@ export async function POST(request: Request): Promise<NextResponse> {
       return responseError("Choose a valid demo payment method.", 400);
     }
 
-    const paymentRecordId = sessionId.slice("demo_".length);
+    const paymentSubmissionId = sessionId.slice("demo_".length);
     const admin = createAdminClient();
 
     const { data: payment } = await admin
-      .from("payment_records")
-      .select("id, user_id, booking_id")
-      .eq("id", paymentRecordId)
+      .from("booking_payment_submissions")
+      .select("id, booking_id")
+      .eq("id", paymentSubmissionId)
       .maybeSingle();
 
     if (!payment) return responseError("The demo checkout session could not be found.", 404);
-    if (payment.user_id !== user.id) {
+
+    const booking = await getBookingById(admin, payment.booking_id);
+    if (!booking || booking.customerId !== user.id) {
       return responseError("You do not have access to this demo checkout.", 403);
     }
 
-    const demoReference = `DEMO-${paymentRecordId.slice(0, 12).toUpperCase()}`;
+    const demoReference = `DEMO-${paymentSubmissionId.slice(0, 12).toUpperCase()}`;
     const result = await fulfillVerifiedPayment(admin, {
-      paymentRecordId,
+      paymentSubmissionId,
       providerPaymentId: demoReference,
       paymentMethod: `Demo ${paymentMethod.toUpperCase()}`,
       providerStatus: "paid",

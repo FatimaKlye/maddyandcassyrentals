@@ -50,12 +50,70 @@ export function parseCatalogInput(value: unknown): CatalogEditorInput {
   };
 }
 
+function slugify(value: string, fallback: string): string {
+  const base = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 90);
+  return `${base || fallback}-${Date.now().toString(36)}`;
+}
+
+/**
+ * products.brand_id is a FK to public.brands, not a free-text column — the
+ * catalog editor still collects a brand name string, so it's looked up (or
+ * created on first use) by name. An empty brand name is allowed (brand_id is
+ * nullable).
+ */
+export async function resolveBrandId(
+  admin: SupabaseClient<Database>,
+  brandName: string,
+): Promise<string | null> {
+  const trimmed = brandName.trim();
+  if (!trimmed) return null;
+
+  const { data: existing } = await admin.from("brands").select("id").ilike("name", trimmed).maybeSingle();
+  if (existing) return existing.id;
+
+  const { data: created, error } = await admin
+    .from("brands")
+    .insert({ name: trimmed, slug: slugify(trimmed, "brand") })
+    .select("id")
+    .single();
+  if (error || !created) throw new Error(error?.message ?? "The brand could not be created.");
+  return created.id;
+}
+
+/**
+ * products.category_id is a required FK to public.categories, not a
+ * free-text column — same lookup-or-create pattern as resolveBrandId(), but
+ * a category name is mandatory (parseCatalogInput() already enforces that).
+ */
+export async function resolveCategoryId(
+  admin: SupabaseClient<Database>,
+  categoryName: string,
+): Promise<string> {
+  const trimmed = categoryName.trim();
+  if (!trimmed) throw new Error("INVALID_CATALOG_INPUT");
+
+  const { data: existing } = await admin.from("categories").select("id").ilike("name", trimmed).maybeSingle();
+  if (existing) return existing.id;
+
+  const { data: created, error } = await admin
+    .from("categories")
+    .insert({ name: trimmed, slug: slugify(trimmed, "category") })
+    .select("id")
+    .single();
+  if (error || !created) throw new Error(error?.message ?? "The category could not be created.");
+  return created.id;
+}
+
 /**
  * Adds/removes public.inventory_units rows so the physical unit count
  * matches totalUnits — the closest Postgres equivalent of the old Firestore
  * inventoryUnits reconciliation. Units beyond the new count are marked
- * 'inactive' rather than deleted, to preserve any historical booking
- * references (bookings.inventory_unit_id has an on delete restrict FK).
+ * 'retired' rather than deleted, to preserve any historical booking
+ * references (unit_reservations.inventory_unit_id references inventory_units).
  */
 export async function reconcileInventoryUnits(
   admin: SupabaseClient<Database>,
@@ -64,7 +122,7 @@ export async function reconcileInventoryUnits(
 ): Promise<void> {
   const { data: units } = await admin
     .from("inventory_units")
-    .select("id, unit_code, status")
+    .select("id, unit_code, lifecycle_status")
     .eq("product_id", productId)
     .order("unit_code", { ascending: true });
 
@@ -74,16 +132,20 @@ export async function reconcileInventoryUnits(
     const newRows = Array.from({ length: totalUnits - existing.length }, (_, index) => ({
       product_id: productId,
       unit_code: `UNIT-${(existing.length + index + 1).toString().padStart(3, "0")}`,
-      status: "available" as const,
+      lifecycle_status: "active" as const,
     }));
     await admin.from("inventory_units").insert(newRows);
   }
 
   for (const [index, unit] of existing.entries()) {
     const shouldBeActive = index < totalUnits;
-    const nextStatus = shouldBeActive ? (unit.status === "inactive" ? "available" : unit.status) : "inactive";
-    if (nextStatus !== unit.status) {
-      await admin.from("inventory_units").update({ status: nextStatus }).eq("id", unit.id);
+    const nextStatus = shouldBeActive
+      ? unit.lifecycle_status === "retired"
+        ? "active"
+        : unit.lifecycle_status
+      : "retired";
+    if (nextStatus !== unit.lifecycle_status) {
+      await admin.from("inventory_units").update({ lifecycle_status: nextStatus }).eq("id", unit.id);
     }
   }
 }

@@ -14,9 +14,9 @@ import {
   updateAdminBookingStatus,
 } from "@/src/services/adminBookingService";
 import { getUserProfile } from "@/src/services/userService";
-import { getBookingPayments, getBookingInvoices, getBookingReceipts } from "@/src/services/paymentService";
+import { getBookingPayments, getBookingReceipts } from "@/src/services/paymentService";
 import type { BookingStatus, UserProfile } from "@/src/types/database";
-import type { PaymentRecord, BookingInvoice, BookingReceipt } from "@/src/types/payment";
+import type { PaymentRecord, BookingReceipt } from "@/src/types/payment";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -69,7 +69,6 @@ interface DetailState {
   details: BookingDetails;
   profile: UserProfile | null;
   payments: PaymentRecord[];
-  invoices: BookingInvoice[];
   receipts: BookingReceipt[];
 }
 
@@ -90,13 +89,12 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
         setError("The selected booking could not be found.");
         return;
       }
-      const [profile, payments, invoices, receipts] = await Promise.all([
-        getUserProfile(details.booking.userId),
+      const [profile, payments, receipts] = await Promise.all([
+        getUserProfile(details.booking.customerId),
         getBookingPayments(supabase, bookingId),
-        getBookingInvoices(supabase, bookingId),
         getBookingReceipts(supabase, bookingId),
       ]);
-      setState({ details, profile, payments, invoices, receipts });
+      setState({ details, profile, payments, receipts });
       setError(null);
     } catch {
       setError("The booking details could not be loaded. Please refresh and try again.");
@@ -199,7 +197,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   }
 
   const { booking, emergencyContact, agreement, statusHistory, documents } = state.details;
-  const { profile, payments, invoices, receipts } = state;
+  const { profile, payments, receipts } = state;
   const customer = booking.customerSnapshot;
   const fullName = customer?.fullName || profile?.displayName || "Customer";
   const email = customer?.email || profile?.email || "-";
@@ -211,7 +209,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   const customerSignature = agreement?.signatures?.find((s) => s.signerRole === "customer");
 
   const amountPaid = payments
-    .filter((p) => p.status === "paid" || p.status === "verified")
+    .filter((p) => p.status === "verified")
     .reduce((sum, p) => sum + p.amount, 0);
   const paymentStatusLabel =
     amountPaid <= 0 ? "Unpaid" : amountPaid >= booking.totalAmount - 0.01 ? "Paid" : "Partially Paid";
@@ -318,7 +316,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
             <p>01</p>
             <h2>Customer Information</h2>
           </div>
-          <Link href={`/admin/users/${booking.userId}`}>View Customer Account</Link>
+          <Link href={`/admin/users/${booking.customerId}`}>View Customer Account</Link>
         </div>
         <dl className={styles.detailGrid}>
           <div><dt>Full name</dt><dd>{fullName}</dd></div>
@@ -403,7 +401,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
             <dl className={styles.detailGrid}>
               <div><dt>Signed name</dt><dd>{customerSignature?.signerName ?? "-"}</dd></div>
               <div><dt>Signed at</dt><dd>{formatDate(customerSignature?.signedAt, true)}</dd></div>
-              <div><dt>Agreement version</dt><dd>{agreement.agreementVersion ?? "-"}</dd></div>
+              <div><dt>Agreement version</dt><dd>{agreement.versionNumber ? `v${agreement.versionNumber}` : "-"}</dd></div>
               <div><dt>Agreement status</dt><dd>{AGREEMENT_STATUS_LABELS[agreement.status] ?? formatStatus(agreement.status)}</dd></div>
             </dl>
             {customerSignature?.signaturePath ? (
@@ -428,23 +426,10 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
         <dl className={styles.detailGrid}>
           <div><dt>Payment status</dt><dd>{paymentStatusLabel}</dd></div>
           <div><dt>Payment attempts</dt><dd>{payments.length}</dd></div>
-          <div><dt>Invoices</dt><dd>{invoices.length}</dd></div>
           <div><dt>Receipts</dt><dd>{receipts.length}</dd></div>
         </dl>
-        {invoices.length || receipts.length ? (
+        {receipts.length ? (
           <div className={styles.documents}>
-            {invoices
-              .filter((invoice) => invoice.documentPath)
-              .map((invoice) => (
-                <button
-                  key={invoice.id}
-                  type="button"
-                  onClick={() => openPrivateFile("invoices", invoice.documentPath!)}
-                >
-                  <span>Invoice {invoice.invoiceNumber ?? invoice.id.slice(0, 8)}</span>
-                  <strong>View private PDF</strong>
-                </button>
-              ))}
             {receipts
               .filter((receipt) => receipt.documentPath)
               .map((receipt) => (

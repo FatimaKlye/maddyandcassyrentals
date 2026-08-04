@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseCatalogInput, reconcileInventoryUnits } from "@/src/lib/server/catalog";
+import { parseCatalogInput, reconcileInventoryUnits, resolveBrandId, resolveCategoryId } from "@/src/lib/server/catalog";
 import { enforceRateLimit, requireActiveAdmin, RequestSecurityError } from "@/src/lib/server/requestSecurity";
 
 export const runtime = "nodejs";
@@ -14,12 +14,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
     const { data: existing } = await supabase.from("products").select("daily_rate").eq("id", productId).maybeSingle();
     if (!existing) return NextResponse.json({ error: "The product no longer exists." }, { status: 404 });
 
+    const [brandId, categoryId] = await Promise.all([
+      resolveBrandId(supabase, input.brand),
+      resolveCategoryId(supabase, input.category),
+    ]);
+
     const { error } = await supabase
       .from("products")
       .update({
         name: input.name,
-        brand: input.brand || null,
-        category: input.category,
+        brand_id: brandId,
+        category_id: categoryId,
         short_description: input.shortDescription || null,
         description: input.description || null,
         daily_rate: input.dailyRate,

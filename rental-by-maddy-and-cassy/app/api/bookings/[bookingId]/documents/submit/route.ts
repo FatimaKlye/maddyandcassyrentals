@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
 import { createAdminClient } from "@/src/lib/supabase/admin";
-import { RENTAL_TERMS_VERSION } from "@/src/lib/rentalAgreement";
+import { getBookingById } from "@/src/services/bookingService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,17 +77,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       verifyUploadedFile(admin, "customer-documents", input.files.signature, expectedPrefix(user.id, bookingId, "signature", input.submissionId)),
     ]);
 
-    const { data: booking } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
+    const booking = await getBookingById(admin, bookingId);
     if (!booking) return errorResponse("The booking could not be found.", 404);
-    if (booking.user_id !== user.id) return errorResponse("You do not have access to this booking.", 403);
-    if (booking.requirements_status !== "not_submitted") {
+    if (booking.customerId !== user.id) return errorResponse("You do not have access to this booking.", 403);
+    if (booking.requirementsStatus !== "not_submitted") {
       return errorResponse("Verification documents have already been submitted.", 409);
     }
     const { data: verifiedPayment } = await admin
-      .from("payment_records")
+      .from("booking_payment_submissions")
       .select("id")
       .eq("booking_id", bookingId)
-      .in("status", ["paid", "verified"])
+      .eq("status", "verified")
       .limit(1)
       .maybeSingle();
     if (!verifiedPayment) {
@@ -95,38 +95,77 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
     }
 
     const now = new Date().toISOString();
+
+    // There is no more booking_documents table: each uploaded file becomes a
+    // customer_documents row, wired to this booking through a booking_requirements
+    // row (ad hoc — there's no seeded product_requirements/requirement_definitions
+    // data for these four fixed document types yet) and a
+    // booking_requirement_submissions row that ties the two together.
     const documentRows = [
-      { type: "government_id" as const, path: input.files.idOne, name: "id-one" },
-      { type: "secondary_id" as const, path: input.files.idTwo, name: "id-two" },
-      { type: "selfie_with_id" as const, path: input.files.selfie, name: "selfie" },
-      { type: "authorization_letter" as const, path: input.files.emergencyId, name: "emergency-contact-id" },
+      { type: "government_id" as const, path: input.files.idOne, name: "id-one", label: "Primary Government ID" },
+      { type: "secondary_id" as const, path: input.files.idTwo, name: "id-two", label: "Secondary ID" },
+      { type: "selfie_with_id" as const, path: input.files.selfie, name: "selfie", label: "Selfie with ID" },
+      {
+        type: "authorization_letter" as const,
+        path: input.files.emergencyId,
+        name: "emergency-contact-id",
+        label: "Emergency Contact ID",
+      },
     ];
 
-    const { error: docsError } = await admin.from("booking_documents").insert(
-      documentRows.map((doc) => ({
-        booking_id: bookingId,
-        user_id: user.id,
-        document_type: doc.type,
-        storage_bucket: "booking-documents",
-        storage_path: doc.path,
-        original_filename: doc.name,
-        review_status: "pending" as const,
-      })),
-    );
-    if (docsError) throw new Error(docsError.message);
+    for (const doc of documentRows) {
+      const { data: customerDocument, error: customerDocumentError } = await admin
+        .from("customer_documents")
+        .insert({
+          owner_user_id: user.id,
+          document_type: doc.type,
+          storage_bucket: "booking-documents",
+          storage_path: doc.path,
+          original_filename: doc.name,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      if (customerDocumentError || !customerDocument) {
+        throw new Error(customerDocumentError?.message ?? "A verification document could not be recorded.");
+      }
 
-    const productSnapshot = booking.product_snapshot as { name?: string; pricePerDay?: number; currency?: string; included?: string[] };
+      const { data: requirement, error: requirementError } = await admin
+        .from("booking_requirements")
+        .insert({
+          booking_id: bookingId,
+          document_type_snapshot: doc.type,
+          requirement_key_snapshot: doc.type,
+          requirement_name_snapshot: doc.label,
+          is_required: true,
+          status: "pending_review",
+        })
+        .select("id")
+        .single();
+      if (requirementError || !requirement) {
+        throw new Error(requirementError?.message ?? "A booking requirement could not be recorded.");
+      }
+
+      const { error: submissionError } = await admin.from("booking_requirement_submissions").insert({
+        booking_requirement_id: requirement.id,
+        customer_document_id: customerDocument.id,
+        review_status: "pending",
+        submitted_at: now,
+      });
+      if (submissionError) throw new Error(submissionError.message);
+    }
+
     const agreementSnapshot = {
-      customerName: (booking.customer_snapshot as { fullName?: string })?.fullName || input.typedFullName,
-      productName: productSnapshot?.name || "Rental item",
-      startDate: booking.rental_start_date,
-      endDate: booking.rental_end_date,
-      dayCount: booking.rental_days ?? 1,
-      fulfillmentMethod: booking.fulfillment_method,
+      customerName: booking.customerSnapshot.fullName || input.typedFullName,
+      productName: booking.productSnapshot.name || "Rental item",
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      dayCount: booking.dayCount || 1,
+      fulfillmentMethod: booking.fulfillmentMethod,
       customerLocation: booking.location || "",
-      pricePerDay: booking.daily_rate,
+      pricePerDay: booking.dailyRate,
       currency: "PHP",
-      includedAccessories: productSnapshot?.included ?? [],
+      includedAccessories: booking.productSnapshot.included ?? [],
     };
 
     const { data: agreement, error: agreementError } = await admin
@@ -134,17 +173,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       .insert({
         booking_id: bookingId,
         status: "awaiting_business_signature",
-        agreement_version: RENTAL_TERMS_VERSION,
-        agreement_snapshot: agreementSnapshot,
-        version_number: 1,
+        created_by: user.id,
       })
       .select("id")
       .single();
     if (agreementError || !agreement) throw new Error(agreementError?.message ?? "Agreement could not be created.");
 
+    const { data: agreementVersion, error: versionError } = await admin
+      .from("agreement_versions")
+      .insert({
+        agreement_id: agreement.id,
+        version_number: 1,
+        status: "awaiting_business_signature",
+        agreement_snapshot: agreementSnapshot,
+        generated_at: now,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+    if (versionError || !agreementVersion) {
+      throw new Error(versionError?.message ?? "Agreement version could not be created.");
+    }
+
     await admin.from("agreement_acknowledgements").insert(
       (Object.keys(input.acknowledgements) as Array<keyof typeof input.acknowledgements>).map((key) => ({
-        agreement_id: agreement.id,
+        agreement_version_id: agreementVersion.id,
         user_id: user.id,
         acknowledgement_key: key,
         acknowledged: true,
@@ -153,7 +206,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
     );
 
     await admin.from("agreement_signatures").insert({
-      agreement_id: agreement.id,
+      agreement_version_id: agreementVersion.id,
       signer_user_id: user.id,
       signer_role: "customer",
       signer_name: input.typedFullName,
@@ -173,11 +226,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       { onConflict: "booking_id" },
     );
 
-    await admin
-      .from("bookings")
-      .update({ requirements_status: "pending_review", agreement_status: "awaiting_business_signature" })
-      .eq("id", bookingId);
-
+    // requirements_status / agreement_status are derived, not stored columns
+    // on bookings anymore — nothing to update there.
     await admin.from("booking_status_history").insert({
       booking_id: bookingId,
       from_status: booking.status,

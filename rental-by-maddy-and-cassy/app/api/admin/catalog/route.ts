@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseCatalogInput, reconcileInventoryUnits } from "@/src/lib/server/catalog";
+import { parseCatalogInput, reconcileInventoryUnits, resolveBrandId, resolveCategoryId } from "@/src/lib/server/catalog";
 import { enforceRateLimit, requireActiveAdmin, RequestSecurityError } from "@/src/lib/server/requestSecurity";
 import { getAllProductsForAdmin, getPriceHistory } from "@/src/services/productService";
 
@@ -37,13 +37,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       .replace(/(^-|-$)/g, "")
       .slice(0, 100);
 
+    const [brandId, categoryId] = await Promise.all([
+      resolveBrandId(supabase, input.brand),
+      resolveCategoryId(supabase, input.category),
+    ]);
+
     const { data: product, error } = await supabase
       .from("products")
       .insert({
         name: input.name,
         slug: `${slug}-${Date.now().toString(36)}`,
-        brand: input.brand || null,
-        category: input.category,
+        brand_id: brandId,
+        category_id: categoryId,
         short_description: input.shortDescription || null,
         description: input.description || null,
         daily_rate: input.dailyRate,

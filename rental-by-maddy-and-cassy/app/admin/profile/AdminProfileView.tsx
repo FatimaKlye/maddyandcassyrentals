@@ -95,14 +95,10 @@ export default function AdminProfileView() {
             <dt>Admin Access Created</dt>
             <dd>{formatDate(admin.createdAt)}</dd>
           </div>
-          <div>
-            <dt>Last Authorization Update</dt>
-            <dd>{formatDate(admin.updatedAt)}</dd>
-          </div>
         </dl>
 
         <p className={styles.note}>
-          Administrator access is controlled by the protected <code>public.admins</code> table
+          Administrator access is controlled by the protected <code>public.user_roles</code> table
           and cannot be changed from the customer account interface.
         </p>
       </section>

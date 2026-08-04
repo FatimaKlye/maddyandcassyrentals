@@ -2,24 +2,31 @@ import { NextResponse } from "next/server";
 import { createCheckoutSession, PayMongoError } from "@/src/lib/paymongo/client";
 import { isDemoPaymentEnabled } from "@/src/lib/paymongo/demo";
 import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
-import { generateAndSaveInvoice } from "@/src/lib/server/customerDocuments";
 import { createAdminClient } from "@/src/lib/supabase/admin";
-import { mapBooking } from "@/src/services/bookingService";
+import { getBookingById } from "@/src/services/bookingService";
+import type { Database } from "@/src/lib/supabase/database.types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+type PaymentStage = Database["public"]["Enums"]["payment_stage"];
 
 function responseError(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
-function documentNumber(prefix: string, bookingRef: string, id: string): string {
-  const cleanBooking = bookingRef.replace(/[^A-Z0-9-]/gi, "").toUpperCase();
-  return `${prefix}-${cleanBooking}-${id.slice(0, 6).toUpperCase()}`;
-}
-
 function isPaymentOption(value: unknown): value is "deposit_50" | "full" | "balance" {
   return value === "deposit_50" || value === "full" || value === "balance";
+}
+
+/** payment_stage has no direct "deposit_50"/"full" concept — down_payment covers the
+ * 50% reservation option, balance covers paying off a remaining balance, and a
+ * single full payment (no prior deposit) doesn't fit either bucket cleanly, so it's
+ * recorded as "other". */
+function paymentOptionToStage(option: "deposit_50" | "full" | "balance"): PaymentStage {
+  if (option === "deposit_50") return "down_payment";
+  if (option === "balance") return "balance";
+  return "other";
 }
 
 function safeReturnPath(value: unknown, fallback: string): string {
@@ -49,24 +56,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       return responseError("Choose a valid booking to pay.", 400);
     }
 
-    const { data: bookingRow } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
-    if (!bookingRow) return responseError("The selected booking could not be found.", 404);
-    if (bookingRow.user_id !== user.id) {
+    const booking = await getBookingById(admin, bookingId);
+    if (!booking) return responseError("The selected booking could not be found.", 404);
+    if (booking.customerId !== user.id) {
       return responseError("You do not have access to this booking.", 403);
     }
-    if (!["pending", "approved", "confirmed"].includes(bookingRow.status)) {
+    if (!["pending", "approved", "confirmed"].includes(booking.status)) {
       return responseError("Payment is not available for this booking.", 409);
     }
-    const booking = mapBooking(bookingRow);
 
     const paymentOption = isPaymentOption(body?.paymentOption) ? body.paymentOption : "full";
+    const stage = paymentOptionToStage(paymentOption);
 
     const { data: priorPayments } = await admin
-      .from("payment_records")
-      .select("amount, status")
+      .from("booking_payment_submissions")
+      .select("declared_amount, status")
       .eq("booking_id", bookingId)
-      .in("status", ["verified", "paid"]);
-    const amountPaid = (priorPayments ?? []).reduce((sum, row) => sum + row.amount, 0);
+      .eq("status", "verified");
+    const amountPaid = (priorPayments ?? []).reduce((sum, row) => sum + row.declared_amount, 0);
 
     const balanceDue = Math.max(0, booking.totalAmount - amountPaid);
     if (balanceDue <= 0) return responseError("This booking is already paid.", 409);
@@ -83,12 +90,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     const demoMode = isDemoPaymentEnabled();
 
     const { data: reusable } = await admin
-      .from("payment_records")
+      .from("booking_payment_submissions")
       .select("*")
       .eq("booking_id", bookingId)
-      .eq("status", "pending")
-      .eq("payment_kind", paymentOption)
-      .eq("amount", amount)
+      .eq("status", "submitted")
+      .eq("stage", stage)
+      .eq("declared_amount", amount)
+      .not("paymongo_checkout_session_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -105,8 +113,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     }
 
-    const paymentRecordId = crypto.randomUUID();
-    const referenceNumber = `${booking.bookingRef}-${paymentRecordId.slice(0, 8)}`;
+    const paymentSubmissionId = crypto.randomUUID();
+    const referenceNumber = `${booking.bookingRef}-${paymentSubmissionId.slice(0, 8)}`;
     const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || new URL(request.url).origin;
     const returnPath = safeReturnPath(body?.returnPath, `/account/bookings/${bookingId}`);
     const returnUrl = `${appOrigin}${returnPath}`;
@@ -120,7 +128,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const checkout = demoMode
       ? {
-          id: `demo_${paymentRecordId}`,
+          id: `demo_${paymentSubmissionId}`,
           checkoutUrl:
             `${appOrigin}/demo/paymongo?` +
             new URLSearchParams({
@@ -129,8 +137,8 @@ export async function POST(request: Request): Promise<NextResponse> {
               bookingRef: booking.bookingRef,
               paymentLabel,
               returnPath,
-              sessionId: `demo_${paymentRecordId}`,
-              paymentRecordId,
+              sessionId: `demo_${paymentSubmissionId}`,
+              paymentRecordId: paymentSubmissionId,
             }).toString(),
           livemode: false,
         }
@@ -149,77 +157,28 @@ export async function POST(request: Request): Promise<NextResponse> {
           cancelUrl: `${returnUrl}${returnSeparator}payment=cancelled`,
           metadata: {
             booking_id: bookingId,
-            payment_record_id: paymentRecordId,
+            payment_submission_id: paymentSubmissionId,
             user_id: user.id,
           },
-          idempotencyKey: `checkout-${bookingId}-${paymentRecordId}`,
+          idempotencyKey: `checkout-${bookingId}-${paymentSubmissionId}`,
         });
 
-    const invoiceId = crypto.randomUUID();
-    const invoiceNumber = documentNumber("INV", booking.bookingRef, invoiceId);
-    const invoicePath = `${user.id}/${bookingId}/${invoiceNumber}.pdf`;
-    const remainingAfterThis = Math.max(0, balanceDue - amount);
-
-    const invoiceReady = true;
-    try {
-      await generateAndSaveInvoice(admin, {
-        booking,
-        invoiceNumber,
-        storagePath: invoicePath,
-        amountDueNow: amount,
-        totalAmount: booking.totalAmount,
-        remainingBalance: remainingAfterThis,
-        paymentLabel,
-      });
-    } catch (error) {
-      console.error("Invoice PDF generation failed", error);
-      return responseError("The invoice could not be prepared. Please try again.", 500);
-    }
-
-    await admin.from("payment_records").insert({
-      id: paymentRecordId,
+    await admin.from("booking_payment_submissions").insert({
+      id: paymentSubmissionId,
       booking_id: bookingId,
-      user_id: user.id,
-      payment_kind: paymentOption,
-      amount,
-      status: "pending",
-      payment_type: "online",
+      stage,
+      declared_amount: amount,
+      status: "submitted",
       external_reference: referenceNumber,
-      idempotency_key: `checkout-${bookingId}-${paymentRecordId}`,
+      idempotency_key: `checkout-${bookingId}-${paymentSubmissionId}`,
       paymongo_checkout_session_id: checkout.id,
       provider_metadata: { checkoutUrl: checkout.checkoutUrl, livemode: checkout.livemode, demo: demoMode },
-    });
-
-    await admin.from("booking_invoices").insert({
-      id: invoiceId,
-      booking_id: bookingId,
-      invoice_number: invoiceNumber,
-      status: "issued",
-      currency_code: "PHP",
-      subtotal: booking.rentalSubtotal,
-      deposit_amount: booking.refundableDeposit,
-      delivery_fee: booking.deliveryFee,
-      discount_amount: 0,
-      total_amount: booking.totalAmount,
-      amount_paid: amountPaid,
-      balance_due: balanceDue,
-      issued_at: new Date().toISOString(),
-      document_path: invoicePath,
-    });
-
-    await admin.from("invoice_line_items").insert({
-      invoice_id: invoiceId,
-      description: `${booking.productSnapshot.name} - ${booking.dayCount} day rental`,
-      quantity: 1,
-      unit_price: booking.rentalSubtotal,
-      line_total: booking.rentalSubtotal,
-      sort_order: 0,
     });
 
     await admin.from("notifications").insert({
       user_id: user.id,
       booking_id: bookingId,
-      type: "payment_pending",
+      notification_type: "payment_pending",
       title: demoMode ? "Demo payment checkout ready" : "Payment checkout ready",
       message: demoMode
         ? `Your demo checkout for ${booking.bookingRef} is ready. No real money will be processed.`
@@ -229,8 +188,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     await admin.rpc("log_audit_event", {
       p_action: "payment.checkout_created",
-      p_entity_type: "payment",
-      p_entity_id: paymentRecordId,
+      p_entity_type: "payment_submission",
+      p_entity_id: paymentSubmissionId,
       p_booking_id: bookingId,
       p_new_values: { checkoutSessionId: checkout.id, amount, paymentOption, demo: demoMode },
     });
@@ -238,9 +197,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       checkoutUrl: checkout.checkoutUrl,
-      paymentId: paymentRecordId,
-      invoiceNumber,
-      invoiceReady,
+      paymentId: paymentSubmissionId,
     });
   } catch (error) {
     if (error instanceof RequestSecurityError) return responseError(error.message, error.status);

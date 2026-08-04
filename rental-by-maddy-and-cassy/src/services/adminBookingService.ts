@@ -7,7 +7,13 @@ export interface AdminBookingAction {
   tone?: "default" | "danger";
 }
 
+// Mirrors the exact transitions admin_set_booking_status() allows server-side
+// (pending->approved/cancelled, approved->confirmed/cancelled,
+// confirmed->released/cancelled, released->returned). 'draft', 'rejected',
+// and 'ready_for_release' are reachable in the booking_status enum but are
+// not produced or accepted by any current RPC, so they offer no actions.
 export const ADMIN_BOOKING_ACTIONS: Record<BookingStatus, AdminBookingAction[]> = {
+  draft: [],
   pending: [
     { status: "approved", label: "Approve Booking" },
     { status: "cancelled", label: "Reject Booking", requiresNote: true, tone: "danger" },
@@ -20,9 +26,11 @@ export const ADMIN_BOOKING_ACTIONS: Record<BookingStatus, AdminBookingAction[]> 
     { status: "released", label: "Mark Released" },
     { status: "cancelled", label: "Cancel Booking", requiresNote: true, tone: "danger" },
   ],
+  ready_for_release: [],
   released: [{ status: "returned", label: "Mark Returned" }],
   returned: [],
   cancelled: [],
+  rejected: [],
 };
 
 async function getErrorMessage(response: Response, fallback: string): Promise<string> {

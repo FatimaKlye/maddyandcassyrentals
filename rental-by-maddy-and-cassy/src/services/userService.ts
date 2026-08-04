@@ -68,12 +68,23 @@ export async function getAllUsers(): Promise<UserProfile[]> {
   return (data ?? []).map(mapProfile);
 }
 
+/**
+ * There is no more profiles.display_role column — role is derived from
+ * public.user_roles (every user gets a 'customer' row on signup; admins get
+ * an additional 'admin' row — see private.handle_new_auth_user()).
+ */
 export async function getUsersByRole(role: UserProfile["role"]): Promise<UserProfile[]> {
-  const { data, error } = await createClient()
-    .from("profiles")
-    .select("*")
-    .eq("display_role", role);
+  const supabase = createClient();
+  const { data: roleRows, error: roleError } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", role);
+  if (roleError) throw new Error(roleError.message);
 
+  const userIds = (roleRows ?? []).map((row) => row.user_id);
+  if (!userIds.length) return [];
+
+  const { data, error } = await supabase.from("profiles").select("*").in("id", userIds);
   if (error) throw new Error(error.message);
   return (data ?? []).map(mapProfile);
 }

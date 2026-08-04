@@ -7,7 +7,7 @@ function mapNotification(row: Tables<"notifications">): UserNotification {
     id: row.id,
     userId: row.user_id,
     bookingId: row.booking_id ?? undefined,
-    type: row.type,
+    type: row.notification_type,
     title: row.title,
     message: row.message,
     actionUrl: row.action_url ?? undefined,

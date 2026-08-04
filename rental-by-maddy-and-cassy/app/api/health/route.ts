@@ -15,8 +15,11 @@ export async function GET() {
   };
 
   try {
+    // public.website_content no longer exists (moved to legacy_v1_20260804
+    // by the schema normalization, with no public-schema replacement) — any
+    // always-present table works equally well as a plain connectivity probe.
     const admin = createAdminClient();
-    const { error } = await admin.from("website_content").select("id").limit(1);
+    const { error } = await admin.from("categories").select("id").limit(1);
     checks.database = !error;
   } catch {
     // Return a safe degraded response without exposing provider details.

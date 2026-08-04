@@ -3,18 +3,34 @@ import { createPublicClient } from "@/src/lib/supabase/public";
 import type { Database, Tables } from "@/src/lib/supabase/database.types";
 import type { Review } from "@/src/types/database";
 
-function mapReview(row: Tables<"reviews">): Review {
+// public.reviews no longer carries booking_id/product_id/user_id directly —
+// it's keyed by booking_item_id, so those are resolved by joining through
+// booking_items (product_id) and booking_items -> bookings (customer_id),
+// mirroring the join private.get_product_reviews_internal() uses.
+
+type ReviewRow = Pick<
+  Tables<"reviews">,
+  "id" | "comment" | "rating" | "status" | "created_at" | "moderated_at" | "moderated_by"
+> & {
+  booking_items:
+    | (Pick<Tables<"booking_items">, "product_id" | "booking_id"> & {
+        bookings: Pick<Tables<"bookings">, "customer_id"> | null;
+      })
+    | null;
+};
+
+function mapReview(row: ReviewRow): Review {
   return {
     id: row.id,
-    bookingId: row.booking_id,
-    productId: row.product_id,
-    userId: row.user_id,
+    bookingId: row.booking_items?.booking_id ?? "",
+    productId: row.booking_items?.product_id ?? "",
+    userId: row.booking_items?.bookings?.customer_id ?? "",
     rating: row.rating,
     comment: row.comment ?? undefined,
-    status: row.status as Review["status"],
+    status: row.status,
     createdAt: row.created_at,
-    reviewedAt: row.reviewed_at ?? undefined,
-    reviewedBy: row.reviewed_by ?? undefined,
+    moderatedAt: row.moderated_at ?? undefined,
+    moderatedBy: row.moderated_by ?? undefined,
   };
 }
 
@@ -37,12 +53,20 @@ export async function submitReview(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("You must be signed in to leave a review.");
 
+  const { data: item, error: itemError } = await supabase
+    .from("booking_items")
+    .select("id")
+    .eq("booking_id", input.bookingId)
+    .eq("product_id", input.productId)
+    .maybeSingle();
+  if (itemError || !item) {
+    throw new Error("This booking does not include the selected product.");
+  }
+
   const { data, error } = await supabase
     .from("reviews")
     .insert({
-      user_id: user.id,
-      booking_id: input.bookingId,
-      product_id: input.productId,
+      booking_item_id: item.id,
       rating: input.rating,
       comment: input.comment ?? null,
       status: "pending",
@@ -57,11 +81,13 @@ export async function submitReview(
 export async function getApprovedReviewsForProduct(productId: string): Promise<Review[]> {
   const { data, error } = await createPublicClient()
     .from("reviews")
-    .select("*")
-    .eq("product_id", productId)
+    .select(
+      "id, comment, rating, status, created_at, moderated_at, moderated_by, booking_items!inner(product_id, booking_id, bookings(customer_id))",
+    )
+    .eq("booking_items.product_id", productId)
     .eq("status", "approved")
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []).map(mapReview);
+  return ((data ?? []) as unknown as ReviewRow[]).map(mapReview);
 }

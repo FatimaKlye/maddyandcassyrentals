@@ -1,49 +1,36 @@
-export type InventoryUnitStatus =
-  | "available"
-  | "reserved"
-  | "rented"
-  | "maintenance"
-  | "inactive";
+export type InventoryUnitLifecycleStatus = "active" | "maintenance" | "retired";
 
 /**
  * public.inventory_units — one row per physical unit; the source of truth
  * for real-world counts. Never exposed to renters directly (admin-only RLS
- * read) — public.product_availability_summary is the public-facing cache.
+ * read) — the get_product_availability()/get_product_availability_calendar()
+ * RPCs are the public-facing, point-in-time computed snapshot (there is no
+ * more materialized product_availability_summary table).
  */
 export interface InventoryUnit {
   id: string;
   productId: string;
   unitCode: string;
   serialNumber?: string;
-  status: InventoryUnitStatus;
+  lifecycleStatus: InventoryUnitLifecycleStatus;
   conditionNotes?: string;
   acquiredAt?: string;
+  retiredAt?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type CalendarEntryStatus = "available" | "reserving" | "booked" | "blocked";
-
-/** public.availability_calendar_entries */
+/** One day of public.get_product_availability_calendar()'s result set. */
 export interface AvailabilityCalendarEntry {
-  id: string;
-  productId: string;
-  inventoryUnitId?: string;
-  startDate: string;
-  endDate: string;
-  status: CalendarEntryStatus;
-  publicNote?: string;
-  createdBy?: string;
-  createdAt: string;
-  updatedAt: string;
+  day: string;
+  totalUnits: number;
+  availableUnits: number;
 }
 
+/** public.get_product_availability()'s result shape for a date range. */
 export interface ProductAvailabilitySummary {
   productId: string;
   totalUnits: number;
   availableUnits: number;
-  reservedUnits: number;
-  rentedUnits: number;
-  maintenanceUnits: number;
-  updatedAt: string;
+  unavailableUnits: number;
 }

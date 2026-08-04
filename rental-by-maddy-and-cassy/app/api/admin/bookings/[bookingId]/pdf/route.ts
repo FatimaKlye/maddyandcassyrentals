@@ -96,8 +96,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ book
         title: "Rental Agreement",
         fields: agreement
           ? [
-              { label: "Terms version", value: agreement.agreementVersion || "-" },
-              { label: "Agreement customer name", value: agreement.agreementSnapshot.customerName },
+              { label: "Terms version", value: agreement.versionNumber ? `v${agreement.versionNumber}` : "-" },
+              { label: "Agreement customer name", value: agreement.agreementSnapshot?.customerName || "-" },
               { label: "Signed name", value: customerSignature?.signerName || "-" },
               { label: "Signed at", value: formatDate(customerSignature?.signedAt, true) },
               { label: "Agreement status", value: formatStatus(agreement.status) },
