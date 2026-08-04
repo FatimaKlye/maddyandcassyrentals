@@ -1,110 +1,153 @@
-import {
-  addDoc,
-  collection,
-  collectionGroup,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-  where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/src/lib/firebase/config";
-import { storage } from "@/src/lib/firebase/config";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import type { Product } from "@/types/product";
+import { createPublicClient } from "@/src/lib/supabase/public";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/src/lib/supabase/database.types";
+import type { Product, ProductReview } from "@/types/product";
 
-const PRODUCTS_COLLECTION = "products";
+type ProductRow = Tables<"products"> & {
+  product_images: Tables<"product_images">[] | null;
+  product_availability_summary: Tables<"product_availability_summary"> | null;
+  reviews: Pick<Tables<"reviews">, "id" | "user_id" | "rating" | "comment" | "status" | "created_at">[] | null;
+};
 
-function serializeTimestamps(data: DocumentData): DocumentData {
-  const result: DocumentData = { ...data };
-  for (const key of ["createdAt", "updatedAt"]) {
-    const value = result[key];
-    if (value instanceof Timestamp) {
-      result[key] = value.toDate().toISOString();
-    }
-  }
-  return result;
-}
+const PRODUCT_SELECT = `
+  *,
+  product_images(*),
+  product_availability_summary(*),
+  reviews(id, user_id, rating, comment, status, created_at)
+`;
 
-function mapProduct(snapshot: QueryDocumentSnapshot<DocumentData>): Product {
-  return { id: snapshot.id, ...serializeTimestamps(snapshot.data()) } as Product;
+function mapProduct(
+  supabase: SupabaseClient<Database>,
+  row: ProductRow,
+): Product {
+  const approvedReviews = (row.reviews ?? []).filter((review) => review.status === "approved");
+  const images = (row.product_images ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((image) => ({
+      id: image.id,
+      storagePath: image.storage_path,
+      url: supabase.storage.from("product-images").getPublicUrl(image.storage_path).data.publicUrl,
+      altText: image.alt_text ?? undefined,
+      sortOrder: image.sort_order,
+      isPrimary: image.is_primary,
+    }));
+
+  const reviews: ProductReview[] = approvedReviews.map((review) => ({
+    id: review.id,
+    author: "Verified renter",
+    rating: review.rating,
+    comment: review.comment ?? "",
+    date: review.created_at,
+  }));
+
+  const rating = approvedReviews.length
+    ? approvedReviews.reduce((sum, review) => sum + review.rating, 0) / approvedReviews.length
+    : 0;
+
+  const summary = row.product_availability_summary;
+  const specifications = (row.specifications as Record<string, string>) ?? {};
+  const included = specifications.included
+    ? specifications.included.split(",").map((item) => item.trim()).filter(Boolean)
+    : [];
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    brand: row.brand ?? undefined,
+    category: row.category,
+    shortDescription: row.short_description ?? undefined,
+    description: row.description ?? undefined,
+    dailyRate: row.daily_rate,
+    refundableDeposit: row.refundable_deposit,
+    currency: "PHP",
+    status: row.status as Product["status"],
+    isFeatured: row.is_featured,
+    specifications,
+    images,
+    totalUnits: summary?.total_units ?? 0,
+    availableUnits: summary?.available_units ?? 0,
+    reservedUnits: summary?.reserved_units ?? 0,
+    rentedUnits: summary?.rented_units ?? 0,
+    maintenanceUnits: summary?.maintenance_units ?? 0,
+    rating,
+    reviewCount: approvedReviews.length,
+    reviews,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    pricePerDay: row.daily_rate,
+    image: images[0]?.url ?? "",
+    included,
+    badge: row.is_featured ? "Featured" : undefined,
+    specs: specifications,
+    isActive: row.status === "active",
+  };
 }
 
 export async function getActiveProducts(): Promise<Product[]> {
-  const productsQuery = query(
-    collection(db, PRODUCTS_COLLECTION),
-    where("isActive", "==", true)
-  );
-  const snapshot = await getDocs(productsQuery);
-  return snapshot.docs.map(mapProduct);
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as ProductRow[]).map((row) => mapProduct(supabase, row));
 }
 
-export async function getProductById(productId: string): Promise<Product | null> {
-  const snapshot = await getDoc(doc(db, PRODUCTS_COLLECTION, productId));
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...serializeTimestamps(snapshot.data()) } as Product;
+/** Accepts either the product UUID or its slug (catalog links use slugs). */
+export async function getProductById(idOrSlug: string): Promise<Product | null> {
+  const supabase = createPublicClient();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq(isUuid ? "id" : "slug", idOrSlug)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapProduct(supabase, data as unknown as ProductRow);
 }
 
-export async function getAllProducts(): Promise<Product[]> {
-  const snapshot = await getDocs(collection(db, PRODUCTS_COLLECTION));
-  return snapshot.docs.map(mapProduct);
-}
+/** Admin catalog list — pass a session-bound client so RLS reveals non-active products too. */
+export async function getAllProductsForAdmin(
+  supabase: SupabaseClient<Database>,
+): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .order("created_at", { ascending: false });
 
-export async function createProduct(
-  product: Omit<Product, "id" | "createdAt" | "updatedAt">
-): Promise<string> {
-  const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), {
-    ...product,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return docRef.id;
-}
-
-export async function updateProduct(
-  productId: string,
-  updates: Partial<Omit<Product, "id" | "createdAt" | "updatedAt">>
-): Promise<void> {
-  await updateDoc(doc(db, PRODUCTS_COLLECTION, productId), {
-    ...updates,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function deleteProduct(productId: string): Promise<void> {
-  await deleteDoc(doc(db, PRODUCTS_COLLECTION, productId));
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as ProductRow[]).map((row) => mapProduct(supabase, row));
 }
 
 export interface CatalogEditorInput {
   name: string;
   brand: string;
-  category: "Phones" | "Cameras";
+  category: string;
+  shortDescription?: string;
   description: string;
-  pricePerDay: number;
-  image: string;
-  included: string[];
+  dailyRate: number;
+  refundableDeposit: number;
+  specifications: Record<string, string>;
   totalUnits: number;
-  isActive: boolean;
+  isFeatured: boolean;
+  status: Product["status"];
 }
 
 async function adminCatalogRequest(
   path: string,
   method: "POST" | "PATCH" | "DELETE",
-  idToken: string,
   input?: CatalogEditorInput,
 ): Promise<void> {
   const response = await fetch(path, {
     method,
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      ...(input ? { "Content-Type": "application/json" } : {}),
-    },
+    credentials: "same-origin",
+    headers: input ? { "Content-Type": "application/json" } : undefined,
     body: input ? JSON.stringify(input) : undefined,
   });
   if (response.ok) return;
@@ -114,48 +157,38 @@ async function adminCatalogRequest(
   );
 }
 
-export async function createCatalogProductAsAdmin(
-  input: CatalogEditorInput,
-  idToken: string,
-): Promise<void> {
-  return adminCatalogRequest("/api/admin/catalog", "POST", idToken, input);
+export async function createCatalogProductAsAdmin(input: CatalogEditorInput): Promise<void> {
+  return adminCatalogRequest("/api/admin/catalog", "POST", input);
 }
 
 export async function updateCatalogProductAsAdmin(
   productId: string,
   input: CatalogEditorInput,
-  idToken: string,
 ): Promise<void> {
-  return adminCatalogRequest(
-    `/api/admin/catalog/${encodeURIComponent(productId)}`,
-    "PATCH",
-    idToken,
-    input,
-  );
+  return adminCatalogRequest(`/api/admin/catalog/${encodeURIComponent(productId)}`, "PATCH", input);
 }
 
-export async function deactivateCatalogProductAsAdmin(
-  productId: string,
-  idToken: string,
-): Promise<void> {
-  return adminCatalogRequest(
-    `/api/admin/catalog/${encodeURIComponent(productId)}`,
-    "DELETE",
-    idToken,
-  );
+export async function deactivateCatalogProductAsAdmin(productId: string): Promise<void> {
+  return adminCatalogRequest(`/api/admin/catalog/${encodeURIComponent(productId)}`, "DELETE");
 }
 
 export async function uploadCatalogImage(
+  supabase: SupabaseClient<Database>,
   productId: string,
   file: File,
-): Promise<string> {
+): Promise<{ storagePath: string; url: string }> {
   const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const storageRef = ref(
-    storage,
-    `products/${productId}/catalog-${Date.now()}.${extension}`,
-  );
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+  const storagePath = `${productId}/catalog-${Date.now()}.${extension}`;
+
+  const { error } = await supabase.storage.from("product-images").upload(storagePath, file, {
+    upsert: true,
+  });
+  if (error) throw new Error(error.message);
+
+  return {
+    storagePath,
+    url: supabase.storage.from("product-images").getPublicUrl(storagePath).data.publicUrl,
+  };
 }
 
 export interface PriceHistoryEntry {
@@ -163,16 +196,34 @@ export interface PriceHistoryEntry {
   productId: string;
   previousPrice: number | null;
   newPrice: number;
-  changedBy: string;
+  changedBy: string | null;
   reason: string;
-  createdAt: Timestamp;
+  createdAt: string;
 }
 
-export async function getPriceHistory(): Promise<PriceHistoryEntry[]> {
-  const snapshot = await getDocs(collectionGroup(db, "priceHistory"));
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    productId: item.ref.parent.parent?.id ?? "",
-    ...item.data(),
-  })) as PriceHistoryEntry[];
+/** Price changes are recorded as audit_logs rows (action = "catalog.price_changed"). */
+export async function getPriceHistory(
+  supabase: SupabaseClient<Database>,
+): Promise<PriceHistoryEntry[]> {
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("id, entity_id, actor_user_id, metadata, created_at")
+    .eq("entity_type", "product")
+    .eq("action", "catalog.price_changed")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const metadata = (row.metadata as Record<string, unknown>) ?? {};
+    return {
+      id: row.id,
+      productId: row.entity_id ?? "",
+      previousPrice: typeof metadata.previousPrice === "number" ? metadata.previousPrice : null,
+      newPrice: typeof metadata.newPrice === "number" ? metadata.newPrice : 0,
+      changedBy: row.actor_user_id,
+      reason: typeof metadata.reason === "string" ? metadata.reason : "",
+      createdAt: row.created_at,
+    };
+  });
 }

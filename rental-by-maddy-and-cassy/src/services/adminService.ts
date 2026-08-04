@@ -1,62 +1,49 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import type { User } from "firebase/auth";
-import { db } from "@/src/lib/firebase/config";
+"use client";
+
+import type { User } from "@supabase/supabase-js";
+import { createClient } from "@/src/lib/supabase/client";
+import type { Tables } from "@/src/lib/supabase/database.types";
 import type { Admin } from "@/src/types/admin";
 
-const ADMINS_COLLECTION = "admins";
-
-function mapAdmin(snapshot: QueryDocumentSnapshot<DocumentData>): Admin {
-  return { id: snapshot.id, ...snapshot.data() } as Admin;
+function mapAdmin(row: Tables<"admins">): Admin {
+  return {
+    userId: row.user_id,
+    isActive: row.is_active,
+    createdBy: row.created_by ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 /**
- * Reads admins/{uid} — the single source of truth for admin authorization
- * (mirrored by isActiveAdmin() in firestore.rules / storage.rules). There is
- * no admin dashboard in this codebase yet; this exists so future
- * admin-only routes/components have a ready way to check access.
+ * Authoritative admin-authorization check, backed by public.admins via the
+ * private.is_active_admin() RPC. RLS additionally guarantees a non-admin
+ * caller can never observe another user's admins row.
  */
-export async function isActiveAdmin(uid: string): Promise<boolean> {
-  const snapshot = await getDoc(doc(db, ADMINS_COLLECTION, uid));
-  return snapshot.exists() && snapshot.data().active === true;
+export async function isActiveAdmin(): Promise<boolean> {
+  const { data, error } = await createClient().rpc("is_active_admin");
+  return !error && data === true;
 }
 
+/** Kept for call-site compatibility with code that already has a User in hand. */
 export async function checkActiveAdmin(user: User): Promise<boolean> {
-  const response = await fetch("/api/admin/session", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${await user.getIdToken()}`,
-    },
-    cache: "no-store",
-  });
-
-  if (response.ok) return true;
-  if (response.status === 403) return false;
-  if (response.status === 401) return false;
-
-  const body = (await response.json().catch(() => null)) as
-    | { error?: unknown }
-    | null;
-  throw new Error(
-    typeof body?.error === "string"
-      ? body.error
-      : "Administrator access could not be verified.",
-  );
+  void user;
+  return isActiveAdmin();
 }
 
 export async function getAdminProfile(uid: string): Promise<Admin | null> {
-  const snapshot = await getDoc(doc(db, ADMINS_COLLECTION, uid));
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() } as Admin;
+  const { data, error } = await createClient()
+    .from("admins")
+    .select("*")
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapAdmin(data);
 }
 
 export async function getAllAdmins(): Promise<Admin[]> {
-  const snapshot = await getDocs(collection(db, ADMINS_COLLECTION));
-  return snapshot.docs.map(mapAdmin);
+  const { data, error } = await createClient().from("admins").select("*");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapAdmin);
 }

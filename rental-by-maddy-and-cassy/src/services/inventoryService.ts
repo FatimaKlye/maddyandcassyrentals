@@ -1,28 +1,13 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-  Timestamp,
-  where,
-  type DocumentData,
-  type QuerySnapshot,
-  type Unsubscribe,
-} from "firebase/firestore";
-import { eachDayOfInterval } from "date-fns";
-import { db } from "@/src/lib/firebase/config";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/src/lib/supabase/database.types";
+import { toJson } from "@/src/lib/supabase/types";
 import type { UnitCounts } from "@/lib/availability";
-import { toDateKey } from "@/src/services/availabilityService";
-import type { BookingProductSnapshot, FulfillmentMethod } from "@/src/types/booking";
-
-const INVENTORY_COLLECTION = "inventory";
-const INVENTORY_UNITS_COLLECTION = "inventoryUnits";
-const BOOKINGS_COLLECTION = "bookings";
+import type {
+  BookingCustomerSnapshot,
+  BookingProductSnapshot,
+  EmergencyContact,
+  FulfillmentMethod,
+} from "@/src/types/booking";
 
 export class InsufficientUnitsError extends Error {
   constructor(productId: string) {
@@ -38,222 +23,161 @@ export class DatesUnavailableError extends Error {
   }
 }
 
-function generateBookingRef(bookingId: string): string {
-  const today = new Date();
-  const datePart = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
-    today.getDate()
-  ).padStart(2, "0")}`;
-  const suffix = bookingId.slice(-5).toUpperCase();
-  return `MC-${datePart}-${suffix}`;
+export class AccountSuspendedError extends Error {
+  constructor() {
+    super("Your account is suspended and cannot create new bookings.");
+    this.name = "AccountSuspendedError";
+  }
 }
 
-interface SubmitBookingWithDateGuardInput {
+export interface SubmitBookingInput {
   productId: string;
-  userId: string;
-  startDate: Date;
-  endDate: Date;
-  dayCount: number;
+  rentalStartDate: string;
+  rentalEndDate: string;
   fulfillmentMethod: FulfillmentMethod;
-  customerLocation: string;
+  location?: string;
+  customerNotes?: string;
+  deliveryFee?: number;
+  discountAmount?: number;
   productSnapshot: BookingProductSnapshot;
+  customerSnapshot: BookingCustomerSnapshot;
+  emergencyContact?: EmergencyContact;
 }
 
-export interface SubmitBookingWithDateGuardResult {
+export interface SubmitBookingResult {
   bookingId: string;
   bookingRef: string;
-  assignedUnitId: string;
+  assignedUnitId: string | null;
 }
 
 /**
- * Atomically reserves one physical inventory unit for the given date range
- * and creates the booking doc, per this order of operations:
- *   1. Compute the requested date keys.
- *   2. Find active physical units for the product (inventoryUnits).
- *   3. Inside a transaction, read that unit's calendar entries for each
- *      requested date.
- *   4. Pick the first unit with no conflicting calendar entry on any date.
- *   5. Create the booking doc, with assignedUnitId set.
- *   6. Create a calendar lock doc per date on that unit.
- *   7. Commit all reads/writes as a single transaction.
- *
- * Firestore transactions guarantee steps 3-7 are atomic and serialized
- * against concurrent transactions touching the same documents, which is
- * what prevents two customers from reserving the last available unit at
- * the same time.
+ * Atomically reserves one physical unit and creates the booking by calling
+ * public.create_booking() — a SECURITY DEFINER Postgres function that row-locks
+ * candidate inventory_units and re-checks date-range conflicts against
+ * public.bookings server-side (see the migration in
+ * supabase/migrations/20260802000000_paymongo_audit_push_agreement_versions.sql).
+ * This is the real guard; any client-side date-picker check is UX only.
  */
-export async function submitBookingWithDateGuard({
-  productId,
-  userId,
-  startDate,
-  endDate,
-  dayCount,
-  fulfillmentMethod,
-  customerLocation,
-  productSnapshot,
-}: SubmitBookingWithDateGuardInput): Promise<SubmitBookingWithDateGuardResult> {
-  const dateKeys = eachDayOfInterval({ start: startDate, end: endDate }).map(toDateKey);
-
-  const unitsQuery = query(
-    collection(db, INVENTORY_UNITS_COLLECTION),
-    where("productId", "==", productId),
-    where("isActive", "==", true)
-  );
-  const unitsSnapshot = await getDocs(unitsQuery);
-  const candidateUnitIds = unitsSnapshot.docs.map((d) => d.id).sort();
-
-  if (candidateUnitIds.length === 0) {
-    throw new InsufficientUnitsError(productId);
-  }
-
-  const bookingRef = doc(collection(db, BOOKINGS_COLLECTION));
-  const bookingRefCode = generateBookingRef(bookingRef.id);
-  const inventoryRef = doc(db, INVENTORY_COLLECTION, productId);
-
-  let assignedUnitId: string | null = null;
-
-  await runTransaction(db, async (transaction) => {
-    // All reads must happen before any writes within a Firestore transaction,
-    // so gather calendar reads for each candidate unit until we find one
-    // that's free for every requested date.
-    for (const unitId of candidateUnitIds) {
-      let unitIsFree = true;
-      for (const dateKey of dateKeys) {
-        const calendarRef = doc(db, INVENTORY_UNITS_COLLECTION, unitId, "calendar", dateKey);
-        const calendarSnapshot = await transaction.get(calendarRef);
-        if (calendarSnapshot.exists()) {
-          unitIsFree = false;
-          break;
+export async function submitBookingWithDateGuard(
+  supabase: SupabaseClient<Database>,
+  input: SubmitBookingInput,
+): Promise<SubmitBookingResult> {
+  const { data, error } = await supabase.rpc("create_booking", {
+    p_product_id: input.productId,
+    p_rental_start_date: input.rentalStartDate,
+    p_rental_end_date: input.rentalEndDate,
+    p_fulfillment_method: input.fulfillmentMethod,
+    p_location: input.location ?? "",
+    p_customer_notes: input.customerNotes ?? "",
+    p_delivery_fee: input.deliveryFee ?? 0,
+    p_discount_amount: input.discountAmount ?? 0,
+    p_product_snapshot: toJson(input.productSnapshot),
+    p_customer_snapshot: toJson(input.customerSnapshot),
+    p_emergency_contact: input.emergencyContact
+      ? {
+          fullName: input.emergencyContact.fullName,
+          relationship: input.emergencyContact.relationship,
+          phoneNumber: input.emergencyContact.phoneNumber,
+          address: input.emergencyContact.address ?? "",
         }
-      }
-      if (unitIsFree) {
-        assignedUnitId = unitId;
-        break;
-      }
-    }
-
-    if (!assignedUnitId) {
-      throw new DatesUnavailableError();
-    }
-
-    const inventorySnapshot = await transaction.get(inventoryRef);
-    const pricePerDaySnapshot = productSnapshot.pricePerDay;
-
-    transaction.set(bookingRef, {
-      bookingRef: bookingRefCode,
-      userId,
-      productId,
-      assignedUnitId,
-      productSnapshot,
-      startDate: Timestamp.fromDate(startDate),
-      endDate: Timestamp.fromDate(endDate),
-      dayCount,
-      fulfillmentMethod,
-      customerLocation,
-      pricePerDaySnapshot,
-      estimatedRentalAmount: pricePerDaySnapshot * dayCount,
-      status: "submitted",
-      requirementsStatus: "not_submitted",
-      agreementStatus: "awaiting_customer_signature",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      submittedAt: serverTimestamp(),
-    });
-
-    for (const dateKey of dateKeys) {
-      const calendarRef = doc(db, INVENTORY_UNITS_COLLECTION, assignedUnitId, "calendar", dateKey);
-      transaction.set(calendarRef, {
-        unitId: assignedUnitId,
-        productId,
-        bookingId: bookingRef.id,
-        dateKey,
-        status: "pending",
-        startAt: Timestamp.fromDate(startDate),
-        endAt: Timestamp.fromDate(endDate),
-        createdAt: serverTimestamp(),
-      });
-    }
-
-    // Best-effort display cache update (see firestore.rules comment on
-    // /inventory/{productId}) — never the source of reservation truth.
-    if (inventorySnapshot.exists()) {
-      const inventory = inventorySnapshot.data();
-      const totalUnits: number = inventory.totalUnits ?? candidateUnitIds.length;
-      const reservedUnits: number = Math.min(totalUnits, (inventory.reservedUnits ?? 0) + 1);
-      const availableUnits: number = Math.max(0, totalUnits - reservedUnits - (inventory.rentedUnits ?? 0));
-
-      // bookedDateCounts is the public per-date aggregate that
-      // availabilityService.ts reads to grey out fully-booked dates — a
-      // signed-in customer cannot query the bookings collection across
-      // other customers, so this cache is the only rules-compatible way to
-      // expose "is this date fully booked" to the reservation UI.
-      const bookedDateCounts: Record<string, number> = { ...(inventory.bookedDateCounts ?? {}) };
-      for (const dateKey of dateKeys) {
-        bookedDateCounts[dateKey] = (bookedDateCounts[dateKey] ?? 0) + 1;
-      }
-
-      transaction.set(
-        inventoryRef,
-        { totalUnits, reservedUnits, availableUnits, bookedDateCounts, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
-    }
+      : null,
   });
 
-  return { bookingId: bookingRef.id, bookingRef: bookingRefCode, assignedUnitId: assignedUnitId! };
+  if (error) {
+    if (error.message.includes("NO_AVAILABILITY")) throw new DatesUnavailableError();
+    if (error.message.includes("PRODUCT_NOT_AVAILABLE")) {
+      throw new InsufficientUnitsError(input.productId);
+    }
+    if (error.message.includes("ACCOUNT_SUSPENDED")) throw new AccountSuspendedError();
+    throw new Error(error.message);
+  }
+
+  const booking = data as Tables<"bookings">;
+  return {
+    bookingId: booking.id,
+    bookingRef: booking.booking_reference,
+    assignedUnitId: booking.inventory_unit_id,
+  };
 }
 
-export async function ensureInventoryDoc(
-  productId: string,
-  defaults: UnitCounts
-): Promise<void> {
-  const ref = doc(db, INVENTORY_COLLECTION, productId);
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) {
-    await setDoc(ref, { ...defaults, updatedAt: serverTimestamp() });
-  }
+function mapSummary(row: Tables<"product_availability_summary">): UnitCounts {
+  return {
+    totalUnits: row.total_units,
+    availableUnits: row.available_units,
+    reservedUnits: row.reserved_units,
+    rentedUnits: row.rented_units,
+  };
 }
 
 export function subscribeToInventory(
+  supabase: SupabaseClient<Database>,
   productId: string,
-  callback: (units: UnitCounts | null) => void
-): Unsubscribe {
-  return onSnapshot(
-    doc(db, INVENTORY_COLLECTION, productId),
-    (snapshot) => {
-      if (!snapshot.exists()) {
-        callback(null);
-        return;
-      }
-      const data = snapshot.data();
-      callback({
-        totalUnits: data.totalUnits,
-        availableUnits: data.availableUnits,
-        reservedUnits: data.reservedUnits,
-        rentedUnits: data.rentedUnits,
-      });
-    },
-    () => callback(null)
-  );
+  callback: (units: UnitCounts | null) => void,
+): () => void {
+  supabase
+    .from("product_availability_summary")
+    .select("*")
+    .eq("product_id", productId)
+    .maybeSingle()
+    .then(({ data }) => callback(data ? mapSummary(data) : null));
+
+  const channel = supabase
+    .channel(`inventory-${productId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "product_availability_summary",
+        filter: `product_id=eq.${productId}`,
+      },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as
+          | Tables<"product_availability_summary">
+          | undefined;
+        callback(row ? mapSummary(row) : null);
+      },
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 export function subscribeToAllInventory(
-  callback: (unitsByProductId: Map<string, UnitCounts>) => void
-): Unsubscribe {
-  return onSnapshot(
-    collection(db, INVENTORY_COLLECTION),
-    (snapshot: QuerySnapshot<DocumentData>) => {
-      const map = new Map<string, UnitCounts>();
-      snapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        map.set(docSnapshot.id, {
-          totalUnits: data.totalUnits,
-          availableUnits: data.availableUnits,
-          reservedUnits: data.reservedUnits,
-          rentedUnits: data.rentedUnits,
-        });
-      });
-      callback(map);
-    },
-    () => callback(new Map())
-  );
+  supabase: SupabaseClient<Database>,
+  callback: (unitsByProductId: Map<string, UnitCounts>) => void,
+): () => void {
+  const state = new Map<string, UnitCounts>();
+
+  supabase
+    .from("product_availability_summary")
+    .select("*")
+    .then(({ data }) => {
+      for (const row of data ?? []) {
+        state.set(row.product_id, mapSummary(row));
+      }
+      callback(new Map(state));
+    });
+
+  const channel = supabase
+    .channel("inventory-all")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "product_availability_summary" },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as
+          | Tables<"product_availability_summary">
+          | undefined;
+        if (!row) return;
+        state.set(row.product_id, mapSummary(row));
+        callback(new Map(state));
+      },
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }

@@ -1,10 +1,9 @@
 "use client";
 
-import type { ProductCategory } from "@/types/product";
 import SearchIcon from "@/components/icons/SearchIcon";
 import styles from "./CatalogFilters.module.css";
 
-export type CategoryFilter = "All" | ProductCategory;
+export type CategoryFilter = string;
 export type SortOption = "featured" | "price-asc" | "price-desc" | "name-asc";
 
 interface CatalogFiltersProps {

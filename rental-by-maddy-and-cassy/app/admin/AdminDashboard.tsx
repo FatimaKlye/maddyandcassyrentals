@@ -8,7 +8,7 @@ import StatusBadge from "@/components/status-badge/StatusBadge";
 import {
   getAdminDashboard,
   type AdminDashboardData,
-} from "@/src/services/adminReadService";
+} from "@/src/services/operationsService";
 import styles from "./admin.module.css";
 
 function formatDate(value: string | null): string {
@@ -29,13 +29,11 @@ export default function AdminDashboard() {
     let active = true;
     if (!user) return;
 
-    user
-      .getIdToken()
-      .then(getAdminDashboard)
+    getAdminDashboard()
       .then((dashboard) => {
         if (active) setData(dashboard);
       })
-      .catch((loadError) => {
+      .catch((loadError: unknown) => {
         if (active) {
           setError(
             loadError instanceof Error
@@ -50,7 +48,7 @@ export default function AdminDashboard() {
     };
   }, [user]);
 
-  const displayName = profile?.displayName ?? user?.displayName ?? "Administrator";
+  const displayName = profile?.displayName ?? (user?.user_metadata?.display_name as string | undefined) ?? "Administrator";
 
   return (
     <div className={styles.page}>

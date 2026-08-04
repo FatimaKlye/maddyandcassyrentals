@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { getMessaging, getToken, isSupported } from "firebase/messaging";
-import { app } from "@/src/lib/firebase/config";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/ToastProvider";
+import { isPushSupported, subscribeToPush } from "@/src/lib/webpush/client";
 import styles from "./PushNotificationButton.module.css";
-import { getAppCheckHeaders } from "@/src/lib/firebase/appCheckClient";
 
 export default function PushNotificationButton() {
   const { user } = useAuth();
@@ -20,29 +18,25 @@ export default function PushNotificationButton() {
     if (!user) return;
     setEnabling(true);
     try {
-      if (!(await isSupported())) throw new Error("This browser does not support push notifications.");
+      if (!(await isPushSupported())) {
+        throw new Error("This browser does not support push notifications.");
+      }
       const permission = await Notification.requestPermission();
       if (permission !== "granted") throw new Error("Notification permission was not granted.");
-      const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
-      if (!vapidKey) throw new Error("Web push is not configured yet.");
-      const serviceWorkerRegistration = await navigator.serviceWorker.register(
-        "/firebase-messaging-sw.js",
-      );
-      const token = await getToken(getMessaging(app), {
-        vapidKey,
-        serviceWorkerRegistration,
-      });
-      if (!token) throw new Error("The browser did not return a push token.");
+
+      const subscription = await subscribeToPush();
+      const json = subscription.toJSON();
       const response = await fetch("/api/push/register", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${await user.getIdToken()}`,
-          "Content-Type": "application/json",
-          ...(await getAppCheckHeaders()),
-        },
-        body: JSON.stringify({ token }),
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          p256dh: json.keys?.p256dh,
+          auth: json.keys?.auth,
+        }),
       });
-      if (!response.ok) throw new Error("The push token could not be registered.");
+      if (!response.ok) throw new Error("The push subscription could not be registered.");
       setEnabled(true);
       showToast("Push notifications are enabled on this device.", "success");
     } catch (error) {
@@ -54,7 +48,10 @@ export default function PushNotificationButton() {
 
   return (
     <div className={styles.panel}>
-      <div><strong>Booking push notifications</strong><span>Receive payment, review, and rental-status updates on this device.</span></div>
+      <div>
+        <strong>Booking push notifications</strong>
+        <span>Receive payment, review, and rental-status updates on this device.</span>
+      </div>
       <button type="button" onClick={enable} disabled={enabled || enabling}>
         {enabled ? "Enabled" : enabling ? "Enabling..." : "Enable Notifications"}
       </button>

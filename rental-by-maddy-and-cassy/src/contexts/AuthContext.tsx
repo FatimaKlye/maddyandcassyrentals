@@ -1,11 +1,11 @@
 "use client";
 
 import { createContext, useEffect, useState, type ReactNode } from "react";
-import type { User } from "firebase/auth";
+import type { User } from "@supabase/supabase-js";
 import { subscribeToAuthChanges } from "@/src/services/authService";
-import { checkActiveAdmin } from "@/src/services/adminService";
+import { isActiveAdmin } from "@/src/services/adminService";
 import { getUserProfile } from "@/src/services/userService";
-import type { UserProfile } from "@/src/types/firebase";
+import type { UserProfile } from "@/src/types/database";
 
 export interface AuthContextValue {
   user: User | null;
@@ -29,10 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  async function loadAccount(account: User) {
+  async function loadAccount() {
     const [userProfile, adminAccess] = await Promise.all([
-      getUserProfile(account.uid).catch(() => null),
-      checkActiveAdmin(account),
+      getUserProfile(user?.id ?? "").catch(() => null),
+      isActiveAdmin().catch(() => false),
     ]);
     setProfile(userProfile);
     setIsAdmin(adminAccess);
@@ -45,7 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         if (nextUser) {
-          await loadAccount(nextUser);
+          const [userProfile, adminAccess] = await Promise.all([
+            getUserProfile(nextUser.id).catch(() => null),
+            isActiveAdmin().catch(() => false),
+          ]);
+          setProfile(userProfile);
+          setIsAdmin(adminAccess);
         } else {
           setProfile(null);
           setIsAdmin(false);
@@ -63,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refreshProfile() {
     if (user) {
-      await loadAccount(user);
+      await loadAccount();
     }
   }
 

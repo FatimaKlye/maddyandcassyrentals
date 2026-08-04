@@ -1,17 +1,17 @@
-import type { Timestamp } from "firebase/firestore";
-import type { PaymentOption, PaymentStatus } from "@/src/types/payment";
+import type { PaymentStatus } from "@/src/types/payment";
+
+// Mirrors public.bookings and its related tables exactly (see
+// maddy_cassy_supabase_schema.sql). Booking status values and transitions
+// are enforced server-side by public.create_booking / admin_set_booking_status
+// / confirm_booking — this file only mirrors that vocabulary for the client.
 
 export type BookingStatus =
-  | "submitted"
-  | "under_review"
-  | "correction_required"
+  | "pending"
   | "approved"
   | "confirmed"
-  | "ready"
-  | "active"
-  | "completed"
-  | "cancelled"
-  | "rejected";
+  | "released"
+  | "returned"
+  | "cancelled";
 
 export type FulfillmentMethod = "pickup" | "delivery";
 
@@ -36,104 +36,105 @@ export interface BookingCustomerSnapshot {
 
 export type RequirementsStatus =
   | "not_submitted"
-  | "submitted"
-  | "correction_required"
-  | "verified";
+  | "pending_review"
+  | "approved"
+  | "rejected";
 
 export type AgreementStatus =
+  | "not_created"
   | "awaiting_customer_signature"
-  | "submitted_for_review"
-  | "correction_required"
-  | "awaiting_admin_signature"
-  | "completed";
+  | "awaiting_business_signature"
+  | "completed"
+  | "rejected";
 
 export interface Booking {
   id: string;
-  // Human-readable booking reference (e.g. "MC-20260726-ABCDE"), equivalent
-  // to what the CMS spec calls "bookingNumber".
   bookingRef: string;
   userId: string;
   productId: string;
-  customerSnapshot?: BookingCustomerSnapshot;
-  // The specific physical unit locked for this booking's date range, set
-  // once the reservation transaction succeeds — see
-  // src/services/reservationService.ts. Null until assigned.
-  assignedUnitId: string | null;
-  productSnapshot: BookingProductSnapshot;
-  startDate: Timestamp;
-  endDate: Timestamp;
-  dayCount: number;
-  fulfillmentMethod: FulfillmentMethod;
-  customerLocation: string;
-  // Snapshot of the daily rate at booking time, plus the resulting
-  // informational estimate (pricePerDaySnapshot * dayCount). Neither field
-  // is a payment amount — no payment/deposit workflow exists in this CMS.
-  pricePerDaySnapshot: number;
-  estimatedRentalAmount: number;
-  amountDue?: number;
-  amountPaid?: number;
-  balanceDue?: number;
-  paymentChoice?: PaymentOption;
-  demoPayment?: boolean;
-  paymentRequired?: boolean;
-  paymentStatus?: PaymentStatus;
+  inventoryUnitId: string | null;
   status: BookingStatus;
+  fulfillmentMethod: FulfillmentMethod;
+  startDate: string;
+  endDate: string;
+  dayCount: number;
+  dailyRate: number;
+  refundableDeposit: number;
+  rentalSubtotal: number;
+  deliveryFee: number;
+  totalAmount: number;
+  location?: string;
+  customerNotes?: string;
+  adminNotes?: string;
+  productSnapshot: BookingProductSnapshot;
+  customerSnapshot: BookingCustomerSnapshot;
   requirementsStatus: RequirementsStatus;
   agreementStatus: AgreementStatus;
-  adminRemarks?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  submittedAt: Timestamp;
+  paymentStatus?: PaymentStatus;
+  approvedAt?: string;
+  confirmedAt?: string;
+  releasedAt?: string;
+  returnedAt?: string;
+  cancelledAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EmergencyContact {
+  id?: string;
+  bookingId?: string;
   fullName: string;
   relationship: string;
-  phone: string;
-  facebookLink: string;
-  idStoragePath: string;
+  phoneNumber: string;
+  address?: string;
 }
 
-export interface RequirementsDoc {
+/** One row of public.booking_documents — a single uploaded verification file. */
+export type BookingDocumentType =
+  | "government_id"
+  | "secondary_id"
+  | "selfie_with_id"
+  | "proof_of_address"
+  | "authorization_letter"
+  | "other";
+
+export type RequirementReviewStatus = "pending" | "approved" | "rejected";
+
+export interface BookingDocument {
+  id: string;
   bookingId: string;
   userId: string;
-  idOneStoragePath: string;
-  idTwoStoragePath: string;
-  selfieWithIdStoragePath: string;
-  facebookLink: string;
-  instagramLink: string;
-  emergencyContact: EmergencyContact;
-  status: RequirementsStatus;
-  correctionNotes?: string;
-  submittedAt: Timestamp;
-  updatedAt: Timestamp;
-  reviews?: Partial<Record<RequirementDocumentKey, RequirementDocumentReview>>;
+  documentType: BookingDocumentType | string;
+  requirementKey?: string;
+  storageBucket: string;
+  storagePath: string;
+  originalFilename?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  reviewStatus: RequirementReviewStatus;
+  reviewNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export type RequirementDocumentKey =
-  | "idOneStoragePath"
-  | "idTwoStoragePath"
-  | "selfieWithIdStoragePath"
-  | "emergencyContactIdStoragePath";
-
-export type RequirementReviewStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "replacement_requested";
-
+/** public.requirement_document_reviews — review history entry for one document. */
 export interface RequirementDocumentReview {
+  id: string;
+  bookingDocumentId: string;
   status: RequirementReviewStatus;
-  reason?: string;
+  notes?: string;
   reviewedBy?: string;
-  reviewedAt?: Timestamp;
+  reviewedAt: string;
+  createdAt: string;
 }
 
 export interface AgreementSnapshot {
   customerName: string;
   productName: string;
-  startDate: Timestamp;
-  endDate: Timestamp;
+  startDate: string;
+  endDate: string;
   dayCount: number;
   fulfillmentMethod: FulfillmentMethod;
   customerLocation: string;
@@ -142,65 +143,80 @@ export interface AgreementSnapshot {
   includedAccessories: string[];
 }
 
-export interface AgreementAcknowledgements {
-  infoAccurate: boolean;
-  agreedToTerms: boolean;
-  understoodRentalRules: boolean;
-  authorizedESignature: boolean;
-  readPrivacyNotice: boolean;
-  emergencyContactAuthorized: boolean;
-}
+/** One row of public.agreement_acknowledgements. */
+export type AcknowledgementKey =
+  | "infoAccurate"
+  | "agreedToTerms"
+  | "understoodRentalRules"
+  | "authorizedESignature"
+  | "readPrivacyNotice"
+  | "emergencyContactAuthorized";
 
-export interface AgreementSignature {
-  method: "drawn" | "uploaded";
-  storagePath: string;
-  typedFullName: string;
-  signedAt: Timestamp;
-}
-
-export interface AgreementDoc {
-  bookingId: string;
+export interface AgreementAcknowledgement {
+  id: string;
+  agreementId: string;
   userId: string;
-  bookingRef: string;
-  generatedTermsVersion: string;
-  agreementSnapshot: AgreementSnapshot;
-  acknowledgements: AgreementAcknowledgements;
-  // Customer's own signature — captured at submission time.
-  signature: AgreementSignature;
+  acknowledgementKey: AcknowledgementKey | string;
+  acknowledged: boolean;
+  acknowledgedAt?: string;
+}
+
+/** One row of public.agreement_signatures (unique per agreement + role). */
+export interface AgreementSignature {
+  id: string;
+  agreementId: string;
+  signerUserId?: string;
+  signerRole: "customer" | "business";
+  signerName: string;
+  signaturePath?: string;
+  signatureData: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+  signedAt: string;
+}
+
+/** public.booking_agreements — the current version; see booking_agreement_versions for history. */
+export interface AgreementDoc {
+  id: string;
+  bookingId: string;
   status: AgreementStatus;
-  // Set once an admin reviews and countersigns (future admin flow).
-  adminSignaturePath?: string;
-  adminTypedName?: string;
-  adminSignedAt?: Timestamp;
-  // Set once the admin approves the booking and the system generates the
-  // final, combined Rental Agreement + Booking Confirmation document.
-  finalAgreementPath?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  agreementVersion?: string;
+  versionNumber: number;
+  agreementSnapshot: AgreementSnapshot;
+  generatedDocumentPath?: string;
+  finalDocumentPath?: string;
+  generatedAt?: string;
+  completedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  acknowledgements?: AgreementAcknowledgement[];
+  signatures?: AgreementSignature[];
+}
+
+export interface AgreementVersion {
+  id: string;
+  agreementId: string;
+  bookingId: string;
+  versionNumber: number;
+  status: string;
+  agreementVersion?: string;
+  agreementSnapshot: AgreementSnapshot;
+  generatedDocumentPath?: string;
+  finalDocumentPath?: string;
+  generatedAt?: string;
+  completedAt?: string;
+  archivedAt: string;
+  archivedReason?: string;
 }
 
 export interface StatusHistoryEntry {
   id: string;
-  previousStatus: BookingStatus | null;
-  newStatus: BookingStatus;
-  changedBy: "customer" | "admin" | "system";
+  bookingId: string;
+  fromStatus: BookingStatus | null;
+  toStatus: BookingStatus;
+  note?: string;
   changedByUserId?: string;
-  message?: string;
-  createdAt: Timestamp;
-}
-
-export type BookingDocumentType =
-  | "final_rental_agreement"
-  | "booking_confirmation"
-  | "pickup_delivery_instructions"
-  | "invoice"
-  | "receipt"
-  | "payment_proof";
-
-export interface BookingDocument {
-  id: string;
-  type: BookingDocumentType;
-  storagePath: string;
-  title: string;
-  generatedAt: Timestamp;
+  createdAt: string;
 }

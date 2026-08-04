@@ -27,7 +27,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile } = useAuth();
-  const displayName = profile?.displayName ?? user?.displayName ?? "Administrator";
+  const displayName = profile?.displayName ?? user?.user_metadata?.display_name ?? "Administrator";
 
   async function handleSignOut() {
     await logout();

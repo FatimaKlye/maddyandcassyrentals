@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import type { User } from "firebase/auth";
+import type { User } from "@supabase/supabase-js";
 import { useAuth } from "@/hooks/useAuth";
 import { updateUserProfile } from "@/src/services/userService";
-import type { UserProfile } from "@/src/types/firebase";
+import type { UserProfile } from "@/src/types/database";
 import { useToast } from "@/components/ui/ToastProvider";
 import formStyles from "@/components/ui/Form.module.css";
 import Spinner from "@/components/ui/Spinner";
@@ -55,7 +55,7 @@ export default function CustomerProfileForm() {
 
   return (
     <CustomerProfileEditor
-      key={profile.updatedAt?.toMillis?.() ?? profile.id}
+      key={profile.updatedAt ?? profile.id}
       user={user}
       profile={profile}
       refreshProfile={refreshProfile}
@@ -113,7 +113,7 @@ function CustomerProfileEditor({
 
     setSaving(true);
     try {
-      await updateUserProfile(user.uid, {
+      await updateUserProfile(user.id, {
         displayName: draft.displayName.trim(),
         phoneNumber: draft.phoneNumber.trim(),
         fullAddress: draft.fullAddress.trim(),

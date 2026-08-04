@@ -9,9 +9,10 @@ import {
   deleteCustomerAccountAsAdmin,
   getUserProfile,
 } from "@/src/services/userService";
+import { createClient } from "@/src/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/ToastProvider";
-import type { Booking, UserProfile } from "@/src/types/firebase";
+import type { Booking, UserProfile } from "@/src/types/database";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import styles from "./userDetail.module.css";
@@ -23,12 +24,13 @@ interface UserDetailData {
   isAdministrator: boolean;
 }
 
-function formatDate(value: Booking["createdAt"] | UserProfile["createdAt"]): string {
-  return value?.toDate?.().toLocaleDateString("en-PH", {
+function formatDate(value: string | undefined | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-PH", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }) ?? "—";
+  });
 }
 
 export default function AdminUserDetail({ uid }: { uid: string }) {
@@ -44,7 +46,8 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
   useEffect(() => {
     let active = true;
 
-    Promise.all([getUserProfile(uid), getBookingsForUser(uid), getAdminProfile(uid)])
+    const supabase = createClient();
+    Promise.all([getUserProfile(uid), getBookingsForUser(supabase, uid), getAdminProfile(uid)])
       .then(([account, bookings, administrator]) => {
         if (!active) return;
         if (!account) {
@@ -67,8 +70,7 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
 
     setDeleting(true);
     try {
-      const idToken = await user.getIdToken();
-      await deleteCustomerAccountAsAdmin(uid, idToken);
+      await deleteCustomerAccountAsAdmin(uid);
       showToast("The customer account has been deleted.", "success");
       router.replace("/admin/users");
       router.refresh();
@@ -175,8 +177,8 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
             <dd>{formatDate(account.createdAt)}</dd>
           </div>
           <div>
-            <dt>Firebase UID</dt>
-            <dd className={styles.uid}>{account.uid}</dd>
+            <dt>User ID</dt>
+            <dd className={styles.uid}>{account.id}</dd>
           </div>
         </dl>
       </section>
@@ -239,7 +241,7 @@ export default function AdminUserDetail({ uid }: { uid: string }) {
           <p>
             {isAdministrator
               ? "Administrator accounts cannot be deleted from customer account management."
-              : "Permanently removes this customer's Firebase login, profile, and notifications. Existing booking and rental history is retained for business records."}
+              : "Permanently removes this customer's Supabase Auth login, profile, and notifications. Existing booking and rental history is retained for business records."}
           </p>
         </div>
 

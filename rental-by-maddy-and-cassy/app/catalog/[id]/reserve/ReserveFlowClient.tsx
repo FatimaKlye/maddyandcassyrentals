@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
-import type { PaymentStatus } from "@/src/types/payment";
 import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/src/lib/supabase/client";
 import RequireAuth from "@/components/route-guards/RequireAuth";
 import ReservationStepper from "@/components/reservation/ReservationStepper";
 import StepRentalDetails from "@/components/reservation/StepRentalDetails";
 import StepCustomerInfo from "@/components/reservation/StepCustomerInfo";
 import StepRequirements from "@/components/reservation/StepRequirements";
 import StepAgreement from "@/components/reservation/StepAgreement";
-import StepPaymentSubmission from "@/components/reservation/StepPaymentSubmission";
+import StepPaymentSubmission, {
+  type BookingPaymentState,
+} from "@/components/reservation/StepPaymentSubmission";
 import StepBookingConfirmation from "@/components/reservation/StepBookingConfirmation";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createEmptyDraft, getDayCount, type ReservationDraft } from "@/src/types/reservationDraft";
@@ -44,7 +46,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
   const [draft, setDraft] = useState<ReservationDraft>(createEmptyDraft());
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookingNumber, setBookingNumber] = useState<string | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
+  const [paymentState, setPaymentState] = useState<BookingPaymentState>("unpaid");
   const [isDemoPayment, setIsDemoPayment] = useState(false);
   const [openingPayment, setOpeningPayment] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
@@ -59,7 +61,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     setDraft((current) => ({
       ...current,
       customerInfo: {
-        fullName: profile?.displayName ?? user.displayName ?? "",
+        fullName: profile?.displayName ?? (user.user_metadata?.display_name as string | undefined) ?? "",
         email: profile?.email ?? user.email ?? "",
         phone: profile?.phoneNumber ?? "",
         address: profile?.fullAddress ?? "",
@@ -82,47 +84,60 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     if (!resumedBookingId) return;
     const activeUser = user;
     const activeBookingId = resumedBookingId;
+    const supabase = createClient();
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const returnedFromPayment = params.get("payment") === "success";
     const paymentCancelled = params.get("payment") === "cancelled";
-    const demoPreviewCompleted = params.get("payment") === "demo-preview";
     let attempts = 0;
 
     async function refreshBooking() {
-      const booking = await getBookingById(activeBookingId);
-      if (
-        !booking ||
-        booking.userId !== activeUser.uid ||
-        booking.productId !== product.id ||
-        cancelled
-      ) {
+      const booking = await getBookingById(supabase, activeBookingId);
+      if (!booking || booking.userId !== activeUser.id || booking.productId !== product.id || cancelled) {
         setPaymentError("This reservation could not be resumed.");
         return;
       }
 
+      const { data: payments } = await supabase
+        .from("payment_records")
+        .select("amount, status, provider_metadata")
+        .eq("booking_id", activeBookingId);
+
+      const verifiedAmount = (payments ?? [])
+        .filter((p) => p.status === "paid" || p.status === "verified")
+        .reduce((sum, p) => sum + p.amount, 0);
+      const hasPendingPayment = (payments ?? []).some((p) =>
+        ["pending", "submitted", "processing"].includes(p.status),
+      );
+      const demo = (payments ?? []).some(
+        (p) => (p.provider_metadata as { demo?: boolean } | null)?.demo === true,
+      );
+
+      const nextState: BookingPaymentState =
+        verifiedAmount <= 0
+          ? hasPendingPayment
+            ? "pending"
+            : "unpaid"
+          : verifiedAmount >= booking.totalAmount - 0.01
+            ? "paid"
+            : "partially_paid";
+
       setBookingId(booking.id);
       setBookingNumber(booking.bookingRef);
-      setPaymentStatus(booking.paymentStatus ?? "unpaid");
-      setIsDemoPayment(booking.demoPayment === true);
+      setPaymentState(nextState);
+      setIsDemoPayment(demo);
       setDraft((current) => ({
         ...current,
-        startDate: booking.startDate.toDate(),
-        endDate: booking.endDate.toDate(),
+        startDate: new Date(booking.startDate),
+        endDate: new Date(booking.endDate),
         fulfillmentMethod: booking.fulfillmentMethod,
-        customerLocation: booking.customerLocation,
-        paymentOption:
-          booking.paymentChoice === "full" || booking.paymentChoice === "deposit_50"
-            ? booking.paymentChoice
-            : current.paymentOption,
+        customerLocation: booking.location ?? current.customerLocation,
         customerInfo: booking.customerSnapshot ?? current.customerInfo,
       }));
       setStep(3);
 
-      const verified =
-        booking.paymentStatus === "paid" || booking.paymentStatus === "partially_paid";
-      if (verified) {
+      if (nextState === "paid" || nextState === "partially_paid") {
         setCheckingPayment(false);
         setPaymentError(null);
         return;
@@ -140,10 +155,6 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
           );
         } else if (paymentCancelled) {
           setPaymentError("Payment was cancelled. Your reservation can still be paid from here.");
-        } else if (demoPreviewCompleted) {
-          setPaymentError(
-            "Demo preview completed. No payment was charged or recorded, so verification remains locked until PayMongo confirms a real payment.",
-          );
         }
       }
     }
@@ -173,30 +184,21 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
       let activeBookingId = bookingId;
       let activeBookingNumber = bookingNumber;
       if (!activeBookingId) {
-        const reservation = await createBookingReservation(product, draft);
+        const supabase = createClient();
+        const reservation = await createBookingReservation(supabase, product, draft);
         activeBookingId = reservation.bookingId;
         activeBookingNumber = reservation.bookingNumber ?? reservation.bookingId;
         setBookingId(activeBookingId);
         setBookingNumber(activeBookingNumber);
       }
 
-      const idToken = await user.getIdToken();
-      const returnPath =
-        `/catalog/${encodeURIComponent(product.id)}/reserve?bookingId=${encodeURIComponent(activeBookingId)}`;
-      const checkout = await createPaymentCheckout(
-        activeBookingId,
-        idToken,
-        draft.paymentOption,
-        returnPath,
-      );
+      const returnPath = `/catalog/${encodeURIComponent(product.id)}/reserve?bookingId=${encodeURIComponent(activeBookingId)}`;
+      const checkout = await createPaymentCheckout(activeBookingId, draft.paymentOption, returnPath);
+      setIsDemoPayment(checkout.checkoutUrl.includes("/demo/paymongo"));
       window.location.assign(checkout.checkoutUrl);
     } catch (error) {
       setOpeningPayment(false);
-      setPaymentError(
-        error instanceof Error
-          ? error.message
-          : "The secure PayMongo checkout could not be opened.",
-      );
+      setPaymentError(error instanceof Error ? error.message : "The secure PayMongo checkout could not be opened.");
     }
   }
 
@@ -209,9 +211,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
       goToStep(6);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "We couldn't submit your documents. Please try again.",
+        error instanceof Error ? error.message : "We couldn't submit your documents. Please try again.",
         "error",
       );
     } finally {
@@ -223,7 +223,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     bookingRef: bookingNumber ?? "Created before payment",
     customerName: draft.customerInfo.fullName || "-",
     productName: product.name,
-    brand: product.brand,
+    brand: product.brand ?? "",
     startDate: draft.startDate ?? new Date(),
     endDate: draft.endDate ?? new Date(),
     dayCount: getDayCount(draft.startDate, draft.endDate),
@@ -241,7 +241,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
       <div className={styles.card}>
         {step === 1 ? (
           <StepCustomerInfo
-            uid={user!.uid}
+            uid={user!.id}
             customerInfo={draft.customerInfo}
             onUpdate={(patch) =>
               updateDraft({ customerInfo: { ...draft.customerInfo, ...patch } })
@@ -265,7 +265,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
           <StepPaymentSubmission
             product={product}
             draft={draft}
-            paymentStatus={paymentStatus}
+            paymentState={paymentState}
             isDemoPayment={isDemoPayment}
             bookingNumber={bookingNumber ?? undefined}
             opening={openingPayment}

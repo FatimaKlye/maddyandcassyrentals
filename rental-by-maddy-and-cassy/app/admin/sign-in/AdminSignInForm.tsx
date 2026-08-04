@@ -43,12 +43,10 @@ export default function AdminSignInForm() {
     setSubmitting(true);
 
     try {
-      const signedInUser = await loginWithEmail(values.email, values.password);
+      await loginWithEmail(values.email, values.password);
       const sessionResponse = await fetch("/api/admin/session", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${await signedInUser.getIdToken()}`,
-        },
+        credentials: "same-origin",
       });
       if (!sessionResponse.ok) {
         const body = (await sessionResponse.json().catch(() => null)) as
@@ -65,8 +63,7 @@ export default function AdminSignInForm() {
       router.replace(redirectTo);
     } catch (error) {
       setFormError(
-        error instanceof Error &&
-          !error.message.toLowerCase().includes("firebase")
+        error instanceof Error
           ? error.message
           : "We couldn't sign you in. Check your admin email and password and try again.",
       );

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/src/lib/supabase/client";
 import {
   getBookingDetails,
   getBookingFileUrl,
@@ -14,7 +14,9 @@ import {
   updateAdminBookingStatus,
 } from "@/src/services/adminBookingService";
 import { getUserProfile } from "@/src/services/userService";
-import type { BookingStatus, UserProfile } from "@/src/types/firebase";
+import { getBookingPayments, getBookingInvoices, getBookingReceipts } from "@/src/services/paymentService";
+import type { BookingStatus, UserProfile } from "@/src/types/database";
+import type { PaymentRecord, BookingInvoice, BookingReceipt } from "@/src/types/payment";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -23,40 +25,33 @@ import RequirementsReviewPanel from "@/components/admin/RequirementsReviewPanel"
 
 const REQUIREMENTS_STATUS_LABELS: Record<string, string> = {
   not_submitted: "Not Submitted",
-  submitted: "Submitted",
-  correction_required: "Correction Required",
-  verified: "Verified",
+  pending_review: "Pending Review",
+  approved: "Approved",
+  rejected: "Rejected",
 };
 
 const AGREEMENT_STATUS_LABELS: Record<string, string> = {
+  not_created: "Not Created",
   awaiting_customer_signature: "Awaiting Customer Signature",
-  submitted_for_review: "Submitted for Review",
-  correction_required: "Correction Required",
-  awaiting_admin_signature: "Awaiting Admin Signature",
+  awaiting_business_signature: "Awaiting Business Signature",
   completed: "Completed",
+  rejected: "Rejected",
 };
 
-function formatDate(value: { toDate?: () => Date } | null | undefined, includeTime = false) {
-  const date = value?.toDate?.();
-  if (!date) return "-";
-  return date.toLocaleString("en-PH", {
+function formatDate(value: string | null | undefined, includeTime = false) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("en-PH", {
     timeZone: "Asia/Manila",
     year: "numeric",
     month: "short",
     day: "numeric",
-    ...(includeTime
-      ? { hour: "numeric", minute: "2-digit", hour12: true }
-      : {}),
+    ...(includeTime ? { hour: "numeric", minute: "2-digit", hour12: true } : {}),
   });
 }
 
 function formatStatus(value: string | null | undefined) {
   if (!value) return "-";
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function yesNo(value: boolean | undefined) {
-  return value ? "Confirmed" : "Not confirmed";
 }
 
 function safeExternalLink(value: string | undefined): string | null {
@@ -73,10 +68,12 @@ function safeExternalLink(value: string | undefined): string | null {
 interface DetailState {
   details: BookingDetails;
   profile: UserProfile | null;
+  payments: PaymentRecord[];
+  invoices: BookingInvoice[];
+  receipts: BookingReceipt[];
 }
 
 export default function AdminBookingDetail({ bookingId }: { bookingId: string }) {
-  const { user } = useAuth();
   const { showToast } = useToast();
   const [state, setState] = useState<DetailState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,13 +84,19 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
 
   const loadDetails = useCallback(async () => {
     try {
-      const details = await getBookingDetails(bookingId);
+      const supabase = createClient();
+      const details = await getBookingDetails(supabase, bookingId);
       if (!details) {
         setError("The selected booking could not be found.");
         return;
       }
-      const profile = await getUserProfile(details.booking.userId);
-      setState({ details, profile });
+      const [profile, payments, invoices, receipts] = await Promise.all([
+        getUserProfile(details.booking.userId),
+        getBookingPayments(supabase, bookingId),
+        getBookingInvoices(supabase, bookingId),
+        getBookingReceipts(supabase, bookingId),
+      ]);
+      setState({ details, profile, payments, invoices, receipts });
       setError(null);
     } catch {
       setError("The booking details could not be loaded. Please refresh and try again.");
@@ -112,7 +115,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
 
   const selectedAction = actions.find((action) => action.status === selectedStatus);
 
-  async function openPrivateFile(path: string) {
+  async function openPrivateFile(bucket: Parameters<typeof getBookingFileUrl>[1], path: string) {
     const previewWindow = window.open("", "_blank");
     if (previewWindow) {
       previewWindow.document.title = "Loading private document...";
@@ -120,7 +123,8 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
     }
 
     try {
-      const url = await getBookingFileUrl(path);
+      const supabase = createClient();
+      const url = await getBookingFileUrl(supabase, bucket, path);
       if (previewWindow) {
         previewWindow.location.href = url;
       } else {
@@ -133,7 +137,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   }
 
   async function handleStatusAction() {
-    if (!user || !state || !selectedStatus || !selectedAction) return;
+    if (!state || !selectedStatus || !selectedAction) return;
     if (selectedAction.requiresNote && !note.trim()) {
       showToast("Please add administrator notes for this action.", "error");
       return;
@@ -146,17 +150,14 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
 
     setUpdating(true);
     try {
-      const idToken = await user.getIdToken();
-      await updateAdminBookingStatus(bookingId, selectedStatus, note, idToken);
+      await updateAdminBookingStatus(bookingId, selectedStatus, note);
       await loadDetails();
       setSelectedStatus("");
       setNote("");
       showToast(`Booking updated: ${selectedAction.label}.`, "success");
     } catch (actionError) {
       showToast(
-        actionError instanceof Error
-          ? actionError.message
-          : "The booking status could not be updated.",
+        actionError instanceof Error ? actionError.message : "The booking status could not be updated.",
         "error",
       );
     } finally {
@@ -165,21 +166,14 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   }
 
   async function handlePdfExport() {
-    if (!user || !state) return;
+    if (!state) return;
     setExporting(true);
     try {
-      const idToken = await user.getIdToken();
-      await downloadAdminBookingPdf(
-        bookingId,
-        state.details.booking.bookingRef,
-        idToken,
-      );
+      await downloadAdminBookingPdf(bookingId, state.details.booking.bookingRef);
       showToast("The private booking PDF was downloaded.", "success");
     } catch (exportError) {
       showToast(
-        exportError instanceof Error
-          ? exportError.message
-          : "The booking PDF could not be generated.",
+        exportError instanceof Error ? exportError.message : "The booking PDF could not be generated.",
         "error",
       );
     } finally {
@@ -204,17 +198,8 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
     );
   }
 
-  const {
-    booking,
-    requirements,
-    agreement,
-    statusHistory,
-    payments,
-    invoices,
-    receipts,
-    documents: customerDocuments,
-  } = state.details;
-  const { profile } = state;
+  const { booking, emergencyContact, agreement, statusHistory, documents } = state.details;
+  const { profile, payments, invoices, receipts } = state;
   const customer = booking.customerSnapshot;
   const fullName = customer?.fullName || profile?.displayName || "Customer";
   const email = customer?.email || profile?.email || "-";
@@ -222,16 +207,14 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   const address = customer?.address || profile?.fullAddress || "-";
   const facebook = safeExternalLink(customer?.facebookLink || profile?.facebookLink);
   const instagram = safeExternalLink(customer?.instagramLink || profile?.instagramLink);
-  const estimatedAmount = `${booking.productSnapshot.currency || "PHP"}${booking.estimatedRentalAmount.toLocaleString("en-PH")}`;
+  const totalAmount = `PHP ${booking.totalAmount.toLocaleString("en-PH")}`;
+  const customerSignature = agreement?.signatures?.find((s) => s.signerRole === "customer");
 
-  const documentItems = requirements
-    ? [
-        { label: "First valid ID", path: requirements.idOneStoragePath },
-        { label: "Second valid ID", path: requirements.idTwoStoragePath },
-        { label: "Selfie holding valid ID", path: requirements.selfieWithIdStoragePath },
-        { label: "Emergency contact ID", path: requirements.emergencyContact.idStoragePath },
-      ].filter((item) => item.path)
-    : [];
+  const amountPaid = payments
+    .filter((p) => p.status === "paid" || p.status === "verified")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const paymentStatusLabel =
+    amountPaid <= 0 ? "Unpaid" : amountPaid >= booking.totalAmount - 0.01 ? "Paid" : "Partially Paid";
 
   return (
     <div className={styles.page}>
@@ -324,8 +307,8 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
           <strong>{AGREEMENT_STATUS_LABELS[booking.agreementStatus] ?? formatStatus(booking.agreementStatus)}</strong>
         </article>
         <article>
-          <span>Submitted</span>
-          <strong>{formatDate(booking.submittedAt, true)}</strong>
+          <span>Created</span>
+          <strong>{formatDate(booking.createdAt, true)}</strong>
         </article>
       </div>
 
@@ -363,10 +346,10 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
           <div><dt>Start date</dt><dd>{formatDate(booking.startDate)}</dd></div>
           <div><dt>End date</dt><dd>{formatDate(booking.endDate)}</dd></div>
           <div><dt>Duration</dt><dd>{booking.dayCount} day(s)</dd></div>
-          <div><dt>Estimated amount</dt><dd>{estimatedAmount}</dd></div>
+          <div><dt>Total amount</dt><dd>{totalAmount}</dd></div>
           <div><dt>Handover method</dt><dd>{formatStatus(booking.fulfillmentMethod)}</dd></div>
-          <div><dt>Assigned unit</dt><dd>{booking.assignedUnitId || "Not assigned"}</dd></div>
-          <div className={styles.wideDetail}><dt>Customer location</dt><dd>{booking.customerLocation}</dd></div>
+          <div><dt>Assigned unit</dt><dd>{booking.inventoryUnitId || "Not assigned"}</dd></div>
+          <div className={styles.wideDetail}><dt>Location</dt><dd>{booking.location || "-"}</dd></div>
           <div className={styles.wideDetail}>
             <dt>Included accessories</dt>
             <dd>{booking.productSnapshot.included?.length ? booking.productSnapshot.included.join(", ") : "None listed"}</dd>
@@ -378,52 +361,31 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
         <div className={styles.sectionHeader}>
           <div><p>03</p><h2>Rental Requirements</h2></div>
         </div>
-        {requirements ? (
+        {emergencyContact || documents.length ? (
           <>
-            <dl className={styles.detailGrid}>
-              <div>
-                <dt>Customer Facebook</dt>
-                <dd>
-                  {safeExternalLink(requirements.facebookLink) ? (
-                    <a href={requirements.facebookLink} target="_blank" rel="noopener noreferrer">Open Facebook</a>
-                  ) : "-"}
-                </dd>
-              </div>
-              <div>
-                <dt>Customer Instagram</dt>
-                <dd>
-                  {safeExternalLink(requirements.instagramLink) ? (
-                    <a href={requirements.instagramLink} target="_blank" rel="noopener noreferrer">Open Instagram</a>
-                  ) : "-"}
-                </dd>
-              </div>
-              <div><dt>Emergency contact</dt><dd>{requirements.emergencyContact.fullName}</dd></div>
-              <div><dt>Relationship</dt><dd>{requirements.emergencyContact.relationship}</dd></div>
-              <div><dt>Emergency phone</dt><dd>{requirements.emergencyContact.phone}</dd></div>
-              <div>
-                <dt>Emergency Facebook</dt>
-                <dd>
-                  {safeExternalLink(requirements.emergencyContact.facebookLink) ? (
-                    <a href={requirements.emergencyContact.facebookLink} target="_blank" rel="noopener noreferrer">Open Facebook</a>
-                  ) : "-"}
-                </dd>
-              </div>
-            </dl>
+            {emergencyContact ? (
+              <dl className={styles.detailGrid}>
+                <div><dt>Emergency contact</dt><dd>{emergencyContact.fullName}</dd></div>
+                <div><dt>Relationship</dt><dd>{emergencyContact.relationship}</dd></div>
+                <div><dt>Emergency phone</dt><dd>{emergencyContact.phoneNumber}</dd></div>
+                <div><dt>Address</dt><dd>{emergencyContact.address || "-"}</dd></div>
+              </dl>
+            ) : null}
             <div className={styles.documents}>
-              {documentItems.map((document) => (
+              {documents.map((document) => (
                 <button
-                  key={document.label}
+                  key={document.id}
                   type="button"
-                  onClick={() => openPrivateFile(document.path)}
+                  onClick={() => openPrivateFile("booking-documents", document.storagePath)}
                 >
-                  <span>{document.label}</span>
+                  <span>{formatStatus(document.documentType)}</span>
                   <strong>View private file</strong>
                 </button>
               ))}
             </div>
             <RequirementsReviewPanel
               bookingId={bookingId}
-              requirements={requirements}
+              documents={documents}
               onUpdated={loadDetails}
             />
           </>
@@ -439,26 +401,20 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
         {agreement ? (
           <>
             <dl className={styles.detailGrid}>
-              <div><dt>Signed name</dt><dd>{agreement.signature.typedFullName}</dd></div>
-              <div><dt>Signed at</dt><dd>{formatDate(agreement.signature.signedAt, true)}</dd></div>
-              <div><dt>Signature method</dt><dd>{formatStatus(agreement.signature.method)}</dd></div>
-              <div><dt>Terms version</dt><dd>{agreement.generatedTermsVersion}</dd></div>
+              <div><dt>Signed name</dt><dd>{customerSignature?.signerName ?? "-"}</dd></div>
+              <div><dt>Signed at</dt><dd>{formatDate(customerSignature?.signedAt, true)}</dd></div>
+              <div><dt>Agreement version</dt><dd>{agreement.agreementVersion ?? "-"}</dd></div>
+              <div><dt>Agreement status</dt><dd>{AGREEMENT_STATUS_LABELS[agreement.status] ?? formatStatus(agreement.status)}</dd></div>
             </dl>
-            <div className={styles.confirmationGrid}>
-              <span>{yesNo(agreement.acknowledgements.infoAccurate)}: Information is accurate</span>
-              <span>{yesNo(agreement.acknowledgements.agreedToTerms)}: Terms accepted</span>
-              <span>{yesNo(agreement.acknowledgements.understoodRentalRules)}: Rental rules understood</span>
-              <span>{yesNo(agreement.acknowledgements.authorizedESignature)}: E-signature authorized</span>
-              <span>{yesNo(agreement.acknowledgements.readPrivacyNotice)}: Privacy notice read</span>
-              <span>{yesNo(agreement.acknowledgements.emergencyContactAuthorized)}: Emergency contact authorized</span>
-            </div>
-            <button
-              type="button"
-              className={styles.signatureButton}
-              onClick={() => openPrivateFile(agreement.signature.storagePath)}
-            >
-              View customer signature
-            </button>
+            {customerSignature?.signaturePath ? (
+              <button
+                type="button"
+                className={styles.signatureButton}
+                onClick={() => openPrivateFile("customer-documents", customerSignature.signaturePath!)}
+              >
+                View customer signature
+              </button>
+            ) : null}
           </>
         ) : (
           <p className={styles.empty}>The rental agreement has not been submitted.</p>
@@ -470,23 +426,37 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
           <div><p>05</p><h2>Payment &amp; Customer Documents</h2></div>
         </div>
         <dl className={styles.detailGrid}>
-          <div><dt>Payment status</dt><dd>{formatStatus(booking.paymentStatus ?? "unpaid")}</dd></div>
+          <div><dt>Payment status</dt><dd>{paymentStatusLabel}</dd></div>
           <div><dt>Payment attempts</dt><dd>{payments.length}</dd></div>
           <div><dt>Invoices</dt><dd>{invoices.length}</dd></div>
           <div><dt>Receipts</dt><dd>{receipts.length}</dd></div>
         </dl>
-        {customerDocuments.length ? (
+        {invoices.length || receipts.length ? (
           <div className={styles.documents}>
-            {customerDocuments.map((document) => (
-              <button
-                key={document.id}
-                type="button"
-                onClick={() => openPrivateFile(document.storagePath)}
-              >
-                <span>{document.title}</span>
-                <strong>View private PDF</strong>
-              </button>
-            ))}
+            {invoices
+              .filter((invoice) => invoice.documentPath)
+              .map((invoice) => (
+                <button
+                  key={invoice.id}
+                  type="button"
+                  onClick={() => openPrivateFile("invoices", invoice.documentPath!)}
+                >
+                  <span>Invoice {invoice.invoiceNumber ?? invoice.id.slice(0, 8)}</span>
+                  <strong>View private PDF</strong>
+                </button>
+              ))}
+            {receipts
+              .filter((receipt) => receipt.documentPath)
+              .map((receipt) => (
+                <button
+                  key={receipt.id}
+                  type="button"
+                  onClick={() => openPrivateFile("receipts", receipt.documentPath!)}
+                >
+                  <span>Receipt {receipt.receiptNumber ?? receipt.id.slice(0, 8)}</span>
+                  <strong>View private PDF</strong>
+                </button>
+              ))}
           </div>
         ) : (
           <p className={styles.empty}>No customer-facing financial documents have been issued yet.</p>
@@ -504,11 +474,11 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                 <span aria-hidden="true" />
                 <div>
                   <strong>
-                    {entry.previousStatus ? `${formatStatus(entry.previousStatus)} to ` : ""}
-                    {formatStatus(entry.newStatus)}
+                    {entry.fromStatus ? `${formatStatus(entry.fromStatus)} to ` : ""}
+                    {formatStatus(entry.toStatus)}
                   </strong>
-                  <p>{entry.message || "Status updated."}</p>
-                  <small>{formatDate(entry.createdAt, true)} - {formatStatus(entry.changedBy)}</small>
+                  <p>{entry.note || "Status updated."}</p>
+                  <small>{formatDate(entry.createdAt, true)}</small>
                 </div>
               </li>
             ))}

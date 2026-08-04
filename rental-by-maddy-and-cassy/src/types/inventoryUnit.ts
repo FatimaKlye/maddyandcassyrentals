@@ -1,39 +1,49 @@
-import type { Timestamp } from "firebase/firestore";
-
-export type InventoryUnitStatus = "available" | "maintenance" | "retired";
+export type InventoryUnitStatus =
+  | "available"
+  | "reserved"
+  | "rented"
+  | "maintenance"
+  | "inactive";
 
 /**
- * inventoryUnits/{unitId} — one document per physical camera or phone.
- * This is the source of truth for real-world unit counts and is what the
- * reservation transaction locks against; `products/{id}.totalUnits` /
- * `availableUnits` remain a denormalized display cache for the catalog UI.
+ * public.inventory_units — one row per physical unit; the source of truth
+ * for real-world counts. Never exposed to renters directly (admin-only RLS
+ * read) — public.product_availability_summary is the public-facing cache.
  */
 export interface InventoryUnit {
   id: string;
   productId: string;
   unitCode: string;
+  serialNumber?: string;
   status: InventoryUnitStatus;
-  isActive: boolean;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  conditionNotes?: string;
+  acquiredAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export type CalendarEntryStatus = "pending" | "confirmed" | "active" | "blocked";
+export type CalendarEntryStatus = "available" | "reserving" | "booked" | "blocked";
 
-/**
- * inventoryUnits/{unitId}/calendar/{dateKey} — a per-day lock on a specific
- * physical unit. `dateKey` is a "YYYY-MM-DD" string, doubling as the document
- * id, so a transactional read/write on this doc is what prevents two
- * customers from reserving the same unit on the same day.
- */
+/** public.availability_calendar_entries */
 export interface AvailabilityCalendarEntry {
-  unitId: string;
+  id: string;
   productId: string;
-  bookingId: string | null;
-  dateKey: string;
+  inventoryUnitId?: string;
+  startDate: string;
+  endDate: string;
   status: CalendarEntryStatus;
-  startAt: Timestamp;
-  endAt: Timestamp;
-  createdAt: Timestamp;
-  expiresAt?: Timestamp;
+  publicNote?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductAvailabilitySummary {
+  productId: string;
+  totalUnits: number;
+  availableUnits: number;
+  reservedUnits: number;
+  rentedUnits: number;
+  maintenanceUnits: number;
+  updatedAt: string;
 }

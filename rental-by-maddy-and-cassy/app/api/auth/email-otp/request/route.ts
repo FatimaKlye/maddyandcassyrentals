@@ -1,18 +1,7 @@
 import { NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
-import { getAdminDb } from "@/src/lib/firebase/admin";
-import {
-  enforceAppCheck,
-  enforceRateLimit,
-  requireUser,
-  RequestSecurityError,
-} from "@/src/lib/server/requestSecurity";
-import {
-  createEmailOtp,
-  hashEmailOtp,
-  hasGmailOtpConfiguration,
-  sendEmailOtp,
-} from "@/src/lib/server/emailOtp";
+import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { createAdminClient } from "@/src/lib/supabase/admin";
+import { createEmailOtp, hashEmailOtp, hasGmailOtpConfiguration, sendEmailOtp } from "@/src/lib/server/emailOtp";
 
 export const runtime = "nodejs";
 
@@ -22,31 +11,24 @@ const RESEND_COOLDOWN_MS = 45_000;
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     enforceRateLimit(request, "email-otp-request", 8, 15 * 60_000);
-    await enforceAppCheck(request);
-    const user = await requireUser(request);
+    const { user } = await requireUser();
     const email = user.email?.trim().toLowerCase();
-    if (!email) {
-      throw new RequestSecurityError(
-        "Your account does not have an email address.",
-        400,
-      );
-    }
-    if (user.email_verified) {
-      return NextResponse.json({ alreadyVerified: true });
-    }
+    if (!email) throw new RequestSecurityError("Your account does not have an email address.", 400);
+    if (user.email_confirmed_at) return NextResponse.json({ alreadyVerified: true });
 
     const gmailConfigured = hasGmailOtpConfiguration();
     if (!gmailConfigured && process.env.NODE_ENV === "production") {
-      throw new RequestSecurityError(
-        "Email verification is not configured yet.",
-        503,
-      );
+      throw new RequestSecurityError("Email verification is not configured yet.", 503);
     }
 
-    const db = getAdminDb();
-    const challengeRef = db.collection("emailVerificationChallenges").doc(user.uid);
-    const existing = await challengeRef.get();
-    const lastSentAt = existing.data()?.lastSentAt?.toMillis?.() ?? 0;
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from("email_verification_challenges")
+      .select("last_sent_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const lastSentAt = existing ? new Date(existing.last_sent_at).getTime() : 0;
     const retryAfterMs = RESEND_COOLDOWN_MS - (Date.now() - lastSentAt);
     if (retryAfterMs > 0) {
       return NextResponse.json(
@@ -59,47 +41,41 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const code = createEmailOtp();
-    const now = Date.now();
-    await challengeRef.set({
-      uid: user.uid,
-      email,
-      codeHash: hashEmailOtp(user.uid, email, code),
-      attempts: 0,
-      status: "pending",
-      createdAt: Timestamp.fromMillis(now),
-      lastSentAt: Timestamp.fromMillis(now),
-      expiresAt: Timestamp.fromMillis(now + CODE_LIFETIME_MS),
-    });
+    const now = new Date();
+    const { error: upsertError } = await admin.from("email_verification_challenges").upsert(
+      {
+        user_id: user.id,
+        email,
+        code_hash: hashEmailOtp(user.id, email, code),
+        attempts: 0,
+        status: "pending",
+        created_at: now.toISOString(),
+        last_sent_at: now.toISOString(),
+        expires_at: new Date(now.getTime() + CODE_LIFETIME_MS).toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (upsertError) throw new Error(upsertError.message);
 
     if (gmailConfigured) {
       try {
         await sendEmailOtp(email, code);
       } catch (deliveryError) {
-        await challengeRef.delete().catch(() => undefined);
+        await admin.from("email_verification_challenges").delete().eq("user_id", user.id);
         throw deliveryError;
       }
       return NextResponse.json({
         delivery: "email",
-        maskedEmail: email.replace(
-          /^(.{1,2}).*(@.*)$/,
-          (_match, start, domain) => `${start}***${domain}`,
-        ),
+        maskedEmail: email.replace(/^(.{1,2}).*(@.*)$/, (_match, start, domain) => `${start}***${domain}`),
       });
     }
 
-    return NextResponse.json({
-      delivery: "preview",
-      demoCode: code,
-      maskedEmail: email,
-    });
+    return NextResponse.json({ delivery: "preview", demoCode: code, maskedEmail: email });
   } catch (error) {
     if (error instanceof RequestSecurityError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("Email OTP request failed", error);
-    return NextResponse.json(
-      { error: "The verification code could not be sent." },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "The verification code could not be sent." }, { status: 500 });
   }
 }

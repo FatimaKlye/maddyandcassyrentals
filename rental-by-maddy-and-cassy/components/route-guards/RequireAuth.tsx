@@ -17,12 +17,12 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
       router.replace(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
       return;
     }
-    if (!user.emailVerified) {
+    if (!user.email_confirmed_at) {
       router.replace(`/verify-email?redirect=${encodeURIComponent(pathname)}`);
     }
   }, [loading, user, router, pathname]);
 
-  if (loading || !user || !user.emailVerified) {
+  if (loading || !user || !user.email_confirmed_at) {
     return (
       <div className={styles.loading}>
         <Spinner size={28} label="Checking your session" />

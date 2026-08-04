@@ -1,33 +1,24 @@
-import type { Timestamp } from "firebase/firestore";
-
 export type NotificationType =
-  | "booking_submitted"
-  | "under_review"
-  | "correction_required"
-  | "booking_approved"
+  | "booking_status_changed"
   | "booking_confirmed"
-  | "agreement_ready"
-  | "schedule_updated"
-  | "rental_active"
-  | "rental_completed"
   | "booking_cancelled"
-  | "booking_rejected"
+  | "agreement_ready"
+  | "requirements_reviewed"
   | "payment_pending"
   | "payment_paid"
-  | "requirements_reviewed"
-  // Legacy value kept for backward compatibility with any existing documents.
-  | "status_changed"
   | "document_ready";
 
+/** public.notifications */
 export interface UserNotification {
   id: string;
-  recipientId: string;
+  userId: string;
   bookingId?: string;
-  type: NotificationType;
+  type: NotificationType | string;
   title: string;
   message: string;
   actionUrl?: string;
   isRead: boolean;
-  createdAt: Timestamp;
-  readAt?: Timestamp;
+  createdAt: string;
+  readAt?: string;
+  expiresAt?: string;
 }

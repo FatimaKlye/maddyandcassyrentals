@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/src/lib/supabase/client";
 import { useToast } from "@/components/ui/ToastProvider";
 import Spinner from "@/components/ui/Spinner";
 import {
@@ -12,10 +12,7 @@ import {
   uploadCatalogImage,
   type CatalogEditorInput,
 } from "@/src/services/productService";
-import {
-  getAdminCatalog,
-  type AdminPriceHistoryEntry,
-} from "@/src/services/adminReadService";
+import { getAdminCatalog, type AdminPriceHistoryEntry } from "@/src/services/operationsService";
 import type { Product } from "@/types/product";
 import styles from "./catalog.module.css";
 
@@ -23,16 +20,17 @@ const blankForm: CatalogEditorInput = {
   name: "",
   brand: "",
   category: "Phones",
+  shortDescription: "",
   description: "",
-  pricePerDay: 0,
-  image: "/images/maddy-cassy-rentals-icon.png",
-  included: [],
+  dailyRate: 0,
+  refundableDeposit: 0,
+  specifications: {},
   totalUnits: 1,
-  isActive: true,
+  isFeatured: false,
+  status: "active",
 };
 
 export default function AdminCatalogManager() {
-  const { user } = useAuth();
   const { showToast } = useToast();
   const [products, setProducts] = useState<Product[] | null>(null);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
@@ -44,10 +42,9 @@ export default function AdminCatalogManager() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!user) return;
     setError(null);
     try {
-      const data = await getAdminCatalog(await user.getIdToken());
+      const data = await getAdminCatalog();
       setProducts(data.products);
       setPriceHistory(data.priceHistory);
       setError(null);
@@ -58,7 +55,7 @@ export default function AdminCatalogManager() {
           : "The catalog could not be loaded. Please refresh and try again.",
       );
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -70,16 +67,18 @@ export default function AdminCatalogManager() {
       setEditing(product);
       setForm({
         name: product.name,
-        brand: product.brand,
+        brand: product.brand ?? "",
         category: product.category,
-        description: product.description,
-        pricePerDay: product.pricePerDay,
-        image: product.image,
-        included: product.included ?? [],
+        shortDescription: product.shortDescription ?? "",
+        description: product.description ?? "",
+        dailyRate: product.dailyRate,
+        refundableDeposit: product.refundableDeposit,
+        specifications: product.specifications,
         totalUnits: product.totalUnits ?? 0,
-        isActive: product.isActive,
+        isFeatured: product.isFeatured,
+        status: product.status,
       });
-      setIncludedText((product.included ?? []).join("\n"));
+      setIncludedText(product.included.join("\n"));
     } else {
       setEditing("new");
       setForm(blankForm);
@@ -89,48 +88,53 @@ export default function AdminCatalogManager() {
   }
 
   async function save() {
-    if (!user || !editing) return;
+    if (!editing) return;
     setSaving(true);
     try {
-      const idToken = await user.getIdToken();
-      const editorInput = {
+      const supabase = createClient();
+      const editorInput: CatalogEditorInput = {
         ...form,
-        included: includedText
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        specifications: {
+          ...form.specifications,
+          included: includedText
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .join(", "),
+        },
       };
-      if (imageFile) {
-        editorInput.image = await uploadCatalogImage(
-          editing === "new" ? `draft-${user.uid}` : editing.id,
-          imageFile,
-        );
-      }
       if (editing === "new") {
-        await createCatalogProductAsAdmin(editorInput, idToken);
+        await createCatalogProductAsAdmin(editorInput);
+        await load();
       } else {
-        await updateCatalogProductAsAdmin(editing.id, editorInput, idToken);
+        await updateCatalogProductAsAdmin(editing.id, editorInput);
+        if (imageFile) {
+          await uploadCatalogImage(supabase, editing.id, imageFile);
+        }
+        await load();
       }
-      await load();
       setEditing(null);
       showToast("Catalog and inventory updated.", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "The product could not be saved.", "error");
+    } catch (saveError) {
+      showToast(saveError instanceof Error ? saveError.message : "The product could not be saved.", "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function deactivate(product: Product) {
-    if (!user || !window.confirm(`Deactivate ${product.name}? Existing booking records will remain.`)) {
+    if (!window.confirm(`Deactivate ${product.name}? Existing booking records will remain.`)) {
       return;
     }
     try {
-      await deactivateCatalogProductAsAdmin(product.id, await user.getIdToken());
+      await deactivateCatalogProductAsAdmin(product.id);
       await load();
       showToast("Product deactivated.", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "The product could not be deactivated.", "error");
+    } catch (deactivateError) {
+      showToast(
+        deactivateError instanceof Error ? deactivateError.message : "The product could not be deactivated.",
+        "error",
+      );
     }
   }
 
@@ -161,7 +165,7 @@ export default function AdminCatalogManager() {
           {products.map((product) => (
             <article key={product.id} className={styles.card}>
               <div className={styles.imageWrap}>
-                <Image src={product.image} alt="" fill sizes="240px" className={styles.image} />
+                <Image src={product.image || "/images/maddy-cassy-rentals-icon.png"} alt="" fill sizes="240px" className={styles.image} />
               </div>
               <div className={styles.cardBody}>
                 <div className={styles.cardTop}>
@@ -229,14 +233,19 @@ export default function AdminCatalogManager() {
             <div className={styles.formGrid}>
               <label><span>Product name</span><input value={form.name} onChange={(e) => setForm({...form, name:e.target.value})} /></label>
               <label><span>Brand</span><input value={form.brand} onChange={(e) => setForm({...form, brand:e.target.value})} /></label>
-              <label><span>Category</span><select value={form.category} onChange={(e) => setForm({...form, category:e.target.value as "Phones" | "Cameras"})}><option>Phones</option><option>Cameras</option></select></label>
-              <label><span>Daily price (PHP)</span><input type="number" min="1" value={form.pricePerDay} onChange={(e) => setForm({...form, pricePerDay:Number(e.target.value)})} /></label>
+              <label><span>Category</span><select value={form.category} onChange={(e) => setForm({...form, category:e.target.value})}><option>Phones</option><option>Cameras</option></select></label>
+              <label><span>Daily price (PHP)</span><input type="number" min="1" value={form.dailyRate} onChange={(e) => setForm({...form, dailyRate:Number(e.target.value)})} /></label>
+              <label><span>Refundable deposit (PHP)</span><input type="number" min="0" value={form.refundableDeposit} onChange={(e) => setForm({...form, refundableDeposit:Number(e.target.value)})} /></label>
               <label><span>Physical units</span><input type="number" min="0" value={form.totalUnits} onChange={(e) => setForm({...form, totalUnits:Number(e.target.value)})} /></label>
-              <label><span>Catalog image</span><input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} /></label>
+              <label><span>Catalog image</span><input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} disabled={editing === "new"} /></label>
+              <label className={styles.wide}><span>Short description</span><input value={form.shortDescription ?? ""} onChange={(e) => setForm({...form, shortDescription:e.target.value})} /></label>
               <label className={styles.wide}><span>Description</span><textarea rows={4} value={form.description} onChange={(e) => setForm({...form, description:e.target.value})} /></label>
               <label className={styles.wide}><span>Included accessories (one per line)</span><textarea rows={4} value={includedText} onChange={(e) => setIncludedText(e.target.value)} /></label>
-              <label className={styles.checkbox}><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({...form, isActive:e.target.checked})} /><span>Visible in public catalog</span></label>
+              <label className={styles.checkbox}><input type="checkbox" checked={form.status === "active"} onChange={(e) => setForm({...form, status: e.target.checked ? "active" : "inactive"})} /><span>Visible in public catalog</span></label>
             </div>
+            {editing === "new" ? (
+              <p className={styles.wide}>Upload the catalog image after creating the product.</p>
+            ) : null}
             <div className={styles.editorActions}>
               <button type="button" onClick={() => setEditing(null)} disabled={saving}>Cancel</button>
               <button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Product"}</button>

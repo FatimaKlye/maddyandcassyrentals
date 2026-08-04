@@ -28,7 +28,7 @@ const sections: GuideSection[] = [
     number: "04",
     title: "Storage & Security",
     paragraphs: [
-      "Account data is stored through Firebase services. Government IDs and verification files are kept in private storage paths protected by authenticated access rules. Reasonable administrative and technical safeguards are used, but no online system can guarantee absolute security.",
+      "Account data is stored through Supabase services. Government IDs and verification files are kept in private storage paths protected by authenticated access rules. Reasonable administrative and technical safeguards are used, but no online system can guarantee absolute security.",
     ],
   },
   {

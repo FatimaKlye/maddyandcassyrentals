@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/src/lib/supabase/client";
 import { getBookingsForUser } from "@/src/services/bookingService";
 import { getBookingPayments } from "@/src/services/paymentService";
 import type { Booking } from "@/src/types/booking";
@@ -30,12 +31,13 @@ export default function PaymentHistoryPage() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    getBookingsForUser(user.uid)
+    const supabase = createClient();
+    getBookingsForUser(supabase, user.id)
       .then(async (bookings) => {
         const payments = await Promise.all(
           bookings.map(async (booking) => ({
             booking,
-            payments: await getBookingPayments(booking.id),
+            payments: await getBookingPayments(supabase, booking.id),
           })),
         );
         if (active) {
@@ -57,9 +59,7 @@ export default function PaymentHistoryPage() {
   const orderedRows = useMemo(
     () =>
       [...(rows ?? [])].sort(
-        (left, right) =>
-          (right.payment.createdAt?.toMillis?.() ?? 0) -
-          (left.payment.createdAt?.toMillis?.() ?? 0),
+        (left, right) => new Date(right.payment.createdAt).getTime() - new Date(left.payment.createdAt).getTime(),
       ),
     [rows],
   );
@@ -87,25 +87,23 @@ export default function PaymentHistoryPage() {
               <div>
                 <Link href={`/account/bookings/${booking.id}`}>{booking.bookingRef}</Link>
                 <p>{booking.productSnapshot.name}</p>
-                <small>
-                  {payment.createdAt?.toDate?.().toLocaleString("en-PH") ?? "Date unavailable"}
-                </small>
+                <small>{new Date(payment.createdAt).toLocaleString("en-PH")}</small>
               </div>
               <div className={styles.payment}>
                 <strong>{money(payment.amount)}</strong>
                 <small>
-                  {payment.isDemo
+                  {(payment.providerMetadata as { demo?: boolean } | undefined)?.demo
                     ? "Demo checkout preview — no charge"
-                    : payment.paymentOption === "deposit_50"
-                    ? "50% reservation payment"
-                    : payment.paymentOption === "balance"
-                      ? "Remaining balance"
-                      : "Full payment"}
+                    : payment.paymentKind === "deposit_50"
+                      ? "50% reservation payment"
+                      : payment.paymentKind === "balance"
+                        ? "Remaining balance"
+                        : "Full payment"}
                 </small>
                 <span className={`${styles.status} ${styles[payment.status]}`}>
                   {payment.status}
                 </span>
-                <small>{payment.referenceNumber}</small>
+                <small>{payment.externalReference}</small>
               </div>
             </article>
           ))}

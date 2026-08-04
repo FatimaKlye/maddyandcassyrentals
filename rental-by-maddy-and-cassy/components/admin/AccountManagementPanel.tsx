@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/ToastProvider";
 import { updateAccountAsAdmin } from "@/src/services/userService";
-import type { UserProfile } from "@/src/types/firebase";
+import type { UserProfile } from "@/src/types/database";
 import styles from "./AccountManagementPanel.module.css";
 
 export default function AccountManagementPanel({
@@ -14,7 +13,6 @@ export default function AccountManagementPanel({
   account: UserProfile;
   isAdministrator: boolean;
 }) {
-  const { user } = useAuth();
   const { showToast } = useToast();
   const [form, setForm] = useState({
     displayName: account.displayName ?? "",
@@ -26,10 +24,9 @@ export default function AccountManagementPanel({
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!user) return;
     setSaving(true);
     try {
-      await updateAccountAsAdmin(account.uid, await user.getIdToken(), form);
+      await updateAccountAsAdmin(account.id, form);
       showToast("Account access and profile updated.", "success");
       window.location.reload();
     } catch (error) {

@@ -1,6 +1,6 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import nodemailer from "nodemailer";
-import { RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { RequestSecurityError } from "@/src/lib/server/requestSecurityError";
 
 const OTP_LENGTH = 6;
 
@@ -8,7 +8,7 @@ function otpSecret(): string {
   const configured = process.env.EMAIL_OTP_HMAC_SECRET?.trim();
   if (configured) return configured;
   if (process.env.NODE_ENV !== "production") {
-    return `development-only:${process.env.FIREBASE_PROJECT_ID || "maddy-cassy"}`;
+    return "development-only:maddy-cassy";
   }
   throw new RequestSecurityError(
     "Email verification is not configured yet.",

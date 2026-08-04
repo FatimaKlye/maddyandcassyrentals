@@ -4,7 +4,6 @@ import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { getAppCheckHeaders } from "@/src/lib/firebase/appCheckClient";
 import styles from "./paymongoDemo.module.css";
 
 const METHODS = [
@@ -57,11 +56,8 @@ function DemoCheckout() {
     try {
       const response = await fetch("/api/payments/demo/complete", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${await user.getIdToken()}`,
-          "Content-Type": "application/json",
-          ...(await getAppCheckHeaders()),
-        },
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, paymentMethod }),
       });
       const body = (await response.json().catch(() => null)) as

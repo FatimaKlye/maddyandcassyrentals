@@ -11,8 +11,8 @@ upload. On an Ubuntu GoDaddy VPS:
 4. Adapt `ops/nginx-godaddy.conf` to the real domain and enable it in Nginx.
 5. Issue a TLS certificate with Certbot and point the GoDaddy DNS A record to
    the VPS.
-6. Register `https://your-domain/api/paymongo/webhook` in PayMongo and subscribe
-   to `checkout_session.payment.paid`.
+6. Register `https://your-domain/api/paymongo/webhook` in the PayMongo
+   dashboard and subscribe to `checkout_session.payment.paid`.
 
 Use Cloudflare proxying in front of the VPS for managed WAF, bot protection,
 DDoS mitigation, and CDN caching. Never cache `/api/*`, `/account/*`, or
@@ -20,31 +20,47 @@ DDoS mitigation, and CDN caching. Never cache `/api/*`, `/account/*`, or
 
 ## Required secrets
 
-Start from `.env.example`. Keep the PayMongo key, webhook secret, Firebase
-service account, and backup bucket in the VPS secret environment. Switch from
-`sk_test_` to `sk_live_` only after test-mode webhook reconciliation passes.
+Start from `.env.example`. Keep the Supabase service-role key, PayMongo
+secret key, PayMongo webhook secret, and Web Push VAPID private key in the
+VPS secret environment only — never commit them or expose them to the
+browser. Switch `PAYMONGO_SECRET_KEY` from `sk_test_` to `sk_live_` only
+after test-mode webhook reconciliation passes.
 
-## Firebase production setup
+## Supabase production setup
 
-- Enable Firebase App Check, configure the reCAPTCHA v3 site key, then set
-  `ENFORCE_FIREBASE_APP_CHECK=true`.
-- Generate a Web Push certificate and configure
-  `NEXT_PUBLIC_FIREBASE_VAPID_KEY`.
-- Deploy rules with `npm run firebase:deploy-rules`.
-- Enable the FCM Registration API and Cloud Messaging API.
+- Project: `Rental by Maddy & Cassy` (ref `nyyjzgpaysuaaqjyibmi`).
+- Schema is managed through `maddy_cassy_supabase_schema.sql` plus the
+  migrations under `supabase/migrations/`. Apply new migrations with the
+  Supabase CLI or dashboard SQL editor in the order they were created.
+- Row Level Security is enabled on every exposed table; do not disable it.
+- Rotate `SUPABASE_SECRET_KEY` (service role) from Project Settings > API if
+  it is ever exposed, and update the VPS secret environment immediately.
+- Run the Supabase security and performance advisors after every schema
+  change (Dashboard > Advisors, or the `get_advisors` MCP tool).
+
+## Web Push (VAPID)
+
+- Generate a production key pair once with
+  `node -e "console.log(require('web-push').generateVAPIDKeys())"` and store
+  the private key only in the server environment.
+- `public/push-sw.js` is the service worker; no separate messaging config is
+  required (this replaces the old Firebase Cloud Messaging setup).
 
 ## Backups
 
-Create a private, versioned Cloud Storage bucket in a different region or
-project. Schedule `gcloud firestore export` daily with Cloud Scheduler/Cloud
-Run, or invoke `npm run firebase:backup` with `FIREBASE_BACKUP_BUCKET` set.
-Configure retention and test a restore quarterly.
+Use Supabase's built-in Point-in-Time Recovery (paid plans) or scheduled
+`pg_dump` exports of the project database, stored in a private, versioned
+bucket in a different region/account. Configure retention and test a restore
+quarterly. Storage buckets (`booking-documents`, `agreements`, `receipts`,
+etc.) should be included in the same backup schedule.
 
 ## Monitoring and alerts
 
 - Monitor `GET /api/health` every minute from an external HTTPS monitor.
-- Alert on HTTP 5xx rates, webhook `failed` records, PayMongo delivery failures,
-  and Firebase quota/permission errors.
-- Forward structured logs without request bodies, ID images, tokens, or secrets.
+- Alert on HTTP 5xx rates, `paymongo_webhook_events.processing_status =
+  'failed'` rows, PayMongo delivery failures, and Supabase quota/permission
+  errors (Dashboard > Logs).
+- Forward structured logs without request bodies, ID images, tokens, or
+  secrets.
 - Configure disk, memory, certificate-expiry, and PM2 restart alerts.
 - Review `/admin/payments` and `/admin/audit` during daily reconciliation.

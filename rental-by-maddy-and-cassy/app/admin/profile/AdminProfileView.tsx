@@ -7,14 +7,15 @@ import type { Admin } from "@/src/types/admin";
 import Spinner from "@/components/ui/Spinner";
 import styles from "./profile.module.css";
 
-function formatDate(value: Admin["createdAt"] | Admin["updatedAt"]): string {
-  return value?.toDate?.().toLocaleString("en-PH", {
+function formatDate(value: string | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("en-PH", {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }) ?? "—";
+  });
 }
 
 export default function AdminProfileView() {
@@ -27,7 +28,7 @@ export default function AdminProfileView() {
     if (!user) return;
     let active = true;
 
-    getAdminProfile(user.uid)
+    getAdminProfile(user.id)
       .then((record) => {
         if (!active) return;
         setAdmin(record);
@@ -56,16 +57,15 @@ export default function AdminProfileView() {
     return <div className={styles.error}>{error ?? "Administrator record not found."}</div>;
   }
 
-  const displayName =
-    admin.displayName ?? profile?.displayName ?? user?.displayName ?? "Administrator";
-  const email = admin.email ?? profile?.email ?? user?.email ?? "Not available";
+  const displayName = profile?.displayName ?? (user?.user_metadata?.display_name as string | undefined) ?? "Administrator";
+  const email = profile?.email ?? user?.email ?? "Not available";
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <p className={styles.eyebrow}>ADMINISTRATOR ACCOUNT</p>
         <h1>Admin Profile</h1>
-        <p>Your verified administrator identity and Firebase authorization record.</p>
+        <p>Your verified administrator identity and Supabase authorization record.</p>
       </header>
 
       <section className={styles.card} aria-labelledby="admin-name">
@@ -77,8 +77,8 @@ export default function AdminProfileView() {
             <h2 id="admin-name">{displayName}</h2>
             <p>{email}</p>
           </div>
-          <span className={`${styles.status} ${admin.active ? styles.active : styles.inactive}`}>
-            {admin.active ? "Active Administrator" : "Inactive Administrator"}
+          <span className={`${styles.status} ${admin.isActive ? styles.active : styles.inactive}`}>
+            {admin.isActive ? "Active Administrator" : "Inactive Administrator"}
           </span>
         </div>
 
@@ -88,8 +88,8 @@ export default function AdminProfileView() {
             <dd>Administrator</dd>
           </div>
           <div>
-            <dt>Firebase UID</dt>
-            <dd className={styles.uid}>{admin.id}</dd>
+            <dt>User ID</dt>
+            <dd className={styles.uid}>{admin.userId}</dd>
           </div>
           <div>
             <dt>Admin Access Created</dt>
@@ -102,8 +102,8 @@ export default function AdminProfileView() {
         </dl>
 
         <p className={styles.note}>
-          Administrator access is controlled by the protected <code>admins/{admin.id}</code>{" "}
-          Firestore record and cannot be changed from the customer account interface.
+          Administrator access is controlled by the protected <code>public.admins</code> table
+          and cannot be changed from the customer account interface.
         </p>
       </section>
     </div>

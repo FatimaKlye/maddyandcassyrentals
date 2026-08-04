@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
-import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import { z } from "zod";
-import { getAdminDb, getAdminStorage } from "@/src/lib/firebase/admin";
-import {
-  enforceAppCheck,
-  enforceRateLimit,
-  requireUser,
-  RequestSecurityError,
-} from "@/src/lib/server/requestSecurity";
+import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { createAdminClient } from "@/src/lib/supabase/admin";
 import { RENTAL_TERMS_VERSION } from "@/src/lib/rentalAgreement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE = 8 * 1024 * 1024;
 const metadataSchema = z.object({
   submissionId: z.string().uuid(),
   files: z.object({
@@ -47,255 +40,166 @@ function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
-function bookingDate(value: unknown, field: string): FirebaseFirestore.Timestamp {
-  if (
-    value &&
-    typeof value === "object" &&
-    "toDate" in value &&
-    typeof value.toDate === "function"
-  ) {
-    return value as FirebaseFirestore.Timestamp;
-  }
-  throw new RequestSecurityError(`The booking ${field} is invalid.`, 409);
-}
-
-function expectedPathPrefix(
-  userId: string,
-  bookingId: string,
-  folder: "requirements" | "signatures",
-  fileName: string,
-  submissionId: string,
-): string {
-  return (
-    `private/users/${userId}/bookings/${bookingId}/${folder}/` +
-    `${fileName}-${submissionId}.`
-  );
+function expectedPrefix(userId: string, bookingId: string, fileName: string, submissionId: string): string {
+  return `${userId}/${bookingId}/${fileName}-${submissionId}.`;
 }
 
 async function verifyUploadedFile(
+  admin: ReturnType<typeof createAdminClient>,
+  bucket: "booking-documents" | "customer-documents",
   path: string,
-  expectedPrefix: string,
-  signature = false,
+  expectedPathPrefix: string,
 ): Promise<void> {
-  if (!path.startsWith(expectedPrefix) || path.slice(expectedPrefix.length).includes("/")) {
+  if (!path.startsWith(expectedPathPrefix) || path.slice(expectedPathPrefix.length).includes("/")) {
     throw new RequestSecurityError("An uploaded document reference is invalid.", 400);
   }
-  const [metadata] = await getAdminStorage().bucket().file(path).getMetadata();
-  const size = Number(metadata.size || 0);
-  const contentType = String(metadata.contentType || "");
-  if (!size || size > MAX_FILE_SIZE) {
-    throw new RequestSecurityError("An uploaded document has an invalid size.", 400);
-  }
-  const validType = signature
-    ? ["image/jpeg", "image/png", "image/webp"].includes(contentType)
-    : ["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(
-        contentType,
-      );
-  if (!validType) {
-    throw new RequestSecurityError("An uploaded document has an invalid type.", 400);
+  const folder = path.slice(0, path.lastIndexOf("/"));
+  const fileName = path.slice(path.lastIndexOf("/") + 1);
+  const { data } = await admin.storage.from(bucket).list(folder, { search: fileName });
+  if (!data?.some((entry) => entry.name === fileName)) {
+    throw new RequestSecurityError("An uploaded document could not be verified.", 400);
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ bookingId: string }> },
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
   try {
     enforceRateLimit(request, "booking-document-submit", 8, 10 * 60_000);
-    await enforceAppCheck(request);
-    const user = await requireUser(request);
+    const { user } = await requireUser();
     const { bookingId } = await params;
     const input = metadataSchema.parse(await request.json());
+    const admin = createAdminClient();
 
     await Promise.all([
-      verifyUploadedFile(
-        input.files.idOne,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "id-one",
-          input.submissionId,
-        ),
-      ),
-      verifyUploadedFile(
-        input.files.idTwo,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "id-two",
-          input.submissionId,
-        ),
-      ),
-      verifyUploadedFile(
-        input.files.selfie,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "selfie",
-          input.submissionId,
-        ),
-      ),
-      verifyUploadedFile(
-        input.files.emergencyId,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "requirements",
-          "emergency-contact-id",
-          input.submissionId,
-        ),
-      ),
-      verifyUploadedFile(
-        input.files.signature,
-        expectedPathPrefix(
-          user.uid,
-          bookingId,
-          "signatures",
-          "signature",
-          input.submissionId,
-        ),
-        true,
-      ),
+      verifyUploadedFile(admin, "booking-documents", input.files.idOne, expectedPrefix(user.id, bookingId, "id-one", input.submissionId)),
+      verifyUploadedFile(admin, "booking-documents", input.files.idTwo, expectedPrefix(user.id, bookingId, "id-two", input.submissionId)),
+      verifyUploadedFile(admin, "booking-documents", input.files.selfie, expectedPrefix(user.id, bookingId, "selfie", input.submissionId)),
+      verifyUploadedFile(admin, "booking-documents", input.files.emergencyId, expectedPrefix(user.id, bookingId, "emergency-contact-id", input.submissionId)),
+      verifyUploadedFile(admin, "customer-documents", input.files.signature, expectedPrefix(user.id, bookingId, "signature", input.submissionId)),
     ]);
 
-    const db = getAdminDb();
-    const bookingRef = db.collection("bookings").doc(bookingId);
-    const bookingSnapshot = await bookingRef.get();
-    if (!bookingSnapshot.exists) {
-      return errorResponse("The booking could not be found.", 404);
+    const { data: booking } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
+    if (!booking) return errorResponse("The booking could not be found.", 404);
+    if (booking.user_id !== user.id) return errorResponse("You do not have access to this booking.", 403);
+    if (booking.requirements_status !== "not_submitted") {
+      return errorResponse("Verification documents have already been submitted.", 409);
     }
-    const booking = bookingSnapshot.data() as DocumentData;
-    if (booking.userId !== user.uid) {
-      return errorResponse("You do not have access to this booking.", 403);
-    }
-    if (!["paid", "partially_paid"].includes(String(booking.paymentStatus))) {
-      return errorResponse(
-        "Complete the reservation payment before submitting documents.",
-        409,
-      );
-    }
-    if (String(booking.requirementsStatus) !== "not_submitted") {
-      return errorResponse(
-        "Verification documents have already been submitted.",
-        409,
-      );
+    const { data: verifiedPayment } = await admin
+      .from("payment_records")
+      .select("id")
+      .eq("booking_id", bookingId)
+      .in("status", ["paid", "verified"])
+      .limit(1)
+      .maybeSingle();
+    if (!verifiedPayment) {
+      return errorResponse("Complete the reservation payment before submitting documents.", 409);
     }
 
-    const now = Timestamp.now();
-    await db.runTransaction(async (transaction) => {
-      const currentSnapshot = await transaction.get(bookingRef);
-      const current = currentSnapshot.data();
-      if (!currentSnapshot.exists || !current) {
-        throw new RequestSecurityError("The booking could not be found.", 404);
-      }
-      if (current.userId !== user.uid) {
-        throw new RequestSecurityError("You do not have access to this booking.", 403);
-      }
-      if (!["paid", "partially_paid"].includes(String(current.paymentStatus))) {
-        throw new RequestSecurityError(
-          "Complete the reservation payment before submitting documents.",
-          409,
-        );
-      }
-      if (String(current.requirementsStatus) !== "not_submitted") {
-        throw new RequestSecurityError(
-          "Verification documents have already been submitted.",
-          409,
-        );
-      }
+    const now = new Date().toISOString();
+    const documentRows = [
+      { type: "government_id" as const, path: input.files.idOne, name: "id-one" },
+      { type: "secondary_id" as const, path: input.files.idTwo, name: "id-two" },
+      { type: "selfie_with_id" as const, path: input.files.selfie, name: "selfie" },
+      { type: "authorization_letter" as const, path: input.files.emergencyId, name: "emergency-contact-id" },
+    ];
 
-      transaction.set(bookingRef.collection("requirements").doc("main"), {
-        bookingId,
-        userId: user.uid,
-        idOneStoragePath: input.files.idOne,
-        idTwoStoragePath: input.files.idTwo,
-        selfieWithIdStoragePath: input.files.selfie,
-        facebookLink: input.facebookLink,
-        instagramLink: input.instagramLink,
-        emergencyContact: {
-          ...input.emergencyContact,
-          idStoragePath: input.files.emergencyId,
-        },
-        status: "submitted",
-        submittedAt: now,
-        updatedAt: now,
-      });
+    const { error: docsError } = await admin.from("booking_documents").insert(
+      documentRows.map((doc) => ({
+        booking_id: bookingId,
+        user_id: user.id,
+        document_type: doc.type,
+        storage_bucket: "booking-documents",
+        storage_path: doc.path,
+        original_filename: doc.name,
+        review_status: "pending" as const,
+      })),
+    );
+    if (docsError) throw new Error(docsError.message);
 
-      const productSnapshot = current.productSnapshot ?? {};
-      transaction.set(bookingRef.collection("agreement").doc("main"), {
-        bookingId,
-        userId: user.uid,
-        bookingRef: String(current.bookingRef || bookingId),
-        generatedTermsVersion: RENTAL_TERMS_VERSION,
-        agreementSnapshot: {
-          customerName: String(
-            current.customerSnapshot?.fullName || input.typedFullName,
-          ),
-          productName: String(productSnapshot.name || "Rental item"),
-          startDate: bookingDate(current.startDate, "start date"),
-          endDate: bookingDate(current.endDate, "end date"),
-          dayCount: Number(current.dayCount || 1),
-          fulfillmentMethod: String(current.fulfillmentMethod || "pickup"),
-          customerLocation: String(current.customerLocation || ""),
-          pricePerDay: Number(productSnapshot.pricePerDay || 0),
-          currency: String(productSnapshot.currency || "PHP"),
-          includedAccessories: Array.isArray(productSnapshot.included)
-            ? productSnapshot.included
-            : [],
-        },
-        acknowledgements: input.acknowledgements,
-        signature: {
-          method: input.signatureMethod,
-          storagePath: input.files.signature,
-          typedFullName: input.typedFullName,
-          signedAt: now,
-        },
-        status: "submitted_for_review",
-        createdAt: now,
-        updatedAt: now,
-      });
+    const productSnapshot = booking.product_snapshot as { name?: string; pricePerDay?: number; currency?: string; included?: string[] };
+    const agreementSnapshot = {
+      customerName: (booking.customer_snapshot as { fullName?: string })?.fullName || input.typedFullName,
+      productName: productSnapshot?.name || "Rental item",
+      startDate: booking.rental_start_date,
+      endDate: booking.rental_end_date,
+      dayCount: booking.rental_days ?? 1,
+      fulfillmentMethod: booking.fulfillment_method,
+      customerLocation: booking.location || "",
+      pricePerDay: booking.daily_rate,
+      currency: "PHP",
+      includedAccessories: productSnapshot?.included ?? [],
+    };
 
-      transaction.update(bookingRef, {
-        requirementsStatus: "submitted",
-        agreementStatus: "submitted_for_review",
-        updatedAt: now,
-      });
-      transaction.set(bookingRef.collection("statusHistory").doc(), {
-        status: String(current.status || "submitted"),
-        note: "Customer submitted verification documents and signed the rental agreement.",
-        actorType: "customer",
-        actorId: user.uid,
-        createdAt: now,
-      });
-      transaction.set(db.collection("auditLogs").doc(), {
-        action: "booking.documents_submitted",
-        actorType: "customer",
-        actorId: user.uid,
-        bookingId,
-        targetType: "booking",
-        targetId: bookingId,
-        createdAt: now,
-      });
+    const { data: agreement, error: agreementError } = await admin
+      .from("booking_agreements")
+      .insert({
+        booking_id: bookingId,
+        status: "awaiting_business_signature",
+        agreement_version: RENTAL_TERMS_VERSION,
+        agreement_snapshot: agreementSnapshot,
+        version_number: 1,
+      })
+      .select("id")
+      .single();
+    if (agreementError || !agreement) throw new Error(agreementError?.message ?? "Agreement could not be created.");
+
+    await admin.from("agreement_acknowledgements").insert(
+      (Object.keys(input.acknowledgements) as Array<keyof typeof input.acknowledgements>).map((key) => ({
+        agreement_id: agreement.id,
+        user_id: user.id,
+        acknowledgement_key: key,
+        acknowledged: true,
+        acknowledged_at: now,
+      })),
+    );
+
+    await admin.from("agreement_signatures").insert({
+      agreement_id: agreement.id,
+      signer_user_id: user.id,
+      signer_role: "customer",
+      signer_name: input.typedFullName,
+      signature_path: input.files.signature,
+      signature_data: { method: input.signatureMethod },
+      signed_at: now,
+    });
+
+    await admin.from("booking_emergency_contacts").upsert(
+      {
+        booking_id: bookingId,
+        full_name: input.emergencyContact.fullName,
+        relationship: input.emergencyContact.relationship,
+        phone_number: input.emergencyContact.phone,
+        address: "",
+      },
+      { onConflict: "booking_id" },
+    );
+
+    await admin
+      .from("bookings")
+      .update({ requirements_status: "pending_review", agreement_status: "awaiting_business_signature" })
+      .eq("id", bookingId);
+
+    await admin.from("booking_status_history").insert({
+      booking_id: bookingId,
+      from_status: booking.status,
+      to_status: booking.status,
+      note: "Customer submitted verification documents and signed the rental agreement.",
+      changed_by: user.id,
+    });
+
+    await admin.rpc("log_audit_event", {
+      p_action: "booking.documents_submitted",
+      p_entity_type: "booking",
+      p_entity_id: bookingId,
+      p_booking_id: bookingId,
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof RequestSecurityError) {
-      return errorResponse(error.message, error.status);
-    }
+    if (error instanceof RequestSecurityError) return errorResponse(error.message, error.status);
     if (error instanceof z.ZodError || error instanceof SyntaxError) {
-      return errorResponse(
-        "Check the verification details and agreement, then try again.",
-        400,
-      );
+      return errorResponse("Check the verification details and agreement, then try again.", 400);
     }
     console.error("Booking document finalization failed", error);
-    return errorResponse(
-      "The documents could not be finalized. Please try again.",
-      500,
-    );
+    return errorResponse("The documents could not be finalized. Please try again.", 500);
   }
 }

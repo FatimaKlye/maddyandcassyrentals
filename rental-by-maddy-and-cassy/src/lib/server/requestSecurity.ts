@@ -1,7 +1,9 @@
-import { getAppCheck } from "firebase-admin/app-check";
-import type { DecodedIdToken } from "firebase-admin/auth";
-import type { Firestore } from "firebase-admin/firestore";
-import { getAdminApp, getAdminAuth } from "@/src/lib/firebase/admin";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { createClient } from "@/src/lib/supabase/server";
+import type { Database } from "@/src/lib/supabase/database.types";
+import { RequestSecurityError } from "@/src/lib/server/requestSecurityError";
+
+export { RequestSecurityError };
 
 type RateBucket = { count: number; resetAt: number };
 
@@ -12,15 +14,6 @@ const globalBuckets = globalThis as typeof globalThis & {
 const buckets =
   globalBuckets.__maddyCassyRateBuckets ??
   (globalBuckets.__maddyCassyRateBuckets = new Map<string, RateBucket>());
-
-export class RequestSecurityError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-  }
-}
 
 export function enforceRateLimit(
   request: Request,
@@ -49,52 +42,45 @@ export function enforceRateLimit(
   existing.count += 1;
 }
 
-export function getBearerToken(request: Request): string {
-  const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) {
-    throw new RequestSecurityError("Authentication is required.", 401);
-  }
-
-  const token = authorization.slice("Bearer ".length).trim();
-  if (!token) {
-    throw new RequestSecurityError("Your session is invalid.", 401);
-  }
-
-  return token;
+export function getClientIp(request: Request): string {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwardedFor || request.headers.get("x-real-ip") || "unknown";
 }
 
-export async function requireUser(request: Request): Promise<DecodedIdToken> {
-  try {
-    return await getAdminAuth().verifyIdToken(getBearerToken(request));
-  } catch (error) {
-    if (error instanceof RequestSecurityError) throw error;
+export interface AuthenticatedRequestContext {
+  supabase: SupabaseClient<Database>;
+  user: User;
+}
+
+/**
+ * Resolves the caller from the Supabase session cookie (set by
+ * src/lib/supabase/middleware.ts on every request) rather than a manually
+ * forwarded bearer token — @supabase/ssr keeps the cookie fresh, so
+ * same-origin fetches from client components need no Authorization header.
+ */
+export async function requireUser(): Promise<AuthenticatedRequestContext> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
     throw new RequestSecurityError("Your session is invalid or expired.", 401);
   }
+
+  return { supabase, user };
 }
 
-export async function requireAdmin(
-  request: Request,
-  db: Firestore,
-): Promise<DecodedIdToken> {
-  const user = await requireUser(request);
-  const snapshot = await db.collection("admins").doc(user.uid).get();
-  if (!snapshot.exists || snapshot.data()?.active !== true) {
+export type AuthenticatedAdminContext = AuthenticatedRequestContext;
+
+export async function requireActiveAdmin(): Promise<AuthenticatedAdminContext> {
+  const context = await requireUser();
+  const { data, error } = await context.supabase.rpc("is_active_admin");
+
+  if (error || data !== true) {
     throw new RequestSecurityError("Active administrator access is required.", 403);
   }
-  return user;
-}
 
-export async function enforceAppCheck(request: Request): Promise<void> {
-  if (process.env.ENFORCE_FIREBASE_APP_CHECK !== "true") return;
-
-  const token = request.headers.get("x-firebase-appcheck");
-  if (!token) {
-    throw new RequestSecurityError("App verification is required.", 401);
-  }
-
-  try {
-    await getAppCheck(getAdminApp()).verifyToken(token);
-  } catch {
-    throw new RequestSecurityError("App verification failed.", 401);
-  }
+  return context;
 }

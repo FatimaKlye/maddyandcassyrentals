@@ -20,18 +20,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Firebase Admin access
+## Supabase access
 
-Server-side operations such as deleting a customer account require Firebase
-Admin credentials. Configure one of these in the local or hosting environment:
+Server-side operations such as deleting a customer account, generating
+private PDFs, and processing the PayMongo webhook use the Supabase
+service-role key. Set `SUPABASE_SECRET_KEY` in the local or hosting
+environment (see `.env.local.example`).
 
-- `FIREBASE_SERVICE_ACCOUNT_JSON` containing the service-account JSON as a
-  single environment-variable value.
-- `GOOGLE_APPLICATION_CREDENTIALS` containing the absolute path to a local
-  service-account JSON file.
-
-Never commit a service-account key. The existing `.gitignore` excludes common
-Firebase service-account filenames.
+Never commit this key or expose it to the browser — only
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are
+safe for client code.
 
 ## Learn More
 
@@ -54,8 +52,10 @@ Configure `.env.example`, then register
 `https://your-domain/api/paymongo/webhook` in the PayMongo dashboard and
 subscribe to `checkout_session.payment.paid`.
 
-Firebase Cloud Messaging is available from the customer profile after the web
-push VAPID key and Cloud Messaging APIs are configured.
+Web Push notifications are available from the customer profile after
+`NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` and `WEB_PUSH_VAPID_PRIVATE_KEY` are
+configured (generate a pair with
+`node -e "console.log(require('web-push').generateVAPIDKeys())"`).
 
 ## Gmail signup verification
 

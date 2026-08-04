@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getAllAdmins } from "@/src/services/adminService";
 import { getAllUsers } from "@/src/services/userService";
-import type { Admin, UserProfile } from "@/src/types/firebase";
+import type { Admin, UserProfile } from "@/src/types/database";
 import Spinner from "@/components/ui/Spinner";
 import styles from "./users.module.css";
 
@@ -14,11 +14,12 @@ interface AccountsData {
 }
 
 function formatDate(value: UserProfile["createdAt"]): string {
-  return value?.toDate?.().toLocaleDateString("en-PH", {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-PH", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }) ?? "—";
+  });
 }
 
 export default function AdminUsersList() {
@@ -43,7 +44,7 @@ export default function AdminUsersList() {
   }, []);
 
   const adminIds = useMemo(
-    () => new Set((data?.admins ?? []).map((admin) => admin.id)),
+    () => new Set((data?.admins ?? []).map((admin) => admin.userId)),
     [data]
   );
 
@@ -66,7 +67,7 @@ export default function AdminUsersList() {
         <div>
           <p className={styles.eyebrow}>ACCOUNT MANAGEMENT</p>
           <h1>User Accounts</h1>
-          <p>View customer and administrator account records stored in Firebase.</p>
+          <p>View customer and administrator account records stored in Supabase.</p>
         </div>
         <span className={styles.count}>{data?.users.length ?? 0} accounts</span>
       </header>
@@ -111,9 +112,9 @@ export default function AdminUsersList() {
                 </thead>
                 <tbody>
                   {filteredUsers.map((account) => (
-                    <tr key={account.uid}>
+                    <tr key={account.id}>
                       <td>
-                        <Link href={`/admin/users/${account.uid}`} className={styles.accountLink}>
+                        <Link href={`/admin/users/${account.id}`} className={styles.accountLink}>
                           <span className={styles.avatar} aria-hidden="true">
                             {account.displayName?.charAt(0).toUpperCase() || "C"}
                           </span>
@@ -123,7 +124,7 @@ export default function AdminUsersList() {
                           </span>
                         </Link>
                       </td>
-                      <td>{adminIds.has(account.uid) ? "Administrator" : "Customer"}</td>
+                      <td>{adminIds.has(account.id) ? "Administrator" : "Customer"}</td>
                       <td>{account.email || "—"}</td>
                       <td>{account.phoneNumber || "—"}</td>
                       <td>

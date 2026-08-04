@@ -52,7 +52,7 @@ export default function ProductDetailsClient({
     rentedUnits: product.rentedUnits,
   };
 
-  const images = product.images ?? [product.image];
+  const images = product.images.length ? product.images.map((image) => image.url) : [product.image];
 
   return (
     <>

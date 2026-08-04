@@ -43,7 +43,7 @@ export default function VerifyEmailForm() {
     setRequesting(true);
     setError(null);
     try {
-      const result = await requestEmailOtp(user);
+      const result = await requestEmailOtp();
       if (result.alreadyVerified) {
         router.replace(redirectTo);
         return;
@@ -78,7 +78,7 @@ export default function VerifyEmailForm() {
       );
       return;
     }
-    if (user.emailVerified) {
+    if (user.email_confirmed_at) {
       router.replace(redirectTo);
       return;
     }
@@ -99,7 +99,7 @@ export default function VerifyEmailForm() {
     setVerifying(true);
     setError(null);
     try {
-      await verifyEmailOtp(user, code);
+      await verifyEmailOtp(code);
       router.replace(redirectTo);
       router.refresh();
     } catch (verifyError) {
@@ -120,7 +120,7 @@ export default function VerifyEmailForm() {
     );
   }
 
-  if (loading || !user || user.emailVerified) {
+  if (loading || !user || user.email_confirmed_at) {
     return (
       <div className={styles.card}>
         <div className={styles.authLoading}>

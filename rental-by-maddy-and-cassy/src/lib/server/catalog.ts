@@ -1,109 +1,89 @@
-import { Timestamp, type Firestore } from "firebase-admin/firestore";
+import "server-only";
 
-export interface CatalogInput {
-  name: string;
-  brand: string;
-  category: "Phones" | "Cameras";
-  description: string;
-  pricePerDay: number;
-  currency: "PHP";
-  image: string;
-  included: string[];
-  totalUnits: number;
-  isActive: boolean;
-}
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/src/lib/supabase/database.types";
+import type { CatalogEditorInput } from "@/src/services/productService";
 
-export function parseCatalogInput(value: unknown): CatalogInput {
+export function parseCatalogInput(value: unknown): CatalogEditorInput {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("INVALID_CATALOG_INPUT");
   }
   const input = value as Record<string, unknown>;
-  const string = (key: string, max: number) => {
-    const result = typeof input[key] === "string" ? input[key].trim() : "";
-    if (!result || result.length > max) throw new Error("INVALID_CATALOG_INPUT");
-    return result;
+  const string = (key: string, max: number, required = true) => {
+    const result = typeof input[key] === "string" ? (input[key] as string).trim() : "";
+    if (required && (!result || result.length > max)) throw new Error("INVALID_CATALOG_INPUT");
+    return result.slice(0, max);
   };
-  const pricePerDay = Number(input.pricePerDay);
+  const dailyRate = Number(input.dailyRate);
+  const refundableDeposit = Number(input.refundableDeposit ?? 0);
   const totalUnits = Number(input.totalUnits);
-  if (!Number.isFinite(pricePerDay) || pricePerDay <= 0 || pricePerDay > 1_000_000) {
+  if (!Number.isFinite(dailyRate) || dailyRate <= 0 || dailyRate > 1_000_000) {
+    throw new Error("INVALID_CATALOG_INPUT");
+  }
+  if (!Number.isFinite(refundableDeposit) || refundableDeposit < 0) {
     throw new Error("INVALID_CATALOG_INPUT");
   }
   if (!Number.isInteger(totalUnits) || totalUnits < 0 || totalUnits > 1000) {
     throw new Error("INVALID_CATALOG_INPUT");
   }
-  if (input.category !== "Phones" && input.category !== "Cameras") {
+  const status = input.status;
+  if (status !== "draft" && status !== "active" && status !== "inactive" && status !== "archived") {
     throw new Error("INVALID_CATALOG_INPUT");
   }
+  const specifications =
+    typeof input.specifications === "object" && input.specifications !== null && !Array.isArray(input.specifications)
+      ? (input.specifications as Record<string, string>)
+      : {};
+
   return {
     name: string("name", 150),
-    brand: string("brand", 100),
-    category: input.category,
-    description: string("description", 3000),
-    pricePerDay,
-    currency: "PHP",
-    image: string("image", 2000),
-    included: Array.isArray(input.included)
-      ? input.included
-          .filter((item): item is string => typeof item === "string")
-          .map((item) => item.trim())
-          .filter(Boolean)
-          .slice(0, 50)
-      : [],
+    brand: string("brand", 100, false),
+    category: string("category", 100),
+    shortDescription: string("shortDescription", 300, false),
+    description: string("description", 3000, false),
+    dailyRate,
+    refundableDeposit,
+    specifications,
     totalUnits,
-    isActive: input.isActive !== false,
+    isFeatured: input.isFeatured === true,
+    status,
   };
 }
 
+/**
+ * Adds/removes public.inventory_units rows so the physical unit count
+ * matches totalUnits — the closest Postgres equivalent of the old Firestore
+ * inventoryUnits reconciliation. Units beyond the new count are marked
+ * 'inactive' rather than deleted, to preserve any historical booking
+ * references (bookings.inventory_unit_id has an on delete restrict FK).
+ */
 export async function reconcileInventoryUnits(
-  db: Firestore,
+  admin: SupabaseClient<Database>,
   productId: string,
-  productName: string,
   totalUnits: number,
 ): Promise<void> {
-  const snapshot = await db
-    .collection("inventoryUnits")
-    .where("productId", "==", productId)
-    .get();
-  const units = snapshot.docs;
-  const batch = db.batch();
-  const now = Timestamp.now();
+  const { data: units } = await admin
+    .from("inventory_units")
+    .select("id, unit_code, status")
+    .eq("product_id", productId)
+    .order("unit_code", { ascending: true });
 
-  for (let index = units.length; index < totalUnits; index += 1) {
-    const ref = db.collection("inventoryUnits").doc();
-    batch.set(ref, {
-      id: ref.id,
-      productId,
-      name: `${productName} Unit ${index + 1}`,
-      serialNumber: "",
-      status: "available",
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    });
+  const existing = units ?? [];
+
+  if (existing.length < totalUnits) {
+    const newRows = Array.from({ length: totalUnits - existing.length }, (_, index) => ({
+      product_id: productId,
+      unit_code: `UNIT-${(existing.length + index + 1).toString().padStart(3, "0")}`,
+      status: "available" as const,
+    }));
+    await admin.from("inventory_units").insert(newRows);
   }
 
-  units.forEach((unit, index) => {
+  for (const [index, unit] of existing.entries()) {
     const shouldBeActive = index < totalUnits;
-    if (unit.data().isActive !== shouldBeActive) {
-      batch.update(unit.ref, {
-        isActive: shouldBeActive,
-        status: shouldBeActive ? "available" : "inactive",
-        updatedAt: now,
-      });
+    const nextStatus = shouldBeActive ? (unit.status === "inactive" ? "available" : unit.status) : "inactive";
+    if (nextStatus !== unit.status) {
+      await admin.from("inventory_units").update({ status: nextStatus }).eq("id", unit.id);
     }
-  });
-
-  batch.set(
-    db.collection("inventory").doc(productId),
-    {
-      productId,
-      totalUnits,
-      availableUnits: totalUnits,
-      reservedUnits: 0,
-      rentedUnits: 0,
-      updatedAt: now,
-    },
-    { merge: true },
-  );
-  await batch.commit();
+  }
 }

@@ -1,28 +1,38 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/src/lib/firebase/config";
-import type { UserProfile } from "@/src/types/firebase";
+"use client";
 
-const USERS_COLLECTION = "users";
+import { createClient } from "@/src/lib/supabase/client";
+import type { Tables } from "@/src/lib/supabase/database.types";
+import type { UserProfile } from "@/src/types/database";
 
-function mapUser(snapshot: QueryDocumentSnapshot<DocumentData>): UserProfile {
-  return { id: snapshot.id, ...snapshot.data() } as UserProfile;
+function mapProfile(row: Tables<"profiles">): UserProfile {
+  return {
+    id: row.id,
+    firebaseUid: row.firebase_uid ?? undefined,
+    email: row.email,
+    firstName: row.first_name ?? undefined,
+    lastName: row.last_name ?? undefined,
+    displayName: row.display_name,
+    phoneNumber: row.phone_number ?? undefined,
+    fullAddress: row.full_address ?? undefined,
+    facebookLink: row.facebook_link ?? undefined,
+    instagramLink: row.instagram_link ?? undefined,
+    role: row.display_role as UserProfile["role"],
+    accountStatus: row.account_status as UserProfile["accountStatus"],
+    photoPath: row.photo_path ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const snapshot = await getDoc(doc(db, USERS_COLLECTION, uid));
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() } as UserProfile;
+  const { data, error } = await createClient()
+    .from("profiles")
+    .select("*")
+    .eq("id", uid)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapProfile(data);
 }
 
 export async function updateUserProfile(
@@ -30,63 +40,70 @@ export async function updateUserProfile(
   updates: Partial<
     Pick<
       UserProfile,
-      "displayName" | "phoneNumber" | "photoURL" | "fullAddress" | "facebookLink" | "instagramLink"
+      "displayName" | "phoneNumber" | "fullAddress" | "facebookLink" | "instagramLink"
     >
-  >
+  >,
 ): Promise<void> {
-  await updateDoc(doc(db, USERS_COLLECTION, uid), {
-    ...updates,
-    updatedAt: serverTimestamp(),
-  });
+  const { error } = await createClient()
+    .from("profiles")
+    .update({
+      display_name: updates.displayName,
+      phone_number: updates.phoneNumber,
+      full_address: updates.fullAddress,
+      facebook_link: updates.facebookLink,
+      instagram_link: updates.instagramLink,
+    })
+    .eq("id", uid);
+
+  if (error) throw new Error(error.message);
 }
 
+/** Admin-only: RLS lets an active admin SELECT every profile row, not just their own. */
 export async function getAllUsers(): Promise<UserProfile[]> {
-  const snapshot = await getDocs(collection(db, USERS_COLLECTION));
-  return snapshot.docs.map(mapUser);
+  const { data, error } = await createClient()
+    .from("profiles")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapProfile);
 }
 
 export async function getUsersByRole(role: UserProfile["role"]): Promise<UserProfile[]> {
-  const usersQuery = query(collection(db, USERS_COLLECTION), where("role", "==", role));
-  const snapshot = await getDocs(usersQuery);
-  return snapshot.docs.map(mapUser);
+  const { data, error } = await createClient()
+    .from("profiles")
+    .select("*")
+    .eq("display_role", role);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapProfile);
 }
 
-// Requires an authenticated admin caller; Firestore rules reject this write
-// from any account whose own role is not already "admin".
-export async function setUserRole(uid: string, role: UserProfile["role"]): Promise<void> {
-  await updateDoc(doc(db, USERS_COLLECTION, uid), {
-    role,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function deleteCustomerAccountAsAdmin(
+async function callAdminUserRoute<T>(
   uid: string,
-  idToken: string,
-): Promise<void> {
+  init: RequestInit,
+): Promise<T | void> {
   const response = await fetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-    },
+    credentials: "same-origin",
+    ...init,
   });
 
-  if (response.ok) return;
-
-  let message = "The customer account could not be deleted.";
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === "string") message = body.error;
-  } catch {
-    // Keep the safe fallback when the server does not return JSON.
+  if (response.ok) {
+    return response.status === 204 ? undefined : ((await response.json()) as T);
   }
 
-  throw new Error(message);
+  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  throw new Error(
+    typeof body?.error === "string" ? body.error : "The request could not be completed.",
+  );
+}
+
+export async function deleteCustomerAccountAsAdmin(uid: string): Promise<void> {
+  await callAdminUserRoute(uid, { method: "DELETE" });
 }
 
 export async function updateAccountAsAdmin(
   uid: string,
-  idToken: string,
   updates: {
     displayName: string;
     phoneNumber: string;
@@ -95,17 +112,9 @@ export async function updateAccountAsAdmin(
     role: UserProfile["role"];
   },
 ): Promise<void> {
-  const response = await fetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
+  await callAdminUserRoute(uid, {
     method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   });
-  if (response.ok) return;
-  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-  throw new Error(
-    typeof body?.error === "string" ? body.error : "The account could not be updated.",
-  );
 }

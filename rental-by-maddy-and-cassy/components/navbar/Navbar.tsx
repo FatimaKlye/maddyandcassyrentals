@@ -48,7 +48,7 @@ export default function Navbar() {
     router.push("/");
   }
 
-  const displayName = profile?.displayName || user?.displayName || "Account";
+  const displayName = profile?.displayName || user?.user_metadata?.display_name || "Account";
   const firstName = displayName.split(" ")[0];
   const accountHomeHref = isAdmin ? "/admin" : "/account/bookings";
   const accountHomeLabel = isAdmin ? "Admin Dashboard" : "My Bookings";

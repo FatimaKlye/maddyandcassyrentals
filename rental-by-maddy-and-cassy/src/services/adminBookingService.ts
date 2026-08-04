@@ -8,40 +8,21 @@ export interface AdminBookingAction {
 }
 
 export const ADMIN_BOOKING_ACTIONS: Record<BookingStatus, AdminBookingAction[]> = {
-  submitted: [
-    { status: "under_review", label: "Start Review" },
+  pending: [
     { status: "approved", label: "Approve Booking" },
-    { status: "correction_required", label: "Request Corrections", requiresNote: true },
-    { status: "rejected", label: "Reject Booking", requiresNote: true, tone: "danger" },
-  ],
-  under_review: [
-    { status: "approved", label: "Approve Booking" },
-    { status: "correction_required", label: "Request Corrections", requiresNote: true },
-    { status: "rejected", label: "Reject Booking", requiresNote: true, tone: "danger" },
-  ],
-  correction_required: [
-    { status: "under_review", label: "Resume Review" },
-    { status: "approved", label: "Approve Booking" },
-    { status: "rejected", label: "Reject Booking", requiresNote: true, tone: "danger" },
+    { status: "cancelled", label: "Reject Booking", requiresNote: true, tone: "danger" },
   ],
   approved: [
-    { status: "confirmed", label: "Confirm Schedule" },
-    { status: "correction_required", label: "Request Corrections", requiresNote: true },
-    { status: "rejected", label: "Reject Booking", requiresNote: true, tone: "danger" },
+    { status: "confirmed", label: "Confirm Booking" },
     { status: "cancelled", label: "Cancel Booking", requiresNote: true, tone: "danger" },
   ],
   confirmed: [
-    { status: "ready", label: "Mark Ready for Handover" },
+    { status: "released", label: "Mark Released" },
     { status: "cancelled", label: "Cancel Booking", requiresNote: true, tone: "danger" },
   ],
-  ready: [
-    { status: "active", label: "Start Rental" },
-    { status: "cancelled", label: "Cancel Booking", requiresNote: true, tone: "danger" },
-  ],
-  active: [{ status: "completed", label: "Complete Rental" }],
-  completed: [],
+  released: [{ status: "returned", label: "Mark Returned" }],
+  returned: [],
   cancelled: [],
-  rejected: [],
 };
 
 async function getErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -57,41 +38,27 @@ export async function updateAdminBookingStatus(
   bookingId: string,
   status: BookingStatus,
   note: string,
-  idToken: string,
 ): Promise<void> {
   const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${idToken}`,
-    },
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status, note }),
   });
 
   if (!response.ok) {
-    throw new Error(
-      await getErrorMessage(response, "The booking status could not be updated."),
-    );
+    throw new Error(await getErrorMessage(response, "The booking status could not be updated."));
   }
 }
 
-export async function downloadAdminBookingPdf(
-  bookingId: string,
-  bookingReference: string,
-  idToken: string,
-): Promise<void> {
-  const response = await fetch(
-    `/api/admin/bookings/${encodeURIComponent(bookingId)}/pdf`,
-    {
-      headers: { Authorization: `Bearer ${idToken}` },
-      cache: "no-store",
-    },
-  );
+export async function downloadAdminBookingPdf(bookingId: string, bookingReference: string): Promise<void> {
+  const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/pdf`, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
 
   if (!response.ok) {
-    throw new Error(
-      await getErrorMessage(response, "The booking PDF could not be generated."),
-    );
+    throw new Error(await getErrorMessage(response, "The booking PDF could not be generated."));
   }
 
   const blob = await response.blob();

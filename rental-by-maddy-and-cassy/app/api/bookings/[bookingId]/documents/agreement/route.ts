@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { Timestamp, type DocumentData } from "firebase-admin/firestore";
-import { getAdminDb } from "@/src/lib/firebase/admin";
-import {
-  enforceAppCheck,
-  enforceRateLimit,
-  requireUser,
-  RequestSecurityError,
-} from "@/src/lib/server/requestSecurity";
+import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { createAdminClient } from "@/src/lib/supabase/admin";
 import { generateAndSaveFinalAgreement } from "@/src/lib/server/customerDocuments";
+import { mapBooking } from "@/src/services/bookingService";
+import type { AgreementDoc } from "@/src/types/booking";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,72 +12,87 @@ function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ bookingId: string }> },
-) {
+/**
+ * Renders the customer-signed draft PDF right after submission (stored in
+ * booking_agreements.generated_document_path) — distinct from the final,
+ * business-countersigned PDF stored in final_document_path, which
+ * paymentFulfillment.ts generates once the booking auto-confirms.
+ */
+export async function POST(request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
   try {
     enforceRateLimit(request, "signed-agreement", 6, 60_000);
-    await enforceAppCheck(request);
-    const user = await requireUser(request);
+    const { user } = await requireUser();
     const { bookingId } = await params;
-    const db = getAdminDb();
-    const bookingRef = db.collection("bookings").doc(bookingId);
-    const agreementRef = bookingRef.collection("agreement").doc("main");
-    const [bookingSnapshot, agreementSnapshot] = await Promise.all([
-      bookingRef.get(),
-      agreementRef.get(),
-    ]);
+    const admin = createAdminClient();
 
-    if (!bookingSnapshot.exists || !agreementSnapshot.exists) {
-      return errorResponse("The signed agreement could not be found.", 404);
-    }
-    const booking: DocumentData & { id: string } = {
-      id: bookingSnapshot.id,
-      ...(bookingSnapshot.data() ?? {}),
-    };
-    const agreement = agreementSnapshot.data() ?? {};
-    if (booking.userId !== user.uid) {
-      return errorResponse("You do not have access to this booking.", 403);
-    }
-    if (!["paid", "partially_paid"].includes(String(booking.paymentStatus))) {
-      return errorResponse("A verified reservation payment is required first.", 409);
-    }
-    if (agreement.status !== "submitted_for_review") {
+    const { data: bookingRow } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
+    const { data: agreementRow } = await admin
+      .from("booking_agreements")
+      .select("*")
+      .eq("booking_id", bookingId)
+      .maybeSingle();
+
+    if (!bookingRow || !agreementRow) return errorResponse("The signed agreement could not be found.", 404);
+    if (bookingRow.user_id !== user.id) return errorResponse("You do not have access to this booking.", 403);
+    if (agreementRow.status !== "awaiting_business_signature") {
       return errorResponse("The rental agreement has not been submitted.", 409);
     }
 
-    const storagePath =
-      `private/users/${user.uid}/bookings/${bookingId}/documents/signed-agreement-${booking.bookingRef}.pdf`;
-    await generateAndSaveFinalAgreement({
+    const { data: verifiedPayment } = await admin
+      .from("payment_records")
+      .select("id, paymongo_payment_id, external_reference")
+      .eq("booking_id", bookingId)
+      .in("status", ["paid", "verified"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!verifiedPayment) return errorResponse("A verified reservation payment is required first.", 409);
+
+    const { data: signatures } = await admin
+      .from("agreement_signatures")
+      .select("*")
+      .eq("agreement_id", agreementRow.id);
+
+    const booking = mapBooking(bookingRow);
+    const agreement: AgreementDoc = {
+      id: agreementRow.id,
+      bookingId: agreementRow.booking_id,
+      status: agreementRow.status as AgreementDoc["status"],
+      agreementVersion: agreementRow.agreement_version ?? undefined,
+      versionNumber: agreementRow.version_number,
+      agreementSnapshot: agreementRow.agreement_snapshot as unknown as AgreementDoc["agreementSnapshot"],
+      generatedDocumentPath: agreementRow.generated_document_path ?? undefined,
+      finalDocumentPath: agreementRow.final_document_path ?? undefined,
+      createdAt: agreementRow.created_at,
+      updatedAt: agreementRow.updated_at,
+      signatures: (signatures ?? []).map((s) => ({
+        id: s.id,
+        agreementId: s.agreement_id,
+        signerUserId: s.signer_user_id ?? undefined,
+        signerRole: s.signer_role as "customer" | "business",
+        signerName: s.signer_name,
+        signaturePath: s.signature_path ?? undefined,
+        signatureData: (s.signature_data as Record<string, unknown>) ?? {},
+        signedAt: s.signed_at,
+      })),
+    };
+
+    const storagePath = `${user.id}/${bookingId}/signed-agreement-${booking.bookingRef}.pdf`;
+    await generateAndSaveFinalAgreement(admin, {
       booking,
       agreement,
-      paymentReference:
-        typeof booking.paymentReference === "string"
-          ? booking.paymentReference
-          : "Verified through PayMongo",
+      paymentReference: verifiedPayment.paymongo_payment_id || verifiedPayment.external_reference || "Verified through PayMongo",
       storagePath,
     });
 
-    const now = Timestamp.now();
-    const batch = db.batch();
-    batch.update(agreementRef, {
-      finalAgreementPath: storagePath,
-      updatedAt: now,
-    });
-    batch.set(bookingRef.collection("documents").doc("signed-rental-agreement"), {
-      type: "final_rental_agreement",
-      storagePath,
-      title: "Signed Rental Agreement",
-      generatedAt: now,
-    });
-    await batch.commit();
+    await admin
+      .from("booking_agreements")
+      .update({ generated_document_path: storagePath, generated_at: new Date().toISOString() })
+      .eq("id", agreementRow.id);
 
     return NextResponse.json({ success: true, storagePath });
   } catch (error) {
-    if (error instanceof RequestSecurityError) {
-      return errorResponse(error.message, error.status);
-    }
+    if (error instanceof RequestSecurityError) return errorResponse(error.message, error.status);
     console.error("Signed agreement PDF generation failed", error);
     return errorResponse("The signed agreement PDF could not be prepared.", 500);
   }

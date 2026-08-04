@@ -45,7 +45,7 @@ export default function CatalogView({ products }: CatalogViewProps) {
       const matchesSearch =
         !query ||
         product.name.toLowerCase().includes(query) ||
-        product.brand.toLowerCase().includes(query);
+        (product.brand ?? "").toLowerCase().includes(query);
       const matchesAvailability = !availableOnly || (units?.availableUnits ?? 0) > 0;
       return matchesCategory && matchesSearch && matchesAvailability;
     });

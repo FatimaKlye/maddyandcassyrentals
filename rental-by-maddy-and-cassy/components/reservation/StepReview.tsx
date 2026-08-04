@@ -75,7 +75,7 @@ export default function StepReview({
         draft.fulfillmentMethod ? (
           <BookingSummaryCard
             productName={product.name}
-            brand={product.brand}
+            brand={product.brand ?? ""}
             productImage={product.image}
             pricePerDay={product.pricePerDay}
             currency={product.currency}

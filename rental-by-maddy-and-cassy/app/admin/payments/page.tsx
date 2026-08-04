@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   getAdminPayments,
   type AdminPaymentsData,
-} from "@/src/services/adminReadService";
+} from "@/src/services/operationsService";
 import styles from "../operations.module.css";
 
 function money(value: number) {
@@ -28,13 +28,11 @@ export default function AdminPaymentsPage() {
     let active = true;
     if (!user) return;
 
-    user
-      .getIdToken()
-      .then(getAdminPayments)
+    getAdminPayments()
       .then((records) => {
         if (active) setData(records);
       })
-      .catch((loadError) => {
+      .catch((loadError: unknown) => {
         if (active) {
           setError(
             loadError instanceof Error
@@ -129,11 +127,11 @@ export default function AdminPaymentsPage() {
                         <tr key={payment.id}>
                           <td>
                             <Link href={`/admin/bookings/${payment.bookingId}`}>
-                              {payment.bookingRef}
+                              {payment.bookingId.slice(0, 8)}
                             </Link>
                           </td>
                           <td>
-                            {payment.paymentId || payment.referenceNumber || "—"}
+                            {payment.paymongoPaymentId || payment.externalReference || "—"}
                           </td>
                           <td>{money(payment.amount)}</td>
                           <td>
@@ -143,7 +141,7 @@ export default function AdminPaymentsPage() {
                               {payment.status}
                             </span>
                           </td>
-                          <td>{payment.isDemo ? "Demo" : "PayMongo"}</td>
+                          <td>{payment.paymentType === "manual_proof" ? "Manual" : "PayMongo"}</td>
                           <td>{payment.paymentMethod || "—"}</td>
                           <td>{formatDate(payment.createdAt)}</td>
                         </tr>
@@ -170,35 +168,33 @@ export default function AdminPaymentsPage() {
                       <tr>
                         <th>Event</th>
                         <th>Type</th>
-                        <th>Mode</th>
+                        <th>Signature</th>
                         <th>Status</th>
-                        <th>Booking</th>
+                        <th>Payment</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[...data.events]
                         .sort(
                           (a, b) =>
-                            Date.parse(b.createdAt || "") -
-                            Date.parse(a.createdAt || ""),
+                            Date.parse(b.receivedAt || "") -
+                            Date.parse(a.receivedAt || ""),
                         )
                         .map((event) => (
                           <tr key={event.id}>
-                            <td>{event.id}</td>
-                            <td>{event.type}</td>
-                            <td>{event.livemode ? "Live" : "Test"}</td>
+                            <td>{event.providerEventId}</td>
+                            <td>{event.eventType}</td>
+                            <td>{event.signatureValid ? "Verified" : "Unverified"}</td>
                             <td>
                               <span
-                                className={`${styles.pill} ${styles[event.status] ?? ""}`}
+                                className={`${styles.pill} ${styles[event.processingStatus] ?? ""}`}
                               >
-                                {event.status}
+                                {event.processingStatus}
                               </span>
                             </td>
                             <td>
-                              {event.bookingId ? (
-                                <Link href={`/admin/bookings/${event.bookingId}`}>
-                                  {event.bookingId.slice(0, 8)}
-                                </Link>
+                              {event.paymentRecordId ? (
+                                <span>{event.paymentRecordId.slice(0, 8)}</span>
                               ) : (
                                 "—"
                               )}

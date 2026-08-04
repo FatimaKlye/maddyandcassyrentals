@@ -1,96 +1,140 @@
-import type { Timestamp } from "firebase/firestore";
+// Mirrors public.payment_records / public.payment_event_logs / public.booking_invoices /
+// public.booking_receipts (see maddy_cassy_supabase_schema.sql and the
+// PayMongo-gap migration). Field names are camelCase; values match the
+// Postgres check-constraint vocabulary exactly since RLS policies and the
+// booking-confirmation RPC key off these exact strings.
 
 export type PaymentStatus =
-  | "unpaid"
   | "pending"
-  | "partially_paid"
+  | "submitted"
+  | "processing"
+  | "verified"
   | "paid"
   | "failed"
   | "expired"
-  | "refunded";
+  | "cancelled"
+  | "refunded"
+  | "rejected";
 
-export type InvoiceStatus = "open" | "paid" | "void";
+export type PaymentType = "online" | "manual_proof";
+export type RefundStatus = "none" | "partial" | "full";
 
+/** payment_records.payment_kind values used by the checkout flow. */
 export type PaymentOption = "deposit_50" | "full" | "balance";
 
 export interface PaymentRecord {
   id: string;
   bookingId: string;
   userId: string;
-  bookingRef: string;
+  paymentKind: string;
   amount: number;
-  paymentOption?: PaymentOption;
-  isDemo?: boolean;
   currency: "PHP";
   status: PaymentStatus;
-  provider: "paymongo";
-  checkoutSessionId: string;
-  checkoutUrl: string;
-  referenceNumber: string;
-  paymentId?: string;
+  paymentType: PaymentType;
   paymentMethod?: string;
-  providerPayload?: Record<string, unknown>;
-  failureReason?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  paidAt?: Timestamp;
+  externalReference?: string;
+  proofStoragePath?: string;
+  paymongoPaymentId?: string;
+  paymongoCheckoutSessionId?: string;
+  paymongoPaymentIntentId?: string;
+  paymongoSourceId?: string;
+  providerStatus?: string;
+  providerMetadata?: Record<string, unknown>;
+  idempotencyKey?: string;
+  failureCode?: string;
+  failureMessage?: string;
+  refundStatus: RefundStatus;
+  refundAmount: number;
+  submittedAt: string;
+  completedAt?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
+export type InvoiceStatus =
+  | "draft"
+  | "issued"
+  | "partially_paid"
+  | "paid"
+  | "void"
+  | "cancelled"
+  | "refunded";
+
 export interface InvoiceLineItem {
-  name: string;
+  id: string;
+  invoiceId: string;
   description: string;
   quantity: number;
-  unitAmount: number;
-  amount: number;
+  unitPrice: number;
+  lineTotal: number;
+  sortOrder: number;
 }
 
 export interface BookingInvoice {
   id: string;
-  invoiceNumber: string;
   bookingId: string;
-  userId: string;
-  bookingRef: string;
+  invoiceNumber?: string;
   status: InvoiceStatus;
-  currency: "PHP";
-  lineItems: InvoiceLineItem[];
+  currencyCode: string;
   subtotal: number;
-  total: number;
-  amountDueNow?: number;
-  remainingBalance?: number;
-  paymentOption?: PaymentOption;
-  isDemo?: boolean;
-  storagePath: string;
-  paymentId?: string;
-  issuedAt: Timestamp;
-  dueAt?: Timestamp;
-  paidAt?: Timestamp;
-  updatedAt: Timestamp;
+  depositAmount: number;
+  deliveryFee: number;
+  discountAmount: number;
+  totalAmount: number;
+  amountPaid: number;
+  balanceDue: number;
+  issuedAt?: string;
+  dueAt?: string;
+  documentPath?: string;
+  voidReason?: string;
+  voidedBy?: string;
+  voidedAt?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  lineItems?: InvoiceLineItem[];
 }
 
 export interface BookingReceipt {
   id: string;
-  receiptNumber: string;
   bookingId: string;
-  userId: string;
-  bookingRef: string;
-  paymentId: string;
-  providerPaymentId?: string;
+  paymentRecordId?: string;
+  receiptNumber?: string;
   amount: number;
-  isDemo?: boolean;
-  currency: "PHP";
-  storagePath: string;
-  issuedAt: Timestamp;
+  issuedAt: string;
+  documentPath?: string;
+  issuedBy?: string;
+  isReissue: boolean;
+  reissuedFromId?: string;
+  reissueReason?: string;
+  createdAt: string;
 }
 
 export interface PaymentEventLog {
   id: string;
-  type: string;
-  livemode: boolean;
-  status: "processing" | "processed" | "ignored" | "failed";
-  checkoutSessionId?: string;
-  bookingId?: string;
+  paymentRecordId: string;
+  eventType: string;
+  fromStatus?: string;
+  toStatus?: string;
+  details: Record<string, unknown>;
+  actorUserId?: string;
+  providerEventId?: string;
+  isManualCorrection: boolean;
+  createdAt: string;
+}
+
+export interface PayMongoWebhookEvent {
+  id: string;
+  providerEventId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  signatureValid: boolean;
+  processingStatus: "pending" | "processed" | "ignored" | "failed";
+  errorMessage?: string;
   paymentRecordId?: string;
-  error?: string;
-  createdAt: Timestamp;
-  processedAt?: Timestamp;
+  receivedAt: string;
+  processedAt?: string;
 }

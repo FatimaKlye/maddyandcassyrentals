@@ -2,37 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@/src/lib/supabase/client";
 import { getAllBookings } from "@/src/services/bookingService";
 import { getAllUsers } from "@/src/services/userService";
-import type { Booking, BookingStatus, UserProfile } from "@/src/types/firebase";
+import type { Booking, BookingStatus, UserProfile } from "@/src/types/database";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/status-badge/StatusBadge";
 import styles from "./bookings.module.css";
 
 const STATUS_OPTIONS: Array<{ value: "" | BookingStatus; label: string }> = [
   { value: "", label: "All statuses" },
-  { value: "submitted", label: "Submitted" },
-  { value: "under_review", label: "Under Review" },
-  { value: "correction_required", label: "Correction Required" },
+  { value: "pending", label: "Pending Review" },
   { value: "approved", label: "Approved" },
   { value: "confirmed", label: "Confirmed" },
-  { value: "ready", label: "Ready" },
-  { value: "active", label: "Active Rental" },
-  { value: "completed", label: "Completed" },
+  { value: "released", label: "Released" },
+  { value: "returned", label: "Returned / Completed" },
   { value: "cancelled", label: "Cancelled" },
-  { value: "rejected", label: "Rejected" },
 ];
 
-function timestampMillis(value: Booking["createdAt"]): number {
-  return value?.toMillis?.() ?? 0;
-}
-
-function formatDate(value: Booking["submittedAt"]): string {
-  return value?.toDate?.().toLocaleDateString("en-PH", {
+function formatDate(value: string | undefined | null): string {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("en-PH", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }) ?? "-";
+  });
 }
 
 function customerName(booking: Booking, user?: UserProfile): string {
@@ -48,14 +42,11 @@ export default function AdminBookingsList() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getAllBookings(), getAllUsers()])
+    const supabase = createClient();
+    Promise.all([getAllBookings(supabase), getAllUsers()])
       .then(([bookingRecords, userRecords]) => {
         if (!active) return;
-        setBookings(
-          [...bookingRecords].sort(
-            (left, right) => timestampMillis(right.createdAt) - timestampMillis(left.createdAt),
-          ),
-        );
+        setBookings(bookingRecords);
         setUsers(userRecords);
       })
       .catch(() => {
@@ -67,10 +58,7 @@ export default function AdminBookingsList() {
     };
   }, []);
 
-  const usersById = useMemo(
-    () => new Map(users.map((user) => [user.uid, user])),
-    [users],
-  );
+  const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
 
   const filteredBookings = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -171,7 +159,7 @@ export default function AdminBookingsList() {
                         {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
                       </td>
                       <td><StatusBadge status={booking.status} /></td>
-                      <td>{formatDate(booking.submittedAt)}</td>
+                      <td>{formatDate(booking.createdAt)}</td>
                       <td>
                         <Link href={`/admin/bookings/${booking.id}`} className={styles.openLink}>
                           Review

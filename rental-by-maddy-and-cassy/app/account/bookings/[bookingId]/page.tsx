@@ -4,36 +4,39 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/src/lib/supabase/client";
 import {
   getBookingDetails,
-  resubmitBookingCorrections,
+  getBookingFileUrl,
   type BookingDetails,
 } from "@/src/services/bookingDetailService";
 import BookingSummaryCard from "@/components/booking-summary/BookingSummaryCard";
 import StatusBadge from "@/components/status-badge/StatusBadge";
-import FileUploadField from "@/components/file-upload/FileUploadField";
 import NotificationList from "@/components/notification-list/NotificationList";
 import Spinner from "@/components/ui/Spinner";
 import formStyles from "@/components/ui/Form.module.css";
 import styles from "./bookingDetail.module.css";
 import BookingPaymentPanel from "@/components/payment/BookingPaymentPanel";
-import { getBookingFileUrl } from "@/src/services/bookingDetailService";
 import { useToast } from "@/components/ui/ToastProvider";
 
 const REQUIREMENTS_STATUS_LABEL: Record<string, string> = {
   not_submitted: "Not Submitted",
-  submitted: "Submitted",
-  correction_required: "Correction Required",
-  verified: "Verified",
+  pending_review: "Pending Review",
+  approved: "Approved",
+  rejected: "Rejected",
 };
 
 const AGREEMENT_STATUS_LABEL: Record<string, string> = {
+  not_created: "Not Created",
   awaiting_customer_signature: "Awaiting Your Signature",
-  submitted_for_review: "Submitted for Review",
-  correction_required: "Correction Required",
-  awaiting_admin_signature: "Awaiting Business Signature",
+  awaiting_business_signature: "Awaiting Business Signature",
   completed: "Completed",
+  rejected: "Rejected",
 };
+
+function formatDocumentType(value: string): string {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function BookingDetailPage() {
   return (
@@ -50,18 +53,11 @@ function BookingDetailContent() {
   const justSubmitted = searchParams.get("justSubmitted") === "1";
 
   const [details, setDetails] = useState<BookingDetails | null | "error">(null);
-  const [replacementFiles, setReplacementFiles] = useState<{
-    idOneStoragePath?: File;
-    idTwoStoragePath?: File;
-    selfieWithIdStoragePath?: File;
-    emergencyContactIdStoragePath?: File;
-  }>({});
-  const [resubmitting, setResubmitting] = useState(false);
   const { showToast } = useToast();
 
   async function loadDetails() {
     try {
-      const result = await getBookingDetails(params.bookingId);
+      const result = await getBookingDetails(createClient(), params.bookingId);
       setDetails(result ?? "error");
     } catch {
       setDetails("error");
@@ -82,23 +78,14 @@ function BookingDetailContent() {
     );
   }
 
-  if (details === "error" || details.booking.userId !== user.uid) {
+  if (details === "error" || details.booking.userId !== user.id) {
     return <p className={formStyles.errorText}>We couldn&apos;t find that booking.</p>;
   }
 
-  const { booking, requirements, agreement, documents, payments } = details;
-  const uid = user.uid;
-
-  async function handleResubmit() {
-    setResubmitting(true);
-    try {
-      await resubmitBookingCorrections(uid, booking.id, replacementFiles);
-      await loadDetails();
-      setReplacementFiles({});
-    } finally {
-      setResubmitting(false);
-    }
-  }
+  const { booking, agreement, documents, payments } = details;
+  const isDemoPayment = payments.some((p) => (p.providerMetadata as { demo?: boolean } | undefined)?.demo === true);
+  const customerSignature = agreement?.signatures?.find((s) => s.signerRole === "customer");
+  const rejectedDocuments = documents.filter((d) => d.reviewStatus === "rejected");
 
   return (
     <div className={styles.wrapper}>
@@ -106,7 +93,7 @@ function BookingDetailContent() {
         <div className={styles.confirmationBanner}>
           <h2>Your reservation is secured and submitted successfully.</h2>
           <p>
-            {booking.demoPayment
+            {isDemoPayment
               ? "This booking completed the development payment flow. No real money was processed. The business can now test document review and confirmation."
               : "PayMongo has verified your reservation payment. The business will now review your verification documents and signed agreement, then mark the booking Confirmed."}
           </p>
@@ -129,11 +116,11 @@ function BookingDetailContent() {
         productImage={booking.productSnapshot.image}
         pricePerDay={booking.productSnapshot.pricePerDay}
         currency={booking.productSnapshot.currency}
-        startDate={booking.startDate.toDate()}
-        endDate={booking.endDate.toDate()}
+        startDate={new Date(booking.startDate)}
+        endDate={new Date(booking.endDate)}
         dayCount={booking.dayCount}
         fulfillmentMethod={booking.fulfillmentMethod}
-        customerLocation={booking.customerLocation}
+        customerLocation={booking.location ?? ""}
       />
 
       {booking.requirementsStatus === "not_submitted" ? (
@@ -158,8 +145,8 @@ function BookingDetailContent() {
         <h3>Status Overview</h3>
         <dl className={styles.detailGrid}>
           <div>
-            <dt>Date Submitted</dt>
-            <dd>{booking.submittedAt?.toDate().toLocaleDateString() ?? "—"}</dd>
+            <dt>Date Created</dt>
+            <dd>{new Date(booking.createdAt).toLocaleDateString()}</dd>
           </div>
           <div>
             <dt>Requirements Status</dt>
@@ -172,54 +159,15 @@ function BookingDetailContent() {
         </dl>
       </section>
 
-      {booking.status === "correction_required" ? (
+      {rejectedDocuments.length ? (
         <section className={styles.correctionSection}>
-          <h3>Correction Required</h3>
-          <p className={styles.remarks}>
-            {booking.adminRemarks ?? "The business has requested updates to your booking. Please check your submitted information and documents."}
-          </p>
-
-          {requirements?.status === "correction_required" ? (
-            <div className={styles.correctionUploads}>
-              <FileUploadField
-                label="Replace first valid ID (optional)"
-                value={replacementFiles.idOneStoragePath ?? null}
-                onChange={(file) =>
-                  setReplacementFiles((current) => ({ ...current, idOneStoragePath: file ?? undefined }))
-                }
-              />
-              <FileUploadField
-                label="Replace emergency contact ID (optional)"
-                value={replacementFiles.emergencyContactIdStoragePath ?? null}
-                onChange={(file) =>
-                  setReplacementFiles((current) => ({ ...current, emergencyContactIdStoragePath: file ?? undefined }))
-                }
-              />
-              <FileUploadField
-                label="Replace second valid ID (optional)"
-                value={replacementFiles.idTwoStoragePath ?? null}
-                onChange={(file) =>
-                  setReplacementFiles((current) => ({ ...current, idTwoStoragePath: file ?? undefined }))
-                }
-              />
-              <FileUploadField
-                label="Replace selfie with ID (optional)"
-                value={replacementFiles.selfieWithIdStoragePath ?? null}
-                onChange={(file) =>
-                  setReplacementFiles((current) => ({ ...current, selfieWithIdStoragePath: file ?? undefined }))
-                }
-              />
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            className={formStyles.primaryButton}
-            disabled={resubmitting}
-            onClick={handleResubmit}
-          >
-            {resubmitting ? "Resubmitting..." : "Resubmit for Review"}
-          </button>
+          <h3>Document Correction Needed</h3>
+          {rejectedDocuments.map((document) => (
+            <p key={document.id} className={styles.remarks}>
+              <strong>{formatDocumentType(document.documentType)}:</strong>{" "}
+              {document.reviewNotes || "Please contact the business for details on this rejection."}
+            </p>
+          ))}
         </section>
       ) : null}
 
@@ -227,7 +175,7 @@ function BookingDetailContent() {
         <h3>Documents</h3>
         {documents.length === 0 ? (
           <p className={styles.emptyDocs}>
-            Documents will appear here once your booking is approved.
+            Documents will appear here once submitted.
           </p>
         ) : (
           <ul className={styles.documentList}>
@@ -237,13 +185,15 @@ function BookingDetailContent() {
                   type="button"
                   onClick={async () => {
                     try {
-                      window.open(await getBookingFileUrl(document.storagePath), "_blank", "noopener,noreferrer");
+                      const supabase = createClient();
+                      const url = await getBookingFileUrl(supabase, "booking-documents", document.storagePath);
+                      window.open(url, "_blank", "noopener,noreferrer");
                     } catch {
                       showToast("This document could not be opened.", "error");
                     }
                   }}
                 >
-                  {document.title}
+                  {formatDocumentType(document.documentType)} ({document.reviewStatus})
                 </button>
               </li>
             ))}
@@ -253,13 +203,13 @@ function BookingDetailContent() {
 
       <section className={styles.section}>
         <h3>Notifications</h3>
-        <NotificationList uid={user.uid} />
+        <NotificationList uid={user.id} />
       </section>
 
-      {agreement ? (
+      {agreement && customerSignature ? (
         <p className={styles.footnote}>
-          Signed by {agreement.signature.typedFullName} on{" "}
-          {agreement.signature.signedAt?.toDate().toLocaleString() ?? "—"}
+          Signed by {customerSignature.signerName} on{" "}
+          {new Date(customerSignature.signedAt).toLocaleString()}
         </p>
       ) : null}
     </div>

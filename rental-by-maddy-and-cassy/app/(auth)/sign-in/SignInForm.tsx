@@ -51,7 +51,7 @@ export default function SignInForm() {
         setSubmitting(false);
         return;
       }
-      if (!signedInUser.emailVerified) {
+      if (!signedInUser.email_confirmed_at) {
         router.replace(
           `/verify-email?redirect=${encodeURIComponent(redirectTo)}`,
         );

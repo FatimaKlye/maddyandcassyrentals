@@ -1,7 +1,6 @@
 "use client";
 
 import type { Product } from "@/types/product";
-import type { PaymentStatus } from "@/src/types/payment";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
 import { getDayCount } from "@/src/types/reservationDraft";
 import formStyles from "@/components/ui/Form.module.css";
@@ -15,10 +14,13 @@ function money(value: number): string {
   })}`;
 }
 
+/** Derived client-side from summing payment_records for this booking — see ReserveFlowClient. */
+export type BookingPaymentState = "unpaid" | "pending" | "partially_paid" | "paid";
+
 interface StepPaymentSubmissionProps {
   product: Product;
   draft: ReservationDraft;
-  paymentStatus: PaymentStatus;
+  paymentState: BookingPaymentState;
   isDemoPayment?: boolean;
   bookingNumber?: string;
   opening: boolean;
@@ -33,7 +35,7 @@ interface StepPaymentSubmissionProps {
 export default function StepPaymentSubmission({
   product,
   draft,
-  paymentStatus,
+  paymentState,
   isDemoPayment = false,
   bookingNumber,
   opening,
@@ -46,7 +48,7 @@ export default function StepPaymentSubmission({
 }: StepPaymentSubmissionProps) {
   const total = product.pricePerDay * getDayCount(draft.startDate, draft.endDate);
   const dueNow = draft.paymentOption === "deposit_50" ? Math.round(total * 50) / 100 : total;
-  const paid = paymentStatus === "paid" || paymentStatus === "partially_paid";
+  const paid = paymentState === "paid" || paymentState === "partially_paid";
 
   return (
     <div className={sharedStyles.wrapper}>

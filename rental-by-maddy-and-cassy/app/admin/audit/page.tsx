@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   getAdminAuditLogs,
   type AdminAuditLog,
-} from "@/src/services/adminReadService";
+} from "@/src/services/operationsService";
 import styles from "../operations.module.css";
 
 export default function AdminAuditPage() {
@@ -21,13 +21,11 @@ export default function AdminAuditPage() {
     let active = true;
     if (!user) return;
 
-    user
-      .getIdToken()
-      .then(getAdminAuditLogs)
+    getAdminAuditLogs()
       .then((records) => {
         if (active) setLogs(records);
       })
-      .catch((loadError) => {
+      .catch((loadError: unknown) => {
         if (active) {
           setError(
             loadError instanceof Error
@@ -47,7 +45,7 @@ export default function AdminAuditPage() {
     return (logs ?? []).filter(
       (log) =>
         !query ||
-        `${log.action} ${log.actorId} ${log.targetType} ${log.targetId}`
+        `${log.action} ${log.actorUserId ?? ""} ${log.entityType} ${log.entityId ?? ""}`
           .toLowerCase()
           .includes(query),
     );
@@ -98,10 +96,10 @@ export default function AdminAuditPage() {
                           <strong>{log.action}</strong>
                         </td>
                         <td>
-                          {log.actorType}: {log.actorId}
+                          {log.actorType}: {log.actorUserId ?? "system"}
                         </td>
                         <td>
-                          {log.targetType}: {log.targetId}
+                          {log.entityType}: {log.entityId ?? "-"}
                         </td>
                         <td>
                           {log.bookingId ? (

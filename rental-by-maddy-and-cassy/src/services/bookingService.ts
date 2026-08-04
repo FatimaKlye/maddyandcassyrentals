@@ -1,71 +1,98 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/src/lib/firebase/config";
-import type { Booking, BookingStatus } from "@/src/types/firebase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/src/lib/supabase/database.types";
+import type {
+  AgreementStatus,
+  Booking,
+  BookingCustomerSnapshot,
+  BookingProductSnapshot,
+  BookingStatus,
+  FulfillmentMethod,
+  RequirementsStatus,
+} from "@/src/types/booking";
 
-const BOOKINGS_COLLECTION = "bookings";
-
-function mapBooking(snapshot: QueryDocumentSnapshot<DocumentData>): Booking {
-  return { id: snapshot.id, ...snapshot.data() } as Booking;
+export function mapBooking(row: Tables<"bookings">): Booking {
+  return {
+    id: row.id,
+    bookingRef: row.booking_reference,
+    userId: row.user_id,
+    productId: row.product_id,
+    inventoryUnitId: row.inventory_unit_id,
+    status: row.status as BookingStatus,
+    fulfillmentMethod: row.fulfillment_method as FulfillmentMethod,
+    startDate: row.rental_start_date,
+    endDate: row.rental_end_date,
+    dayCount: row.rental_days ?? 0,
+    dailyRate: row.daily_rate,
+    refundableDeposit: row.refundable_deposit,
+    rentalSubtotal: row.rental_subtotal,
+    deliveryFee: row.delivery_fee,
+    totalAmount: row.total_amount,
+    location: row.location ?? undefined,
+    customerNotes: row.customer_notes ?? undefined,
+    adminNotes: row.admin_notes ?? undefined,
+    productSnapshot: row.product_snapshot as unknown as BookingProductSnapshot,
+    customerSnapshot: row.customer_snapshot as unknown as BookingCustomerSnapshot,
+    requirementsStatus: row.requirements_status as RequirementsStatus,
+    agreementStatus: row.agreement_status as AgreementStatus,
+    approvedAt: row.approved_at ?? undefined,
+    confirmedAt: row.confirmed_at ?? undefined,
+    releasedAt: row.released_at ?? undefined,
+    returnedAt: row.returned_at ?? undefined,
+    cancelledAt: row.cancelled_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-export async function createBooking(
-  booking: Omit<Booking, "id" | "createdAt" | "updatedAt" | "status"> & {
-    status?: BookingStatus;
-  }
-): Promise<string> {
-  const docRef = await addDoc(collection(db, BOOKINGS_COLLECTION), {
-    ...booking,
-    status: booking.status ?? "submitted",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return docRef.id;
-}
-
-export async function getBookingById(bookingId: string): Promise<Booking | null> {
-  const snapshot = await getDoc(doc(db, BOOKINGS_COLLECTION, bookingId));
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() } as Booking;
-}
-
-export async function getBookingsForUser(userId: string): Promise<Booking[]> {
-  const bookingsQuery = query(
-    collection(db, BOOKINGS_COLLECTION),
-    where("userId", "==", userId),
-    orderBy("createdAt", "desc")
-  );
-  const snapshot = await getDocs(bookingsQuery);
-  return snapshot.docs.map(mapBooking);
-}
-
-export async function getAllBookings(): Promise<Booking[]> {
-  const snapshot = await getDocs(collection(db, BOOKINGS_COLLECTION));
-  return snapshot.docs.map(mapBooking);
-}
-
-export async function updateBookingStatus(
+export async function getBookingById(
+  supabase: SupabaseClient<Database>,
   bookingId: string,
-  status: BookingStatus
-): Promise<void> {
-  await updateDoc(doc(db, BOOKINGS_COLLECTION, bookingId), {
-    status,
-    updatedAt: serverTimestamp(),
-  });
+): Promise<Booking | null> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapBooking(data);
 }
 
-export async function cancelBooking(bookingId: string): Promise<void> {
-  await updateBookingStatus(bookingId, "cancelled");
+export async function getBookingsForUser(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapBooking);
+}
+
+/** Admin-only: RLS (bookings_admin_manage) reveals every booking to an active admin. */
+export async function getAllBookings(supabase: SupabaseClient<Database>): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapBooking);
+}
+
+/** Renter self-service cancellation, only while still pending/approved — see public.cancel_own_booking(). */
+export async function cancelBookingAsCustomer(
+  supabase: SupabaseClient<Database>,
+  bookingId: string,
+  note?: string,
+): Promise<Booking> {
+  const { data, error } = await supabase.rpc("cancel_own_booking", {
+    p_booking_id: bookingId,
+    p_note: note,
+  });
+  if (error || !data) throw new Error(error?.message ?? "The booking could not be cancelled.");
+  return mapBooking(data as Tables<"bookings">);
 }

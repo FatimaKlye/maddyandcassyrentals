@@ -1,25 +1,18 @@
-import type { DocumentData } from "firebase-admin/firestore";
-import { getAdminStorage } from "@/src/lib/firebase/admin";
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/src/lib/supabase/database.types";
+import type { StorageBucket } from "@/src/lib/supabase/storage";
 import {
   createFinalAgreementPdf,
   createInvoicePdf,
   createReceiptPdf,
 } from "@/src/lib/pdf/customerDocuments";
+import type { Booking } from "@/src/types/booking";
+import type { AgreementDoc } from "@/src/types/booking";
 
-function toDate(value: unknown): Date | null {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "toDate" in value &&
-    typeof (value as { toDate?: unknown }).toDate === "function"
-  ) {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  return null;
-}
-
-function formatDate(value: unknown, withTime = false): string {
-  const date = toDate(value) ?? (value instanceof Date ? value : new Date());
+export function formatManilaDate(value: string | Date, withTime = false): string {
+  const date = typeof value === "string" ? new Date(value) : value;
   return date.toLocaleString("en-PH", {
     timeZone: "Asia/Manila",
     month: "long",
@@ -29,143 +22,125 @@ function formatDate(value: unknown, withTime = false): string {
   });
 }
 
+export function bookingRentalDates(booking: Booking): string {
+  return `${formatManilaDate(booking.startDate)} - ${formatManilaDate(booking.endDate)} (${booking.dayCount} day(s))`;
+}
+
 export async function savePrivatePdf(
+  admin: SupabaseClient<Database>,
+  bucket: StorageBucket,
   storagePath: string,
   bytes: Uint8Array,
-  metadata: Record<string, string> = {},
 ): Promise<void> {
-  await getAdminStorage()
-    .bucket()
-    .file(storagePath)
-    .save(Buffer.from(bytes), {
-      resumable: false,
-      contentType: "application/pdf",
-      metadata: {
-        cacheControl: "private, max-age=0, no-store",
-        metadata,
-      },
-    });
+  const { error } = await admin.storage.from(bucket).upload(storagePath, Buffer.from(bytes), {
+    contentType: "application/pdf",
+    upsert: true,
+    cacheControl: "0",
+  });
+  if (error) throw new Error(`Failed to store ${storagePath}: ${error.message}`);
 }
 
-export function bookingRentalDates(booking: DocumentData): string {
-  return `${formatDate(booking.startDate)} - ${formatDate(booking.endDate)} (${booking.dayCount ?? 1} day(s))`;
-}
-
-export async function generateAndSaveInvoice(input: {
-  booking: DocumentData;
-  invoiceNumber: string;
-  storagePath: string;
-  amountDueNow?: number;
-  totalAmount?: number;
-  remainingBalance?: number;
-  paymentOption?: string;
-  isDemo?: boolean;
-}): Promise<void> {
-  const booking = input.booking;
-  const customer = booking.customerSnapshot ?? {};
+export async function generateAndSaveInvoice(
+  admin: SupabaseClient<Database>,
+  input: {
+    booking: Booking;
+    invoiceNumber: string;
+    storagePath: string;
+    amountDueNow: number;
+    totalAmount: number;
+    remainingBalance: number;
+    paymentLabel: string;
+  },
+): Promise<void> {
+  const { booking } = input;
   const bytes = await createInvoicePdf({
     invoiceNumber: input.invoiceNumber,
     bookingRef: booking.bookingRef,
-    customerName: customer.fullName || "Customer",
-    customerEmail: customer.email || "",
-    productName: booking.productSnapshot?.name || "Rental item",
+    customerName: booking.customerSnapshot.fullName || "Customer",
+    customerEmail: booking.customerSnapshot.email || "",
+    productName: booking.productSnapshot.name || "Rental item",
     rentalDates: bookingRentalDates(booking),
-    amount: input.amountDueNow ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
-    totalAmount: input.totalAmount ?? booking.estimatedRentalAmount ?? booking.amountDue ?? 0,
-    amountDueNow: input.amountDueNow ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
-    remainingBalance: input.remainingBalance ?? 0,
-    paymentLabel:
-      input.paymentOption === "deposit_50"
-        ? "50% reservation payment"
-        : input.paymentOption === "balance"
-          ? "Remaining balance"
-          : "Full payment",
-    isDemo: input.isDemo === true,
-    issuedAt: formatDate(new Date(), true),
+    amount: input.amountDueNow,
+    totalAmount: input.totalAmount,
+    amountDueNow: input.amountDueNow,
+    remainingBalance: input.remainingBalance,
+    paymentLabel: input.paymentLabel,
+    issuedAt: formatManilaDate(new Date(), true),
   });
-  await savePrivatePdf(input.storagePath, bytes, {
-    bookingId: booking.id,
-    documentType: "invoice",
-  });
+  await savePrivatePdf(admin, "invoices", input.storagePath, bytes);
 }
 
-export async function generateAndSaveReceipt(input: {
-  booking: DocumentData;
-  receiptNumber: string;
-  paymentReference: string;
-  paymentMethod: string;
-  storagePath: string;
-  amount?: number;
-  isDemo?: boolean;
-}): Promise<void> {
-  const booking = input.booking;
-  const customer = booking.customerSnapshot ?? {};
+export async function generateAndSaveReceipt(
+  admin: SupabaseClient<Database>,
+  input: {
+    booking: Booking;
+    receiptNumber: string;
+    paymentReference: string;
+    paymentMethod: string;
+    storagePath: string;
+    amount: number;
+  },
+): Promise<void> {
+  const { booking } = input;
   const bytes = await createReceiptPdf({
     receiptNumber: input.receiptNumber,
     bookingRef: booking.bookingRef,
-    customerName: customer.fullName || "Customer",
-    customerEmail: customer.email || "",
-    productName: booking.productSnapshot?.name || "Rental item",
+    customerName: booking.customerSnapshot.fullName || "Customer",
+    customerEmail: booking.customerSnapshot.email || "",
+    productName: booking.productSnapshot.name || "Rental item",
     rentalDates: bookingRentalDates(booking),
-    amount: input.amount ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
-    issuedAt: formatDate(new Date(), true),
+    amount: input.amount,
+    issuedAt: formatManilaDate(new Date(), true),
     paymentReference: input.paymentReference,
     paymentMethod: input.paymentMethod || "PayMongo",
-    isDemo: input.isDemo === true,
   });
-  await savePrivatePdf(input.storagePath, bytes, {
-    bookingId: booking.id,
-    documentType: "receipt",
-  });
+  await savePrivatePdf(admin, "receipts", input.storagePath, bytes);
 }
 
-export async function generateAndSaveFinalAgreement(input: {
-  booking: DocumentData;
-  agreement: DocumentData;
-  paymentReference: string;
-  storagePath: string;
-}): Promise<void> {
+export async function generateAndSaveFinalAgreement(
+  admin: SupabaseClient<Database>,
+  input: {
+    booking: Booking;
+    agreement: AgreementDoc;
+    paymentReference: string;
+    storagePath: string;
+  },
+): Promise<void> {
   const { booking, agreement } = input;
-  const customer = booking.customerSnapshot ?? {};
-  const signaturePath = agreement.signature?.storagePath;
+  const customerSignature = agreement.signatures?.find((s) => s.signerRole === "customer");
+
   let signatureBytes: Uint8Array | undefined;
   let signatureContentType: string | undefined;
-
-  if (typeof signaturePath === "string" && signaturePath) {
-    try {
-      const file = getAdminStorage().bucket().file(signaturePath);
-      const [bytes, metadata] = await Promise.all([file.download(), file.getMetadata()]);
-      signatureBytes = bytes[0];
-      signatureContentType = metadata[0].contentType;
-    } catch {
-      // The typed legal name remains a valid fallback in the final document.
+  if (customerSignature?.signaturePath) {
+    const { data } = await admin.storage
+      .from("customer-documents")
+      .download(customerSignature.signaturePath);
+    if (data) {
+      signatureBytes = new Uint8Array(await data.arrayBuffer());
+      signatureContentType = data.type;
     }
   }
 
   const bytes = await createFinalAgreementPdf({
     bookingRef: booking.bookingRef,
-    customerName: customer.fullName || agreement.signature?.typedFullName || "Customer",
-    customerEmail: customer.email || "",
-    phone: customer.phone || "",
-    address: customer.address || "",
-    productName: booking.productSnapshot?.name || "Rental item",
+    customerName: booking.customerSnapshot.fullName || customerSignature?.signerName || "Customer",
+    customerEmail: booking.customerSnapshot.email || "",
+    phone: booking.customerSnapshot.phone || "",
+    address: booking.customerSnapshot.address || "",
+    productName: booking.productSnapshot.name || "Rental item",
     rentalDates: bookingRentalDates(booking),
-    amount: booking.amountPaid ?? booking.amountDue ?? booking.estimatedRentalAmount ?? 0,
-    issuedAt: formatDate(new Date(), true),
-    fulfillmentMethod: booking.fulfillmentMethod || "",
-    customerLocation: booking.customerLocation || "",
-    includedAccessories: booking.productSnapshot?.included ?? [],
-    termsVersion: agreement.generatedTermsVersion || "2026-01",
-    signedAt: formatDate(agreement.signature?.signedAt, true),
-    typedFullName: agreement.signature?.typedFullName || customer.fullName || "Customer",
+    amount: booking.totalAmount,
+    issuedAt: formatManilaDate(new Date(), true),
+    fulfillmentMethod: booking.fulfillmentMethod,
+    customerLocation: booking.location || "",
+    includedAccessories: booking.productSnapshot.included ?? [],
+    termsVersion: agreement.agreementVersion || "2026-01",
+    signedAt: customerSignature ? formatManilaDate(customerSignature.signedAt, true) : "",
+    typedFullName: customerSignature?.signerName || booking.customerSnapshot.fullName || "Customer",
     signatureBytes,
     signatureContentType,
     paymentReference: input.paymentReference,
-    confirmedAt: formatDate(new Date(), true),
-    isDemo: booking.demoPayment === true,
+    confirmedAt: formatManilaDate(new Date(), true),
   });
-  await savePrivatePdf(input.storagePath, bytes, {
-    bookingId: booking.id,
-    documentType: "final_rental_agreement",
-  });
+  await savePrivatePdf(admin, "agreements", input.storagePath, bytes);
 }

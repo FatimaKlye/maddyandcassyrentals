@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
-import { Timestamp, type DocumentData } from "firebase-admin/firestore";
-import { getAdminDb } from "@/src/lib/firebase/admin";
 import { createCheckoutSession, PayMongoError } from "@/src/lib/paymongo/client";
-import {
-  enforceAppCheck,
-  enforceRateLimit,
-  requireUser,
-  RequestSecurityError,
-} from "@/src/lib/server/requestSecurity";
-import { generateAndSaveInvoice } from "@/src/lib/server/customerDocuments";
-import type { PaymentOption } from "@/src/types/payment";
 import { isDemoPaymentEnabled } from "@/src/lib/paymongo/demo";
+import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
+import { generateAndSaveInvoice } from "@/src/lib/server/customerDocuments";
+import { createAdminClient } from "@/src/lib/supabase/admin";
+import { mapBooking } from "@/src/services/bookingService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +18,7 @@ function documentNumber(prefix: string, bookingRef: string, id: string): string 
   return `${prefix}-${cleanBooking}-${id.slice(0, 6).toUpperCase()}`;
 }
 
-function isPaymentOption(value: unknown): value is PaymentOption {
+function isPaymentOption(value: unknown): value is "deposit_50" | "full" | "balance" {
   return value === "deposit_50" || value === "full" || value === "balance";
 }
 
@@ -44,115 +38,79 @@ function safeReturnPath(value: unknown, fallback: string): string {
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     enforceRateLimit(request, "payment-checkout", 8, 60_000);
-    await enforceAppCheck(request);
-    const user = await requireUser(request);
-    const db = getAdminDb();
+    const { user } = await requireUser();
+    const admin = createAdminClient();
 
     const body = (await request.json().catch(() => null)) as
       | { bookingId?: unknown; paymentOption?: unknown; returnPath?: unknown }
       | null;
-    const bookingId =
-      typeof body?.bookingId === "string" ? body.bookingId.trim() : "";
-    if (!bookingId || bookingId.length > 150) {
+    const bookingId = typeof body?.bookingId === "string" ? body.bookingId.trim() : "";
+    if (!bookingId || bookingId.length > 100) {
       return responseError("Choose a valid booking to pay.", 400);
     }
 
-    const bookingRef = db.collection("bookings").doc(bookingId);
-    const bookingSnapshot = await bookingRef.get();
-    if (!bookingSnapshot.exists) {
-      return responseError("The selected booking could not be found.", 404);
-    }
-
-    const booking: DocumentData & { id: string } = {
-      id: bookingSnapshot.id,
-      ...(bookingSnapshot.data() ?? {}),
-    };
-    if (booking.userId !== user.uid) {
+    const { data: bookingRow } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
+    if (!bookingRow) return responseError("The selected booking could not be found.", 404);
+    if (bookingRow.user_id !== user.id) {
       return responseError("You do not have access to this booking.", 403);
     }
-    if (
-      !["submitted", "under_review", "correction_required", "approved", "confirmed"].includes(
-        booking.status,
-      )
-    ) {
-      return responseError(
-        "Payment is not available for this booking.",
-        409,
-      );
+    if (!["pending", "approved", "confirmed"].includes(bookingRow.status)) {
+      return responseError("Payment is not available for this booking.", 409);
     }
-    const paymentOption = isPaymentOption(body?.paymentOption)
-      ? body.paymentOption
-      : "full";
-    if (booking.paymentStatus === "paid" && paymentOption !== "balance") {
-      return responseError("This booking is already paid.", 409);
-    }
+    const booking = mapBooking(bookingRow);
 
-    const configuredTotal = booking.estimatedRentalAmount ?? booking.amountDue;
-    const amountPaid =
-      typeof booking.amountPaid === "number" && Number.isFinite(booking.amountPaid)
-        ? booking.amountPaid
-        : 0;
-    if (
-      typeof configuredTotal !== "number" ||
-      !Number.isFinite(configuredTotal) ||
-      configuredTotal <= 0
-    ) {
-      return responseError("The booking amount is not configured correctly.", 409);
-    }
-    const totalAmount = configuredTotal;
-    const balanceDue = Math.max(0, totalAmount - amountPaid);
-    if (balanceDue <= 0) {
-      return responseError("This booking is already paid.", 409);
-    }
+    const paymentOption = isPaymentOption(body?.paymentOption) ? body.paymentOption : "full";
+
+    const { data: priorPayments } = await admin
+      .from("payment_records")
+      .select("amount, status")
+      .eq("booking_id", bookingId)
+      .in("status", ["verified", "paid"]);
+    const amountPaid = (priorPayments ?? []).reduce((sum, row) => sum + row.amount, 0);
+
+    const balanceDue = Math.max(0, booking.totalAmount - amountPaid);
+    if (balanceDue <= 0) return responseError("This booking is already paid.", 409);
+
     const amount =
       paymentOption === "deposit_50" && amountPaid === 0
-        ? Math.round(totalAmount * 50) / 100
-        : paymentOption === "balance"
-          ? balanceDue
-          : balanceDue;
+        ? Math.round(booking.totalAmount * 50) / 100
+        : balanceDue;
     const amountCentavos = Math.round(amount * 100);
     if (amountCentavos < 100) {
       return responseError("The booking amount is below the payment minimum.", 409);
     }
+
     const demoMode = isDemoPaymentEnabled();
 
-    const reusablePayments = await bookingRef
-      .collection("payments")
-      .where("status", "==", "pending")
+    const { data: reusable } = await admin
+      .from("payment_records")
+      .select("*")
+      .eq("booking_id", bookingId)
+      .eq("status", "pending")
+      .eq("payment_kind", paymentOption)
+      .eq("amount", amount)
+      .order("created_at", { ascending: false })
       .limit(1)
-      .get();
-    const reusable = reusablePayments.docs[0]?.data();
-    if (
-      reusable &&
-      typeof reusable.checkoutUrl === "string" &&
-      reusable.amount === amount &&
-      reusable.paymentOption === paymentOption &&
-      reusable.isDemo === demoMode &&
-      (!demoMode || reusable.checkoutUrl.includes("sessionId="))
-    ) {
-      return NextResponse.json({
-        success: true,
-        checkoutUrl: reusable.checkoutUrl,
-        paymentId: reusablePayments.docs[0].id,
-        reused: true,
-      });
+      .maybeSingle();
+
+    if (reusable?.external_reference && reusable.provider_metadata) {
+      const meta = reusable.provider_metadata as Record<string, unknown>;
+      if (typeof meta.checkoutUrl === "string") {
+        return NextResponse.json({
+          success: true,
+          checkoutUrl: meta.checkoutUrl,
+          paymentId: reusable.id,
+          reused: true,
+        });
+      }
     }
 
-    const paymentRef = bookingRef.collection("payments").doc();
-    const invoiceRef = bookingRef.collection("invoices").doc();
-    const referenceNumber = `${booking.bookingRef}-${paymentRef.id.slice(0, 8)}`;
-    const invoiceNumber = documentNumber("INV", booking.bookingRef, invoiceRef.id);
-    const invoicePath =
-      `private/users/${user.uid}/bookings/${bookingId}/documents/${invoiceNumber}.pdf`;
-    const appOrigin =
-      process.env.APP_URL?.replace(/\/$/, "") || new URL(request.url).origin;
-    const returnPath = safeReturnPath(
-      body?.returnPath,
-      `/account/bookings/${bookingId}`,
-    );
+    const paymentRecordId = crypto.randomUUID();
+    const referenceNumber = `${booking.bookingRef}-${paymentRecordId.slice(0, 8)}`;
+    const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || new URL(request.url).origin;
+    const returnPath = safeReturnPath(body?.returnPath, `/account/bookings/${bookingId}`);
     const returnUrl = `${appOrigin}${returnPath}`;
     const returnSeparator = returnUrl.includes("?") ? "&" : "?";
-    const customer = booking.customerSnapshot ?? {};
     const paymentLabel =
       paymentOption === "deposit_50"
         ? "50% reservation payment"
@@ -162,180 +120,129 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const checkout = demoMode
       ? {
-          id: `demo_${paymentRef.id}`,
+          id: `demo_${paymentRecordId}`,
           checkoutUrl:
             `${appOrigin}/demo/paymongo?` +
             new URLSearchParams({
               amount: amount.toFixed(2),
-              item: booking.productSnapshot?.name || "Rental item",
+              item: booking.productSnapshot.name || "Rental item",
               bookingRef: booking.bookingRef,
               paymentLabel,
               returnPath,
-              sessionId: `demo_${paymentRef.id}`,
+              sessionId: `demo_${paymentRecordId}`,
+              paymentRecordId,
             }).toString(),
           livemode: false,
         }
       : await createCheckoutSession({
           amountCentavos,
-          productName: booking.productSnapshot?.name || "Rental item",
+          productName: booking.productSnapshot.name || "Rental item",
           bookingRef: booking.bookingRef,
           referenceNumber,
           customer: {
-            name: customer.fullName || user.name || "Customer",
-            email: customer.email || user.email || "",
-            phone: customer.phone || "",
+            name: booking.customerSnapshot.fullName || "Customer",
+            email: booking.customerSnapshot.email || user.email || "",
+            phone: booking.customerSnapshot.phone || "",
           },
           paymentLabel,
           successUrl: `${returnUrl}${returnSeparator}payment=success`,
           cancelUrl: `${returnUrl}${returnSeparator}payment=cancelled`,
           metadata: {
             booking_id: bookingId,
-            payment_record_id: paymentRef.id,
-            user_id: user.uid,
-            invoice_id: invoiceRef.id,
-            payment_option: paymentOption,
+            payment_record_id: paymentRecordId,
+            user_id: user.id,
           },
-          idempotencyKey: `checkout-${bookingId}-${paymentRef.id}`,
+          idempotencyKey: `checkout-${bookingId}-${paymentRecordId}`,
         });
 
-    const now = Timestamp.now();
-    await db.collection("paymentSessions").doc(checkout.id).set({
-      checkoutSessionId: checkout.id,
-      bookingId,
-      paymentRecordId: paymentRef.id,
-      invoiceId: invoiceRef.id,
-      userId: user.uid,
-      amount,
-      totalAmount,
-      paymentOption,
-      currency: "PHP",
-      referenceNumber,
-      livemode: checkout.livemode,
-      isDemo: demoMode,
-      createdAt: now,
-    });
+    const invoiceId = crypto.randomUUID();
+    const invoiceNumber = documentNumber("INV", booking.bookingRef, invoiceId);
+    const invoicePath = `${user.id}/${bookingId}/${invoiceNumber}.pdf`;
+    const remainingAfterThis = Math.max(0, balanceDue - amount);
 
     try {
-      await generateAndSaveInvoice({
+      await generateAndSaveInvoice(admin, {
         booking,
         invoiceNumber,
         storagePath: invoicePath,
         amountDueNow: amount,
-        totalAmount,
-        remainingBalance: Math.max(0, balanceDue - amount),
-        paymentOption,
-        isDemo: demoMode,
+        totalAmount: booking.totalAmount,
+        remainingBalance: remainingAfterThis,
+        paymentLabel,
       });
     } catch (error) {
       console.error("Invoice PDF generation failed", error);
-      await db.collection("paymentSessions").doc(checkout.id).delete();
-      throw new Error("INVOICE_GENERATION_FAILED");
+      return responseError("The invoice could not be prepared. Please try again.", 500);
     }
 
-    const batch = db.batch();
-    batch.set(paymentRef, {
-      id: paymentRef.id,
-      bookingId,
-      userId: user.uid,
-      bookingRef: booking.bookingRef,
+    await admin.from("payment_records").insert({
+      id: paymentRecordId,
+      booking_id: bookingId,
+      user_id: user.id,
+      payment_kind: paymentOption,
       amount,
-      paymentOption,
-      isDemo: demoMode,
-      currency: "PHP",
       status: "pending",
-      provider: "paymongo",
-      checkoutSessionId: checkout.id,
-      checkoutUrl: checkout.checkoutUrl,
-      referenceNumber,
-      createdAt: now,
-      updatedAt: now,
+      payment_type: "online",
+      external_reference: referenceNumber,
+      idempotency_key: `checkout-${bookingId}-${paymentRecordId}`,
+      paymongo_checkout_session_id: checkout.id,
+      provider_metadata: { checkoutUrl: checkout.checkoutUrl, livemode: checkout.livemode, demo: demoMode },
     });
-    batch.set(invoiceRef, {
-      id: invoiceRef.id,
-      invoiceNumber,
-      bookingId,
-      userId: user.uid,
-      bookingRef: booking.bookingRef,
-      status: "open",
-      currency: "PHP",
-      lineItems: [
-        {
-          name: booking.productSnapshot?.name || "Rental item",
-          description: `${booking.dayCount} day rental`,
-          quantity: 1,
-          unitAmount: amount,
-          amount,
-        },
-      ],
-      subtotal: amount,
-      total: totalAmount,
-      amountDueNow: amount,
-      remainingBalance: Math.max(0, balanceDue - amount),
-      paymentOption,
-      isDemo: demoMode,
-      storagePath: invoicePath,
-      paymentId: paymentRef.id,
-      issuedAt: now,
-      updatedAt: now,
+
+    await admin.from("booking_invoices").insert({
+      id: invoiceId,
+      booking_id: bookingId,
+      invoice_number: invoiceNumber,
+      status: "issued",
+      currency_code: "PHP",
+      subtotal: booking.rentalSubtotal,
+      deposit_amount: booking.refundableDeposit,
+      delivery_fee: booking.deliveryFee,
+      discount_amount: 0,
+      total_amount: booking.totalAmount,
+      amount_paid: amountPaid,
+      balance_due: balanceDue,
+      issued_at: new Date().toISOString(),
+      document_path: invoicePath,
     });
-    batch.set(bookingRef.collection("documents").doc(`invoice-${invoiceRef.id}`), {
-      type: "invoice",
-      storagePath: invoicePath,
-      title: demoMode
-        ? `DEMO Invoice ${invoiceNumber} - Not Valid`
-        : `Invoice ${invoiceNumber}`,
-      isDemo: demoMode,
-      generatedAt: now,
+
+    await admin.from("invoice_line_items").insert({
+      invoice_id: invoiceId,
+      description: `${booking.productSnapshot.name} - ${booking.dayCount} day rental`,
+      quantity: 1,
+      unit_price: booking.rentalSubtotal,
+      line_total: booking.rentalSubtotal,
+      sort_order: 0,
     });
-    batch.update(bookingRef, {
-      amountDue: totalAmount,
-      balanceDue,
-      paymentChoice: paymentOption,
-      paymentRequired: true,
-      paymentStatus: "pending",
-      activePaymentId: paymentRef.id,
-      updatedAt: now,
-    });
-    batch.set(db.collection("auditLogs").doc(), {
-      action: "payment.checkout_created",
-      actorType: "customer",
-      actorId: user.uid,
-      bookingId,
-      targetType: "payment",
-      targetId: paymentRef.id,
-      metadata: { checkoutSessionId: checkout.id, amount, paymentOption, demo: demoMode },
-      createdAt: now,
-    });
-    batch.set(db.collection("users").doc(user.uid).collection("notifications").doc(), {
-      recipientId: user.uid,
-      bookingId,
+
+    await admin.from("notifications").insert({
+      user_id: user.id,
+      booking_id: bookingId,
       type: "payment_pending",
       title: demoMode ? "Demo payment checkout ready" : "Payment checkout ready",
       message: demoMode
         ? `Your demo checkout for ${booking.bookingRef} is ready. No real money will be processed.`
         : `Your secure payment checkout for ${booking.bookingRef} is ready.`,
-      actionUrl: `/account/bookings/${bookingId}`,
-      isRead: false,
-      createdAt: now,
+      action_url: `/account/bookings/${bookingId}`,
     });
-    await batch.commit();
+
+    await admin.rpc("log_audit_event", {
+      p_action: "payment.checkout_created",
+      p_entity_type: "payment",
+      p_entity_id: paymentRecordId,
+      p_booking_id: bookingId,
+      p_new_values: { checkoutSessionId: checkout.id, amount, paymentOption, demo: demoMode },
+    });
 
     return NextResponse.json({
       success: true,
       checkoutUrl: checkout.checkoutUrl,
-      paymentId: paymentRef.id,
+      paymentId: paymentRecordId,
       invoiceNumber,
     });
   } catch (error) {
-    if (error instanceof RequestSecurityError) {
-      return responseError(error.message, error.status);
-    }
-    if (error instanceof PayMongoError) {
-      return responseError(error.message, error.status);
-    }
-    if (error instanceof Error && error.message === "INVOICE_GENERATION_FAILED") {
-      return responseError("The invoice could not be prepared. Please try again.", 500);
-    }
+    if (error instanceof RequestSecurityError) return responseError(error.message, error.status);
+    if (error instanceof PayMongoError) return responseError(error.message, error.status);
     console.error("Payment checkout creation failed", error);
     return responseError("The secure checkout could not be created. Please try again.", 500);
   }

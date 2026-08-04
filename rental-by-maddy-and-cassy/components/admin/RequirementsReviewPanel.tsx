@@ -1,55 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/ToastProvider";
-import type {
-  RequirementDocumentKey,
-  RequirementReviewStatus,
-  RequirementsDoc,
-} from "@/src/types/booking";
+import type { BookingDocument, RequirementReviewStatus } from "@/src/types/booking";
 import styles from "./RequirementsReviewPanel.module.css";
 
-const DOCUMENTS: Array<{ key: RequirementDocumentKey; label: string }> = [
-  { key: "idOneStoragePath", label: "First valid ID" },
-  { key: "idTwoStoragePath", label: "Second valid ID" },
-  { key: "selfieWithIdStoragePath", label: "Selfie holding ID" },
-  { key: "emergencyContactIdStoragePath", label: "Emergency contact ID" },
-];
+function formatDocumentType(value: string): string {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function RequirementsReviewPanel({
   bookingId,
-  requirements,
+  documents,
   onUpdated,
 }: {
   bookingId: string;
-  requirements: RequirementsDoc;
+  documents: BookingDocument[];
   onUpdated(): Promise<void>;
 }) {
-  const { user } = useAuth();
   const { showToast } = useToast();
-  const [activeKey, setActiveKey] = useState<RequirementDocumentKey | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
 
-  async function saveReview(documentKey: RequirementDocumentKey, status: RequirementReviewStatus) {
-    if (!user) return;
-    if (["rejected", "replacement_requested"].includes(status) && !reason.trim()) {
-      showToast("Add a clear reason before requesting a replacement.", "error");
+  async function saveReview(documentId: string, status: Exclude<RequirementReviewStatus, "pending">) {
+    if (status === "rejected" && !reason.trim()) {
+      showToast("Add a clear reason before rejecting a document.", "error");
       return;
     }
-    setActiveKey(documentKey);
+    setActiveId(documentId);
     try {
-      const response = await fetch(
-        `/api/admin/bookings/${encodeURIComponent(bookingId)}/requirements`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${await user.getIdToken()}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ documentKey, status, reason }),
-        },
-      );
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/requirements`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId, status, reason }),
+      });
       const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
       if (!response.ok) {
         throw new Error(typeof body?.error === "string" ? body.error : "The review could not be saved.");
@@ -60,7 +45,7 @@ export default function RequirementsReviewPanel({
     } catch (error) {
       showToast(error instanceof Error ? error.message : "The review could not be saved.", "error");
     } finally {
-      setActiveKey(null);
+      setActiveId(null);
     }
   }
 
@@ -68,10 +53,10 @@ export default function RequirementsReviewPanel({
     <div className={styles.panel}>
       <div className={styles.intro}>
         <strong>Individual document verification</strong>
-        <span>Approve each file or request a replacement with a specific reason.</span>
+        <span>Approve each file or reject it with a specific reason.</span>
       </div>
       <label className={styles.note}>
-        <span>Reason for rejection or replacement</span>
+        <span>Reason for rejection</span>
         <textarea
           rows={2}
           maxLength={1000}
@@ -81,45 +66,34 @@ export default function RequirementsReviewPanel({
         />
       </label>
       <div className={styles.list}>
-        {DOCUMENTS.map((document) => {
-          const currentReview = requirements.reviews?.[document.key];
-          return (
-            <div key={document.key} className={styles.row}>
-              <div>
-                <strong>{document.label}</strong>
-                <span className={`${styles.reviewStatus} ${currentReview ? styles[currentReview.status] : ""}`}>
-                  {currentReview?.status?.replaceAll("_", " ") ?? "pending review"}
-                </span>
-                {currentReview?.reason ? <small>{currentReview.reason}</small> : null}
-              </div>
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  onClick={() => saveReview(document.key, "approved")}
-                  disabled={activeKey !== null}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  className={styles.replace}
-                  onClick={() => saveReview(document.key, "rejected")}
-                  disabled={activeKey !== null}
-                >
-                  Reject
-                </button>
-                <button
-                  type="button"
-                  className={styles.replace}
-                  onClick={() => saveReview(document.key, "replacement_requested")}
-                  disabled={activeKey !== null}
-                >
-                  {activeKey === document.key ? "Saving..." : "Request replacement"}
-                </button>
-              </div>
+        {documents.map((document) => (
+          <div key={document.id} className={styles.row}>
+            <div>
+              <strong>{formatDocumentType(document.documentType)}</strong>
+              <span className={`${styles.reviewStatus} ${styles[document.reviewStatus]}`}>
+                {document.reviewStatus.replaceAll("_", " ")}
+              </span>
+              {document.reviewNotes ? <small>{document.reviewNotes}</small> : null}
             </div>
-          );
-        })}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                onClick={() => saveReview(document.id, "approved")}
+                disabled={activeId !== null}
+              >
+                {activeId === document.id ? "Saving..." : "Approve"}
+              </button>
+              <button
+                type="button"
+                className={styles.replace}
+                onClick={() => saveReview(document.id, "rejected")}
+                disabled={activeId !== null}
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

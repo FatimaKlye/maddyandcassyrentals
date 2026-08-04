@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/src/lib/supabase/client";
 import { getBookingsForUser } from "@/src/services/bookingService";
 import type { Booking } from "@/src/types/booking";
 import BookingSummaryCard from "@/components/booking-summary/BookingSummaryCard";
@@ -16,7 +17,7 @@ export default function BookingsListPage() {
 
   useEffect(() => {
     if (!user) return;
-    getBookingsForUser(user.uid).then(setBookings);
+    getBookingsForUser(createClient(), user.id).then(setBookings);
   }, [user]);
 
   return (
@@ -46,11 +47,11 @@ export default function BookingsListPage() {
                   productImage={booking.productSnapshot.image}
                   pricePerDay={booking.productSnapshot.pricePerDay}
                   currency={booking.productSnapshot.currency}
-                  startDate={booking.startDate.toDate()}
-                  endDate={booking.endDate.toDate()}
+                  startDate={new Date(booking.startDate)}
+                  endDate={new Date(booking.endDate)}
                   dayCount={booking.dayCount}
                   fulfillmentMethod={booking.fulfillmentMethod}
-                  customerLocation={booking.customerLocation}
+                  customerLocation={booking.location ?? ""}
                   statusSlot={<StatusBadge status={booking.status} />}
                 />
               </Link>

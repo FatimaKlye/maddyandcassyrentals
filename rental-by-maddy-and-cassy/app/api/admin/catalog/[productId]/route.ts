@@ -1,67 +1,56 @@
 import { NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
-import { getAdminDb } from "@/src/lib/firebase/admin";
-import {
-  parseCatalogInput,
-  reconcileInventoryUnits,
-} from "@/src/lib/server/catalog";
-import {
-  enforceRateLimit,
-  requireAdmin,
-  RequestSecurityError,
-} from "@/src/lib/server/requestSecurity";
+import { parseCatalogInput, reconcileInventoryUnits } from "@/src/lib/server/catalog";
+import { enforceRateLimit, requireActiveAdmin, RequestSecurityError } from "@/src/lib/server/requestSecurity";
 
 export const runtime = "nodejs";
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ productId: string }> },
-): Promise<NextResponse> {
+export async function PATCH(request: Request, { params }: { params: Promise<{ productId: string }> }): Promise<NextResponse> {
   try {
     enforceRateLimit(request, "admin-catalog", 30, 60_000);
-    const db = getAdminDb();
-    const admin = await requireAdmin(request, db);
+    const { supabase, user } = await requireActiveAdmin();
     const { productId } = await params;
     const input = parseCatalogInput(await request.json());
-    const productRef = db.collection("products").doc(productId);
-    const snapshot = await productRef.get();
-    if (!snapshot.exists) {
-      return NextResponse.json({ error: "The product no longer exists." }, { status: 404 });
-    }
-    const previousPrice = snapshot.data()?.pricePerDay;
-    const now = Timestamp.now();
-    await productRef.update({
-      ...input,
-      status: input.isActive ? "Available" : "Inactive",
-      updatedAt: now,
-    });
-    await reconcileInventoryUnits(db, productId, input.name, input.totalUnits);
-    const batch = db.batch();
-    if (previousPrice !== input.pricePerDay) {
-      batch.set(productRef.collection("priceHistory").doc(), {
-        previousPrice,
-        newPrice: input.pricePerDay,
-        changedBy: admin.uid,
-        reason: "Catalog pricing update",
-        createdAt: now,
+
+    const { data: existing } = await supabase.from("products").select("daily_rate").eq("id", productId).maybeSingle();
+    if (!existing) return NextResponse.json({ error: "The product no longer exists." }, { status: 404 });
+
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: input.name,
+        brand: input.brand || null,
+        category: input.category,
+        short_description: input.shortDescription || null,
+        description: input.description || null,
+        daily_rate: input.dailyRate,
+        refundable_deposit: input.refundableDeposit,
+        status: input.status,
+        is_featured: input.isFeatured,
+        specifications: input.specifications,
+        updated_by: user.id,
+      })
+      .eq("id", productId);
+    if (error) throw new Error(error.message);
+
+    await reconcileInventoryUnits(supabase, productId, input.totalUnits);
+
+    if (existing.daily_rate !== input.dailyRate) {
+      await supabase.rpc("log_audit_event", {
+        p_action: "catalog.price_changed",
+        p_entity_type: "product",
+        p_entity_id: productId,
+        p_previous_values: { previousPrice: existing.daily_rate },
+        p_new_values: { previousPrice: existing.daily_rate, newPrice: input.dailyRate, reason: "Catalog pricing update" },
       });
     }
-    batch.set(db.collection("auditLogs").doc(), {
-      action: "catalog.product_updated",
-      actorType: "admin",
-      actorId: admin.uid,
-      targetType: "product",
-      targetId: productId,
-      metadata: {
-        name: input.name,
-        previousPrice,
-        pricePerDay: input.pricePerDay,
-        totalUnits: input.totalUnits,
-        isActive: input.isActive,
-      },
-      createdAt: now,
+
+    await supabase.rpc("log_audit_event", {
+      p_action: "catalog.product_updated",
+      p_entity_type: "product",
+      p_entity_id: productId,
+      p_new_values: { name: input.name, dailyRate: input.dailyRate, totalUnits: input.totalUnits, status: input.status },
     });
-    await batch.commit();
+
     return NextResponse.json({ success: true, productId });
   } catch (error) {
     if (error instanceof RequestSecurityError) {
@@ -75,36 +64,25 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ productId: string }> },
-): Promise<NextResponse> {
+/** Deactivates rather than deletes — historical bookings reference this product. */
+export async function DELETE(request: Request, { params }: { params: Promise<{ productId: string }> }): Promise<NextResponse> {
   try {
-    const db = getAdminDb();
-    const admin = await requireAdmin(request, db);
+    const { supabase } = await requireActiveAdmin();
     const { productId } = await params;
-    const productRef = db.collection("products").doc(productId);
-    const snapshot = await productRef.get();
-    if (!snapshot.exists) {
-      return NextResponse.json({ error: "The product no longer exists." }, { status: 404 });
-    }
-    const now = Timestamp.now();
-    await productRef.update({ isActive: false, status: "Inactive", updatedAt: now });
-    await reconcileInventoryUnits(
-      db,
-      productId,
-      snapshot.data()?.name ?? "Rental item",
-      0,
-    );
-    await db.collection("auditLogs").add({
-      action: "catalog.product_deactivated",
-      actorType: "admin",
-      actorId: admin.uid,
-      targetType: "product",
-      targetId: productId,
-      metadata: { name: snapshot.data()?.name ?? "" },
-      createdAt: now,
+
+    const { data: existing } = await supabase.from("products").select("name").eq("id", productId).maybeSingle();
+    if (!existing) return NextResponse.json({ error: "The product no longer exists." }, { status: 404 });
+
+    await supabase.from("products").update({ status: "inactive" }).eq("id", productId);
+    await reconcileInventoryUnits(supabase, productId, 0);
+
+    await supabase.rpc("log_audit_event", {
+      p_action: "catalog.product_deactivated",
+      p_entity_type: "product",
+      p_entity_id: productId,
+      p_new_values: { name: existing.name },
     });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof RequestSecurityError) {
