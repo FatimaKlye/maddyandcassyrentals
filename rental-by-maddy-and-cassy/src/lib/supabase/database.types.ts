@@ -1311,6 +1311,7 @@ export type Database = {
           display_name: string
           facebook_url: string | null
           first_name: string | null
+          full_address: string | null
           id: string
           instagram_url: string | null
           last_name: string | null
@@ -1325,6 +1326,7 @@ export type Database = {
           display_name: string
           facebook_url?: string | null
           first_name?: string | null
+          full_address?: string | null
           id: string
           instagram_url?: string | null
           last_name?: string | null
@@ -1339,6 +1341,7 @@ export type Database = {
           display_name?: string
           facebook_url?: string | null
           first_name?: string | null
+          full_address?: string | null
           id?: string
           instagram_url?: string | null
           last_name?: string | null

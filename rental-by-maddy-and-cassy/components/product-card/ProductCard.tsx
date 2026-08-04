@@ -17,7 +17,7 @@ export default function ProductCard({ product, className }: ProductCardProps) {
     <article className={cardClassName}>
       <div className={styles.imageWrapper}>
         <Image
-          src={product.image}
+          src={product.image || "/images/product-placeholder.png"}
           alt={`${product.name} available for rent`}
           fill
           sizes="(max-width: 640px) 90vw, 320px"

@@ -50,7 +50,7 @@ export async function createBookingReservation(
       name: product.name,
       brand: product.brand ?? "",
       category: product.category,
-      image: product.images[0]?.url ?? "",
+      image: product.images[0]?.url || "/images/product-placeholder.png",
       pricePerDay: product.dailyRate,
       currency: product.currency,
       included: [],

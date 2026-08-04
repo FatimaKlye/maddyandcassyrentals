@@ -7,16 +7,15 @@ import type { UserProfile } from "@/src/types/database";
 function mapProfile(row: Tables<"profiles">): UserProfile {
   return {
     id: row.id,
-    firebaseUid: row.firebase_uid ?? undefined,
-    email: row.email,
+    email: row.contact_email ?? "",
     firstName: row.first_name ?? undefined,
     lastName: row.last_name ?? undefined,
     displayName: row.display_name,
     phoneNumber: row.phone_number ?? undefined,
     fullAddress: row.full_address ?? undefined,
-    facebookLink: row.facebook_link ?? undefined,
-    instagramLink: row.instagram_link ?? undefined,
-    role: row.display_role as UserProfile["role"],
+    facebookLink: row.facebook_url ?? undefined,
+    instagramLink: row.instagram_url ?? undefined,
+    role: "customer",
     accountStatus: row.account_status as UserProfile["accountStatus"],
     photoPath: row.photo_path ?? undefined,
     createdAt: row.created_at,
@@ -50,8 +49,8 @@ export async function updateUserProfile(
       display_name: updates.displayName,
       phone_number: updates.phoneNumber,
       full_address: updates.fullAddress,
-      facebook_link: updates.facebookLink,
-      instagram_link: updates.instagramLink,
+      facebook_url: updates.facebookLink,
+      instagram_url: updates.instagramLink,
     })
     .eq("id", uid);
 

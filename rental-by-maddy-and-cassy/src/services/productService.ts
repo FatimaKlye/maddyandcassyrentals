@@ -114,7 +114,7 @@ async function mapProduct(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pricePerDay: row.daily_rate,
-    image: images[0]?.url ?? "",
+    image: images[0]?.url || "/images/product-placeholder.png",
     included,
     badge: row.is_featured ? "Featured" : undefined,
     specs: specifications,
