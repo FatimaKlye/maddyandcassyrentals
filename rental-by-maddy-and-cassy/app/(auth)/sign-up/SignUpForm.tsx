@@ -6,21 +6,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { registerWithEmail } from "@/src/services/authService";
+import { sendEmailOtp } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
-import PasswordInput from "@/components/ui/PasswordInput";
 import styles from "../auth.module.css";
 
-const schema = z
-  .object({
-    email: z.string().min(1, "Email is required").email("Enter a valid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(1, "Please confirm your password"),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
+const schema = z.object({
+  email: z.string().min(1, "Email is required").email("Enter a valid email address"),
+});
 
 type FormValues = z.infer<typeof schema>;
 
@@ -49,13 +41,13 @@ export default function SignUpForm() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await registerWithEmail(values.email, values.password);
+      await sendEmailOtp(values.email, { shouldCreateUser: true });
       router.replace(
-        `/verify-email?redirect=${encodeURIComponent(redirectTo)}`,
+        `/verify-email?email=${encodeURIComponent(values.email)}&redirect=${encodeURIComponent(redirectTo)}&flow=sign-up`,
       );
     } catch {
       setFormError(
-        "We couldn't create your account. That email may already be in use, or your password may be too weak.",
+        "We couldn't send a code to that email. Check the address and try again.",
       );
       setSubmitting(false);
     }
@@ -66,8 +58,9 @@ export default function SignUpForm() {
       <p className={styles.eyebrow}>Customer account</p>
       <h1 className={styles.heading}>Create Account</h1>
       <p className={styles.subheading}>
-        Create your login and verify your email with a one-time code. Your
-        identity documents are collected only when you reserve an item.
+        Enter your email and we&apos;ll send you a 6-digit one-time code to
+        create your account. Your identity documents are collected only when
+        you reserve an item.
       </p>
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -92,49 +85,13 @@ export default function SignUpForm() {
           ) : null}
         </div>
 
-        <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="password">
-            Password<span className={formStyles.required}>*</span>
-          </label>
-          <PasswordInput
-            id="password"
-            autoComplete="new-password"
-            className={`${formStyles.input} ${errors.password ? formStyles.inputError : ""}`}
-            aria-invalid={!!errors.password}
-            {...register("password")}
-          />
-          {errors.password ? (
-            <p className={formStyles.errorText} role="alert">
-              {errors.password.message}
-            </p>
-          ) : null}
-        </div>
-
-        <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="confirmPassword">
-            Confirm password<span className={formStyles.required}>*</span>
-          </label>
-          <PasswordInput
-            id="confirmPassword"
-            autoComplete="new-password"
-            className={`${formStyles.input} ${errors.confirmPassword ? formStyles.inputError : ""}`}
-            aria-invalid={!!errors.confirmPassword}
-            {...register("confirmPassword")}
-          />
-          {errors.confirmPassword ? (
-            <p className={formStyles.errorText} role="alert">
-              {errors.confirmPassword.message}
-            </p>
-          ) : null}
-        </div>
-
         <div className={styles.submitRow}>
           <button
             type="submit"
             className={`${formStyles.primaryButton} ${styles.submitButton}`}
             disabled={submitting}
           >
-            {submitting ? "Creating account..." : "Create & Verify Account"}
+            {submitting ? "Sending code..." : "Send Code"}
           </button>
         </div>
       </form>

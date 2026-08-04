@@ -160,7 +160,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const invoicePath = `${user.id}/${bookingId}/${invoiceNumber}.pdf`;
     const remainingAfterThis = Math.max(0, balanceDue - amount);
 
-    let invoiceReady = true;
+    const invoiceReady = true;
     try {
       await generateAndSaveInvoice(admin, {
         booking,

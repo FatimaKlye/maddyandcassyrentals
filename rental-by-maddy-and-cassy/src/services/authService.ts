@@ -3,83 +3,35 @@
 import type { Subscription, User } from "@supabase/supabase-js";
 import { createClient } from "@/src/lib/supabase/client";
 
-export interface RegisterOptions {
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-}
-
-export interface EmailOtpDelivery {
-  alreadyVerified?: boolean;
-  delivery?: "email" | "preview";
-  maskedEmail?: string;
-  demoCode?: string;
-}
-
-async function emailOtpRequest<T>(
-  path: "/api/auth/email-otp/request" | "/api/auth/email-otp/verify",
-  body?: Record<string, unknown>,
-): Promise<T> {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "same-origin",
-  });
-  const result = (await response.json().catch(() => null)) as
-    | (T & { error?: unknown })
-    | null;
-  if (!response.ok) {
-    throw new Error(
-      typeof result?.error === "string"
-        ? result.error
-        : "Email verification could not be completed.",
-    );
-  }
-  if (!result) throw new Error("Email verification could not be completed.");
-  return result;
-}
-
-export function requestEmailOtp(): Promise<EmailOtpDelivery> {
-  return emailOtpRequest("/api/auth/email-otp/request");
-}
-
-export async function verifyEmailOtp(code: string): Promise<void> {
-  await emailOtpRequest<{ verified: boolean }>("/api/auth/email-otp/verify", { code });
-  await createClient().auth.refreshSession();
+export interface SendEmailOtpOptions {
+  /** Creates a new account for this email if one does not already exist. */
+  shouldCreateUser?: boolean;
 }
 
 /**
- * Creates the Supabase Auth account. The matching public.profiles row is
- * created automatically by the private.handle_new_auth_user() trigger from
- * the metadata passed here — see maddy_cassy_supabase_schema.sql. Guests can
- * still browse the whole catalog without an account; this is only reached
- * from the sign-up form.
+ * Sends a 6-digit one-time code to the given email via Supabase's native
+ * email OTP delivery. Used for both customer sign-in (existing accounts
+ * only) and sign-up (creates the account on first verified code) — see
+ * app/(auth)/sign-in and app/(auth)/sign-up.
  */
-export async function registerWithEmail(
+export async function sendEmailOtp(
   email: string,
-  password: string,
-  displayName = "",
-  options: RegisterOptions = {},
-): Promise<User> {
+  options: SendEmailOtpOptions = {},
+): Promise<void> {
   const supabase = createClient();
-  const { data, error } = await supabase.auth.signUp({
+  const { error } = await supabase.auth.signInWithOtp({
     email,
-    password,
-    options: {
-      data: {
-        display_name: displayName || undefined,
-        first_name: options.firstName,
-        last_name: options.lastName,
-        phone_number: options.phoneNumber,
-      },
-    },
+    options: { shouldCreateUser: options.shouldCreateUser ?? false },
   });
+  if (error) throw new Error(error.message);
+}
 
+export async function verifyEmailOtp(email: string, token: string): Promise<User> {
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
   if (error || !data.user) {
-    throw new Error(error?.message ?? "Could not create the account.");
+    throw new Error(error?.message ?? "The verification code could not be confirmed.");
   }
-
   return data.user;
 }
 

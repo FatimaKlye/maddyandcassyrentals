@@ -6,15 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { checkActiveAdmin } from "@/src/services/adminService";
-import { loginWithEmail, logout } from "@/src/services/authService";
+import { sendEmailOtp } from "@/src/services/authService";
 import formStyles from "@/components/ui/Form.module.css";
-import PasswordInput from "@/components/ui/PasswordInput";
 import styles from "../auth.module.css";
 
 const schema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -44,22 +41,14 @@ export default function SignInForm() {
     setFormError(null);
     setSubmitting(true);
     try {
-      const signedInUser = await loginWithEmail(values.email, values.password);
-      if (await checkActiveAdmin(signedInUser)) {
-        await logout();
-        setFormError("This is an administrator account. Please use the separate Admin Login.");
-        setSubmitting(false);
-        return;
-      }
-      if (!signedInUser.email_confirmed_at) {
-        router.replace(
-          `/verify-email?redirect=${encodeURIComponent(redirectTo)}`,
-        );
-        return;
-      }
-      router.replace(redirectTo);
+      await sendEmailOtp(values.email, { shouldCreateUser: false });
+      router.replace(
+        `/verify-email?email=${encodeURIComponent(values.email)}&redirect=${encodeURIComponent(redirectTo)}&flow=sign-in`,
+      );
     } catch {
-      setFormError("We couldn't sign you in. Check your email and password and try again.");
+      setFormError(
+        "We couldn't send a code to that email. Check the address and try again, or create an account.",
+      );
       setSubmitting(false);
     }
   }
@@ -69,7 +58,8 @@ export default function SignInForm() {
       <p className={styles.eyebrow}>Welcome back</p>
       <h1 className={styles.heading}>Customer Sign In</h1>
       <p className={styles.subheading}>
-        Sign in to reserve gear and manage your bookings.
+        Enter your email and we&apos;ll send you a 6-digit one-time code to
+        sign in.
       </p>
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -95,32 +85,13 @@ export default function SignInForm() {
           ) : null}
         </div>
 
-        <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="password">
-            Password<span className={formStyles.required}>*</span>
-          </label>
-          <PasswordInput
-            id="password"
-            autoComplete="current-password"
-            className={`${formStyles.input} ${errors.password ? formStyles.inputError : ""}`}
-            aria-invalid={!!errors.password}
-            aria-describedby={errors.password ? "password-error" : undefined}
-            {...register("password")}
-          />
-          {errors.password ? (
-            <p className={formStyles.errorText} id="password-error" role="alert">
-              {errors.password.message}
-            </p>
-          ) : null}
-        </div>
-
         <div className={styles.submitRow}>
           <button
             type="submit"
             className={`${formStyles.primaryButton} ${styles.submitButton}`}
             disabled={submitting}
           >
-            {submitting ? "Signing in..." : "Sign In"}
+            {submitting ? "Sending code..." : "Send Code"}
           </button>
         </div>
       </form>

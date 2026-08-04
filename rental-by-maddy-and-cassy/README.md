@@ -57,16 +57,12 @@ Web Push notifications are available from the customer profile after
 configured (generate a pair with
 `node -e "console.log(require('web-push').generateVAPIDKeys())"`).
 
-## Gmail signup verification
+## Customer sign-in
 
-New customer accounts complete a six-digit email OTP step. Configure
-`GMAIL_SMTP_USER`, `GMAIL_SMTP_APP_PASSWORD`, and a long random
-`EMAIL_OTP_HMAC_SECRET` to send the code through Gmail. Use a Google App
-Password, not the Gmail account's normal password.
-
-In local development, when Gmail credentials are absent, the verification
-screen displays a clearly marked preview code so the full signup and booking
-flow remains testable. Preview codes are never returned in production.
+Customers sign in and create accounts with a six-digit email OTP —
+`supabase.auth.signInWithOtp` sends the code and `supabase.auth.verifyOtp`
+confirms it, so no separate email provider configuration is required beyond
+the Supabase project's own email settings.
 
 ## Verification
 
