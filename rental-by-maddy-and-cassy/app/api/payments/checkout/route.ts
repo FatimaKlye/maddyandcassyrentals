@@ -160,6 +160,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const invoicePath = `${user.id}/${bookingId}/${invoiceNumber}.pdf`;
     const remainingAfterThis = Math.max(0, balanceDue - amount);
 
+    let invoiceReady = true;
     try {
       await generateAndSaveInvoice(admin, {
         booking,
@@ -172,7 +173,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     } catch (error) {
       console.error("Invoice PDF generation failed", error);
+<<<<<<< HEAD
       return responseError("The invoice could not be prepared. Please try again.", 500);
+=======
+      invoiceReady = false;
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
     }
 
     await admin.from("payment_records").insert({
@@ -188,6 +193,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       paymongo_checkout_session_id: checkout.id,
       provider_metadata: { checkoutUrl: checkout.checkoutUrl, livemode: checkout.livemode, demo: demoMode },
     });
+<<<<<<< HEAD
 
     await admin.from("booking_invoices").insert({
       id: invoiceId,
@@ -218,6 +224,76 @@ export async function POST(request: Request): Promise<NextResponse> {
     await admin.from("notifications").insert({
       user_id: user.id,
       booking_id: bookingId,
+=======
+    batch.set(invoiceRef, {
+      id: invoiceRef.id,
+      invoiceNumber,
+      bookingId,
+      userId: user.uid,
+      bookingRef: booking.bookingRef,
+      status: "open",
+      currency: "PHP",
+      lineItems: [
+        {
+          name: booking.productSnapshot?.name || "Rental item",
+          description: `${booking.dayCount} day rental`,
+          quantity: 1,
+          unitAmount: amount,
+          amount,
+        },
+      ],
+      subtotal: amount,
+      total: totalAmount,
+      amountDueNow: amount,
+      remainingBalance: Math.max(0, balanceDue - amount),
+      paymentOption,
+      isDemo: demoMode,
+      storagePath: invoicePath,
+      generationStatus: invoiceReady ? "ready" : "pending_retry",
+      paymentId: paymentRef.id,
+      issuedAt: now,
+      updatedAt: now,
+    });
+    if (invoiceReady) {
+      batch.set(bookingRef.collection("documents").doc(`invoice-${invoiceRef.id}`), {
+        type: "invoice",
+        storagePath: invoicePath,
+        title: demoMode
+          ? `DEMO Invoice ${invoiceNumber} - Not Valid`
+          : `Invoice ${invoiceNumber}`,
+        isDemo: demoMode,
+        generatedAt: now,
+      });
+    }
+    batch.update(bookingRef, {
+      amountDue: totalAmount,
+      balanceDue,
+      paymentChoice: paymentOption,
+      paymentRequired: true,
+      paymentStatus: "pending",
+      activePaymentId: paymentRef.id,
+      updatedAt: now,
+    });
+    batch.set(db.collection("auditLogs").doc(), {
+      action: "payment.checkout_created",
+      actorType: "customer",
+      actorId: user.uid,
+      bookingId,
+      targetType: "payment",
+      targetId: paymentRef.id,
+      metadata: {
+        checkoutSessionId: checkout.id,
+        amount,
+        paymentOption,
+        demo: demoMode,
+        invoiceReady,
+      },
+      createdAt: now,
+    });
+    batch.set(db.collection("users").doc(user.uid).collection("notifications").doc(), {
+      recipientId: user.uid,
+      bookingId,
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
       type: "payment_pending",
       title: demoMode ? "Demo payment checkout ready" : "Payment checkout ready",
       message: demoMode
@@ -239,10 +315,20 @@ export async function POST(request: Request): Promise<NextResponse> {
       checkoutUrl: checkout.checkoutUrl,
       paymentId: paymentRecordId,
       invoiceNumber,
+      invoiceReady,
     });
   } catch (error) {
+<<<<<<< HEAD
     if (error instanceof RequestSecurityError) return responseError(error.message, error.status);
     if (error instanceof PayMongoError) return responseError(error.message, error.status);
+=======
+    if (error instanceof RequestSecurityError) {
+      return responseError(error.message, error.status);
+    }
+    if (error instanceof PayMongoError) {
+      return responseError(error.message, error.status);
+    }
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
     console.error("Payment checkout creation failed", error);
     return responseError("The secure checkout could not be created. Please try again.", 500);
   }

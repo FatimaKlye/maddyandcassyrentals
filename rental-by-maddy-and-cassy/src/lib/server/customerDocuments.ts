@@ -32,12 +32,41 @@ export async function savePrivatePdf(
   storagePath: string,
   bytes: Uint8Array,
 ): Promise<void> {
+<<<<<<< HEAD
   const { error } = await admin.storage.from(bucket).upload(storagePath, Buffer.from(bytes), {
     contentType: "application/pdf",
     upsert: true,
     cacheControl: "0",
   });
   if (error) throw new Error(`Failed to store ${storagePath}: ${error.message}`);
+=======
+  const file = getAdminStorage().bucket().file(storagePath);
+  let lastError: unknown;
+
+  // Cloud Storage occasionally resets a local development connection. PDF
+  // uploads are idempotent, so a short retry is safe and avoids making the
+  // customer restart checkout for a transient network interruption.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await file.save(Buffer.from(bytes), {
+        resumable: false,
+        contentType: "application/pdf",
+        metadata: {
+          cacheControl: "private, max-age=0, no-store",
+          metadata,
+        },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+      }
+    }
+  }
+
+  throw lastError;
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 }
 
 export async function generateAndSaveInvoice(

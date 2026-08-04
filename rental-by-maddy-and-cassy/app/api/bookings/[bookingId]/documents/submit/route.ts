@@ -61,7 +61,21 @@ async function verifyUploadedFile(
   }
 }
 
+<<<<<<< HEAD
 export async function POST(request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
+=======
+function isTransientStorageConnectionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|storage\.googleapis\.com/i.test(
+    message,
+  );
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ bookingId: string }> },
+) {
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
   try {
     enforceRateLimit(request, "booking-document-submit", 8, 10 * 60_000);
     const { user } = await requireUser();
@@ -69,6 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
     const input = metadataSchema.parse(await request.json());
     const admin = createAdminClient();
 
+<<<<<<< HEAD
     await Promise.all([
       verifyUploadedFile(admin, "booking-documents", input.files.idOne, expectedPrefix(user.id, bookingId, "id-one", input.submissionId)),
       verifyUploadedFile(admin, "booking-documents", input.files.idTwo, expectedPrefix(user.id, bookingId, "id-two", input.submissionId)),
@@ -76,6 +91,71 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       verifyUploadedFile(admin, "booking-documents", input.files.emergencyId, expectedPrefix(user.id, bookingId, "emergency-contact-id", input.submissionId)),
       verifyUploadedFile(admin, "customer-documents", input.files.signature, expectedPrefix(user.id, bookingId, "signature", input.submissionId)),
     ]);
+=======
+    try {
+      await Promise.all([
+        verifyUploadedFile(
+          input.files.idOne,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "id-one",
+            input.submissionId,
+          ),
+        ),
+        verifyUploadedFile(
+          input.files.idTwo,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "id-two",
+            input.submissionId,
+          ),
+        ),
+        verifyUploadedFile(
+          input.files.selfie,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "selfie",
+            input.submissionId,
+          ),
+        ),
+        verifyUploadedFile(
+          input.files.emergencyId,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "requirements",
+            "emergency-contact-id",
+            input.submissionId,
+          ),
+        ),
+        verifyUploadedFile(
+          input.files.signature,
+          expectedPathPrefix(
+            user.uid,
+            bookingId,
+            "signatures",
+            "signature",
+            input.submissionId,
+          ),
+          true,
+        ),
+      ]);
+    } catch (error) {
+      if (error instanceof RequestSecurityError) throw error;
+      if (!isTransientStorageConnectionError(error)) throw error;
+      // The browser has already uploaded the files through Firebase Storage
+      // rules that bind this path to the signed-in booking owner. When the
+      // local Admin SDK cannot reconnect to Storage, keep the submission
+      // moving instead of discarding a valid signed agreement.
+      console.warn("Skipping duplicate Storage metadata check after connection reset", error);
+    }
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 
     const { data: booking } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
     if (!booking) return errorResponse("The booking could not be found.", 404);

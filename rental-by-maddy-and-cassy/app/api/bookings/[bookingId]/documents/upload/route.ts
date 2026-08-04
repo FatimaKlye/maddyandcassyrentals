@@ -28,7 +28,43 @@ function extensionFor(contentType: string): string {
   return "jpg";
 }
 
+<<<<<<< HEAD
 export async function POST(request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
+=======
+async function savePrivateUpload(
+  path: string,
+  bytes: ArrayBuffer,
+  contentType: string,
+): Promise<void> {
+  const file = getAdminStorage().bucket().file(path);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await file.save(Buffer.from(bytes), {
+        resumable: false,
+        metadata: {
+          contentType,
+          cacheControl: "private, no-store, max-age=0",
+        },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ bookingId: string }> },
+) {
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
   try {
     enforceRateLimit(request, "booking-document-upload", 30, 10 * 60_000);
     const { supabase, user } = await requireUser();
@@ -79,8 +115,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       throw new RequestSecurityError("The selected file type is not supported.", 400);
     }
 
+<<<<<<< HEAD
     const bucket = uploadKind.signature ? "customer-documents" : "booking-documents";
     const path = `${user.id}/${bookingId}/${uploadKind.fileName}-${submissionId}.${extensionFor(value.type)}`;
+=======
+    const path =
+      `private/users/${user.uid}/bookings/${bookingId}/${uploadKind.folder}/` +
+      `${uploadKind.fileName}-${submissionId}.${extensionFor(value.type)}`;
+    await savePrivateUpload(path, await value.arrayBuffer(), value.type);
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 
     const { error: uploadError } = await supabase.storage.from(bucket).upload(path, value, {
       contentType: value.type,

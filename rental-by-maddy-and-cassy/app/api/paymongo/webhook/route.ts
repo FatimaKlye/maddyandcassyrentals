@@ -156,6 +156,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   const source = recordValue(paidAttributes.source);
   const paymentMethod = stringValue(source.type) || stringValue(paidAttributes.payment_method_type) || "PayMongo";
 
+  let receiptReady = false;
+  let agreementReady = false;
   try {
     const result = await fulfillVerifiedPayment(admin, {
       paymentRecordId: payment.id,
@@ -165,6 +167,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       providerMetadata: { checkoutSessionId, livemode },
       providerEventId: eventId,
     });
+<<<<<<< HEAD
 
     await markEvent({ processing_status: "processed", payment_record_id: payment.id });
 
@@ -184,7 +187,201 @@ export async function POST(request: Request): Promise<NextResponse> {
       processing_status: "failed",
       error_message: error instanceof Error ? error.message : "Unknown error.",
       payment_record_id: payment.id,
+=======
+    receiptReady = true;
+  } catch (error) {
+    // Payment verification is the source of truth. A receipt upload can be
+    // retried later and must never cause a paid PayMongo event to be rejected.
+    console.error("Paid booking receipt generation failed", error);
+  }
+
+  if (canFinalizeAgreement) {
+    try {
+      await generateAndSaveFinalAgreement({
+        booking,
+        agreement: agreementSnapshot.data() ?? {},
+        paymentReference: providerPaymentId,
+        storagePath: agreementPath,
+      });
+      agreementReady = true;
+    } catch (error) {
+      console.error("Paid booking agreement generation failed", error);
+    }
+  }
+
+  try {
+    const now = Timestamp.now();
+    await db.runTransaction(async (transaction) => {
+      const [latestBooking, latestPayment, latestEvent] = await transaction.getAll(
+        bookingRef,
+        paymentRef,
+        eventRef,
+      );
+      if (latestPayment.data()?.status === "paid" || latestEvent.data()?.status === "processed") {
+        return;
+      }
+      const latestBookingData = latestBooking.data() ?? {};
+      const totalAmount =
+        typeof latestBookingData.estimatedRentalAmount === "number"
+          ? latestBookingData.estimatedRentalAmount
+          : latestBookingData.amountDue;
+      const previousAmountPaid =
+        typeof latestBookingData.amountPaid === "number"
+          ? latestBookingData.amountPaid
+          : 0;
+      const newAmountPaid = Math.min(
+        typeof totalAmount === "number" ? totalAmount : previousAmountPaid + expectedAmount,
+        previousAmountPaid + expectedAmount,
+      );
+      const remainingBalance =
+        typeof totalAmount === "number" ? Math.max(0, totalAmount - newAmountPaid) : 0;
+      const nextPaymentStatus =
+        remainingBalance <= 0.009 ? "paid" : "partially_paid";
+
+      transaction.update(paymentRef, {
+        status: "paid",
+        paymentId: providerPaymentId,
+        paymentMethod,
+        providerPayload: {
+          checkoutSessionId,
+          paymentIntentId: paidAttributes.payment_intent_id ?? null,
+          referenceNumber: checkoutAttributes.reference_number ?? session.referenceNumber,
+          livemode: event.data.attributes.livemode === true,
+        },
+        paidAt: now,
+        updatedAt: now,
+      });
+      transaction.update(invoiceRef, {
+        status: "paid",
+        paidAt: now,
+        updatedAt: now,
+      });
+      transaction.set(bookingRef.collection("receipts").doc(receiptId), {
+        id: receiptId,
+        receiptNumber,
+        bookingId,
+        userId,
+        bookingRef: booking.bookingRef,
+        paymentId: paymentRecordId,
+        providerPaymentId,
+        amount: expectedAmount,
+        currency: "PHP",
+        storagePath: receiptPath,
+        generationStatus: receiptReady ? "ready" : "pending_retry",
+        issuedAt: now,
+      });
+      if (receiptReady) {
+        transaction.set(bookingRef.collection("documents").doc(`receipt-${receiptId}`), {
+          type: "receipt",
+          storagePath: receiptPath,
+          title: `Official Receipt ${receiptNumber}`,
+          generatedAt: now,
+        });
+        transaction.set(bookingRef.collection("documents").doc(`proof-${receiptId}`), {
+          type: "payment_proof",
+          storagePath: receiptPath,
+          title: `Verified PayMongo Payment ${providerPaymentId}`,
+          generatedAt: now,
+        });
+      }
+
+      const bookingUpdates: Record<string, unknown> = {
+        paymentStatus: nextPaymentStatus,
+        amountPaid: newAmountPaid,
+        balanceDue: remainingBalance,
+        paidAt: now,
+        paymentReference: providerPaymentId,
+        updatedAt: now,
+      };
+      if (agreementReady && booking.status === "approved") {
+        bookingUpdates.status = "confirmed";
+        bookingUpdates.agreementStatus = "completed";
+        bookingUpdates.confirmedAt = now;
+      }
+      transaction.update(bookingRef, bookingUpdates);
+
+      if (agreementReady) {
+        transaction.update(agreementRef, {
+          status: "completed",
+          finalAgreementPath: agreementPath,
+          updatedAt: now,
+        });
+        transaction.set(bookingRef.collection("documents").doc("final-rental-agreement"), {
+          type: "final_rental_agreement",
+          storagePath: agreementPath,
+          title: "Final Signed Rental Agreement",
+          generatedAt: now,
+        });
+        transaction.set(bookingRef.collection("documents").doc("booking-confirmation"), {
+          type: "booking_confirmation",
+          storagePath: agreementPath,
+          title: "Payment-Aware Booking Confirmation",
+          generatedAt: now,
+        });
+      }
+
+      transaction.set(bookingRef.collection("statusHistory").doc(), {
+        previousStatus: booking.status,
+        newStatus:
+          agreementReady && booking.status === "approved"
+            ? "confirmed"
+            : booking.status,
+        changedBy: "system",
+        message: receiptReady
+          ? "PayMongo payment verified and receipt issued."
+          : "PayMongo payment verified. Receipt generation is pending a document storage retry.",
+        createdAt: now,
+      });
+      transaction.set(db.collection("users").doc(userId).collection("notifications").doc(), {
+        recipientId: userId,
+        bookingId,
+        type: "payment_paid",
+        title: "Reservation payment confirmed",
+        message: receiptReady
+          ? `Your payment for ${booking.bookingRef} was verified. Your rental dates are now secured and your receipt is ready.`
+          : `Your payment for ${booking.bookingRef} was verified and your rental dates are secured. Your receipt will be prepared when document storage is available.`,
+        actionUrl: `/account/bookings/${bookingId}`,
+        isRead: false,
+        createdAt: now,
+      });
+      transaction.set(db.collection("auditLogs").doc(), {
+        action: "payment.paid",
+        actorType: "system",
+        actorId: "paymongo",
+        bookingId,
+        targetType: "payment",
+        targetId: paymentRecordId,
+        metadata: {
+          checkoutSessionId,
+          providerPaymentId,
+          amount: expectedAmount,
+          paymentOption: session.paymentOption ?? "full",
+          remainingBalance,
+          receiptReady,
+          agreementReady,
+        },
+        createdAt: now,
+      });
+      transaction.update(eventRef, {
+        status: "processed",
+        processedAt: now,
+      });
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
     });
     return json("Payment could not be recorded.", 500);
   }
+<<<<<<< HEAD
+=======
+
+  await sendPushNotification({
+    userId,
+    title: "Reservation payment confirmed",
+    body: receiptReady
+      ? `Your payment for ${booking.bookingRef} was verified. Your rental dates are secured and your receipt is ready.`
+      : `Your payment for ${booking.bookingRef} was verified and your rental dates are secured. Your receipt is still being prepared.`,
+    actionUrl: `/account/bookings/${bookingId}`,
+  }).catch((pushError) => console.error("Payment push notification failed", pushError));
+
+  return json("Payment recorded.", 200);
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 }

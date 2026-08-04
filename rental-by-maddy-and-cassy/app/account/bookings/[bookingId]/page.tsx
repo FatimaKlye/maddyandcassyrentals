@@ -17,6 +17,11 @@ import Spinner from "@/components/ui/Spinner";
 import formStyles from "@/components/ui/Form.module.css";
 import styles from "./bookingDetail.module.css";
 import BookingPaymentPanel from "@/components/payment/BookingPaymentPanel";
+<<<<<<< HEAD
+=======
+import { getBookingFileUrl } from "@/src/services/bookingDetailService";
+import { retryPendingFinancialDocuments } from "@/src/services/paymentService";
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
 import { useToast } from "@/components/ui/ToastProvider";
 
 const REQUIREMENTS_STATUS_LABEL: Record<string, string> = {
@@ -57,7 +62,23 @@ function BookingDetailContent() {
 
   async function loadDetails() {
     try {
+<<<<<<< HEAD
       const result = await getBookingDetails(createClient(), params.bookingId);
+=======
+      let result = await getBookingDetails(params.bookingId);
+      const hasPendingFinancialDocuments = result
+        ? [...result.invoices, ...result.receipts].some(
+            (document) => document.generationStatus === "pending_retry",
+          )
+        : false;
+      if (result && user && hasPendingFinancialDocuments) {
+        await retryPendingFinancialDocuments(
+          params.bookingId,
+          await user.getIdToken(),
+        ).catch(() => undefined);
+        result = await getBookingDetails(params.bookingId);
+      }
+>>>>>>> 33630b5409c8d7d7f3ae7359564ad097aa42a444
       setDetails(result ?? "error");
     } catch {
       setDetails("error");
