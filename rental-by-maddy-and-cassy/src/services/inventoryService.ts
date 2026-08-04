@@ -30,12 +30,24 @@ export class AccountSuspendedError extends Error {
   }
 }
 
+export class DeliveryAddressRequiredError extends Error {
+  constructor() {
+    super("Please provide a complete delivery address (street/barangay, city/municipality, and province).");
+    this.name = "DeliveryAddressRequiredError";
+  }
+}
+
 export interface SubmitBookingInput {
   productId: string;
   rentalStartDate: string;
   rentalEndDate: string;
   fulfillmentMethod: FulfillmentMethod;
+  /** Street/barangay/landmark line. Required only when fulfillmentMethod is "delivery". */
   location?: string;
+  /** Required only when fulfillmentMethod is "delivery". */
+  cityMunicipality?: string;
+  /** Required only when fulfillmentMethod is "delivery". */
+  province?: string;
   customerNotes?: string;
   deliveryFee?: number;
   discountAmount?: number;
@@ -68,6 +80,8 @@ export async function submitBookingWithDateGuard(
     p_rental_end_date: input.rentalEndDate,
     p_fulfillment_method: input.fulfillmentMethod,
     p_location: input.location ?? "",
+    p_city_municipality: input.cityMunicipality ?? "",
+    p_province: input.province ?? "",
     p_customer_notes: input.customerNotes ?? "",
     p_delivery_fee: input.deliveryFee ?? 0,
     p_discount_amount: input.discountAmount ?? 0,
@@ -89,6 +103,7 @@ export async function submitBookingWithDateGuard(
       throw new InsufficientUnitsError(input.productId);
     }
     if (error.message.includes("ACCOUNT_SUSPENDED")) throw new AccountSuspendedError();
+    if (error.message.includes("DELIVERY_ADDRESS_REQUIRED")) throw new DeliveryAddressRequiredError();
     throw new Error(error.message);
   }
 

@@ -1705,6 +1705,7 @@ export type Database = {
       }
       create_booking: {
         Args: {
+          p_city_municipality?: string
           p_customer_notes: string
           p_customer_snapshot: Json
           p_delivery_fee: number
@@ -1714,6 +1715,7 @@ export type Database = {
           p_location: string
           p_product_id: string
           p_product_snapshot: Json
+          p_province?: string
           p_rental_end_date: string
           p_rental_start_date: string
         }

@@ -56,11 +56,26 @@ export default function StepRentalDetails({
   }, [product.id, units.totalUnits]);
 
   const dayCount = getDayCount(draft.startDate, draft.endDate);
+  const isDelivery = draft.fulfillmentMethod === "delivery";
+  const hasValidLocation =
+    draft.fulfillmentMethod === "pickup" ||
+    (isDelivery &&
+      draft.customerLocation.trim().length > 0 &&
+      draft.cityMunicipality.trim().length > 0 &&
+      draft.province.trim().length > 0);
   const canContinue =
-    !!draft.startDate &&
-    !!draft.endDate &&
-    !!draft.fulfillmentMethod &&
-    draft.customerLocation.trim().length > 0;
+    !!draft.startDate && !!draft.endDate && !!draft.fulfillmentMethod && hasValidLocation;
+
+  function handleFulfillmentChange(method: FulfillmentMethod) {
+    if (method === "pickup") {
+      // Pickup never carries a delivery address -- clear any address the
+      // customer may have typed while "delivery" was selected so a
+      // subsequent switch back to delivery doesn't reuse stale values.
+      onUpdate({ fulfillmentMethod: method, customerLocation: "", cityMunicipality: "", province: "" });
+    } else {
+      onUpdate({ fulfillmentMethod: method });
+    }
+  }
 
   async function handleContinue() {
     setError(null);
@@ -77,8 +92,8 @@ export default function StepRentalDetails({
       setError("Please choose pickup or delivery.");
       return;
     }
-    if (!draft.customerLocation.trim()) {
-      setError("Please enter your location.");
+    if (isDelivery && (!draft.customerLocation.trim() || !draft.cityMunicipality.trim() || !draft.province.trim())) {
+      setError("Please provide your complete delivery address, including city/municipality and province.");
       return;
     }
 
@@ -161,19 +176,6 @@ export default function StepRentalDetails({
         <div className={styles.fulfillmentColumn}>
           <h3 className={styles.sectionHeading}>Location &amp; Fulfillment</h3>
 
-          <div className={formStyles.field}>
-            <label className={formStyles.label} htmlFor="customerLocation">
-              Your location<span className={formStyles.required}>*</span>
-            </label>
-            <textarea
-              id="customerLocation"
-              className={formStyles.textarea}
-              value={draft.customerLocation}
-              onChange={(event) => onUpdate({ customerLocation: event.target.value })}
-              placeholder="Barangay, city, and any landmark details"
-            />
-          </div>
-
           <fieldset className={styles.fulfillmentFieldset}>
             <legend className={formStyles.label}>
               Pickup or delivery<span className={formStyles.required}>*</span>
@@ -184,7 +186,7 @@ export default function StepRentalDetails({
                 type="radio"
                 name="fulfillmentMethod"
                 checked={draft.fulfillmentMethod === "pickup"}
-                onChange={() => onUpdate({ fulfillmentMethod: "pickup" as FulfillmentMethod })}
+                onChange={() => handleFulfillmentChange("pickup" as FulfillmentMethod)}
               />
               <span>
                 <strong>Pickup</strong>
@@ -200,7 +202,7 @@ export default function StepRentalDetails({
                 type="radio"
                 name="fulfillmentMethod"
                 checked={draft.fulfillmentMethod === "delivery"}
-                onChange={() => onUpdate({ fulfillmentMethod: "delivery" as FulfillmentMethod })}
+                onChange={() => handleFulfillmentChange("delivery" as FulfillmentMethod)}
               />
               <span>
                 <strong>Delivery</strong>
@@ -211,6 +213,53 @@ export default function StepRentalDetails({
               </span>
             </label>
           </fieldset>
+
+          {isDelivery ? (
+            <>
+              <div className={formStyles.field}>
+                <label className={formStyles.label} htmlFor="customerLocation">
+                  Delivery address<span className={formStyles.required}>*</span>
+                </label>
+                <textarea
+                  id="customerLocation"
+                  className={formStyles.textarea}
+                  value={draft.customerLocation}
+                  onChange={(event) => onUpdate({ customerLocation: event.target.value })}
+                  placeholder="House/unit number, street, barangay, and any landmark details"
+                />
+              </div>
+
+              <div className={formStyles.row}>
+                <div className={formStyles.field}>
+                  <label className={formStyles.label} htmlFor="cityMunicipality">
+                    City/Municipality<span className={formStyles.required}>*</span>
+                  </label>
+                  <input
+                    id="cityMunicipality"
+                    type="text"
+                    className={formStyles.input}
+                    value={draft.cityMunicipality}
+                    onChange={(event) => onUpdate({ cityMunicipality: event.target.value })}
+                    placeholder="e.g. Manila"
+                  />
+                </div>
+
+                <div className={formStyles.field}>
+                  <label className={formStyles.label} htmlFor="province">
+                    Province<span className={formStyles.required}>*</span>
+                  </label>
+                  <input
+                    id="province"
+                    type="text"
+                    className={formStyles.input}
+                    value={draft.province}
+                    onChange={(event) => onUpdate({ province: event.target.value })}
+                    placeholder="e.g. Metro Manila"
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
 

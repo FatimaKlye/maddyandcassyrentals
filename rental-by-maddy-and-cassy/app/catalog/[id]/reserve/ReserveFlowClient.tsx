@@ -16,7 +16,7 @@ import StepPaymentSubmission, {
 } from "@/components/reservation/StepPaymentSubmission";
 import StepBookingConfirmation from "@/components/reservation/StepBookingConfirmation";
 import { useToast } from "@/components/ui/ToastProvider";
-import { createEmptyDraft, getDayCount, type ReservationDraft } from "@/src/types/reservationDraft";
+import { createEmptyDraft, formatCustomerLocation, getDayCount, type ReservationDraft } from "@/src/types/reservationDraft";
 import {
   createBookingReservation,
   submitBookingDocuments,
@@ -228,7 +228,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     endDate: draft.endDate ?? new Date(),
     dayCount: getDayCount(draft.startDate, draft.endDate),
     fulfillmentMethod: draft.fulfillmentMethod ?? "pickup",
-    customerLocation: draft.customerLocation || "-",
+    customerLocation: draft.fulfillmentMethod ? formatCustomerLocation(draft) || "-" : "-",
     pricePerDay: product.pricePerDay,
     currency: product.currency,
     includedAccessories: product.included,

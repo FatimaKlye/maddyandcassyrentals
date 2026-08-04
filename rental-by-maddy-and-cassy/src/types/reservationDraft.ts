@@ -46,7 +46,12 @@ export interface ReservationDraft {
   startDate: Date | null;
   endDate: Date | null;
   fulfillmentMethod: FulfillmentMethod | null;
+  /** Street/barangay/landmark line. Only required (and only sent) when fulfillmentMethod is "delivery". */
   customerLocation: string;
+  /** Required (and only sent) when fulfillmentMethod is "delivery". */
+  cityMunicipality: string;
+  /** Required (and only sent) when fulfillmentMethod is "delivery". */
+  province: string;
   paymentOption: Exclude<PaymentOption, "balance">;
   customerInfo: CustomerInfoDraft;
   requirements: RequirementsDraft;
@@ -59,6 +64,8 @@ export function createEmptyDraft(): ReservationDraft {
     endDate: null,
     fulfillmentMethod: null,
     customerLocation: "",
+    cityMunicipality: "",
+    province: "",
     paymentOption: "deposit_50",
     customerInfo: {
       fullName: "",
@@ -95,6 +102,23 @@ export function createEmptyDraft(): ReservationDraft {
       typedFullName: "",
     },
   };
+}
+
+/**
+ * Human-readable location summary used on the review step and the rental
+ * agreement. Pickup never carries a delivery address (see create_booking),
+ * so it always shows the fixed pickup site instead of blank fields.
+ */
+export function formatCustomerLocation(
+  draft: Pick<ReservationDraft, "fulfillmentMethod" | "customerLocation" | "cityMunicipality" | "province">,
+): string {
+  if (draft.fulfillmentMethod === "pickup") {
+    return "Pickup — Right Focus Off Campus, Manuel Hizon, Sta. Cruz, Manila";
+  }
+  return [draft.customerLocation, draft.cityMunicipality, draft.province]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 export function getDayCount(startDate: Date | null, endDate: Date | null): number {

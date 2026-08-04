@@ -2,7 +2,7 @@
 
 import type { Product } from "@/types/product";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
-import { getDayCount } from "@/src/types/reservationDraft";
+import { formatCustomerLocation, getDayCount } from "@/src/types/reservationDraft";
 
 import BookingSummaryCard from "@/components/booking-summary/BookingSummaryCard";
 
@@ -83,7 +83,7 @@ export default function StepReview({
             endDate={draft.endDate}
             dayCount={dayCount}
             fulfillmentMethod={draft.fulfillmentMethod}
-            customerLocation={draft.customerLocation}
+            customerLocation={formatCustomerLocation(draft)}
           />
         ) : (
           <p className={formStyles.errorText}>

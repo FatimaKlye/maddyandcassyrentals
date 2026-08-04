@@ -16,6 +16,13 @@ function validateReservationDetails(draft: ReservationDraft): void {
     throw new Error("Missing rental details.");
   }
 
+  if (
+    draft.fulfillmentMethod === "delivery" &&
+    (!draft.customerLocation.trim() || !draft.cityMunicipality.trim() || !draft.province.trim())
+  ) {
+    throw new Error("Please provide a complete delivery address (street/barangay, city/municipality, and province).");
+  }
+
   const { customerInfo } = draft;
   if (
     !customerInfo.fullName.trim() ||
@@ -45,7 +52,11 @@ export async function createBookingReservation(
     rentalStartDate: toDateKey(startDate),
     rentalEndDate: toDateKey(endDate),
     fulfillmentMethod,
-    location: draft.customerLocation,
+    // Pickup never carries a delivery address (create_booking stores null for
+    // pickup regardless), so only send it through for delivery bookings.
+    location: fulfillmentMethod === "delivery" ? draft.customerLocation.trim() : undefined,
+    cityMunicipality: fulfillmentMethod === "delivery" ? draft.cityMunicipality.trim() : undefined,
+    province: fulfillmentMethod === "delivery" ? draft.province.trim() : undefined,
     productSnapshot: {
       name: product.name,
       brand: product.brand ?? "",
