@@ -4,6 +4,7 @@ import { isDemoPaymentEnabled } from "@/src/lib/paymongo/demo";
 import { enforceRateLimit, requireUser, RequestSecurityError } from "@/src/lib/server/requestSecurity";
 import { createAdminClient } from "@/src/lib/supabase/admin";
 import { getBookingById } from "@/src/services/bookingService";
+import { isUuid } from "@/src/lib/uuid";
 import type { Database } from "@/src/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -52,7 +53,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       | { bookingId?: unknown; paymentOption?: unknown; returnPath?: unknown }
       | null;
     const bookingId = typeof body?.bookingId === "string" ? body.bookingId.trim() : "";
-    if (!bookingId || bookingId.length > 100) {
+    if (!bookingId || !isUuid(bookingId)) {
       return responseError("Choose a valid booking to pay.", 400);
     }
 
