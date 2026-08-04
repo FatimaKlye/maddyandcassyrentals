@@ -116,7 +116,7 @@ export function formatCustomerLocation(
     return "Pickup — Right Focus Off Campus, Manuel Hizon, Sta. Cruz, Manila";
   }
   return [draft.customerLocation, draft.cityMunicipality, draft.province]
-    .map((part) => part.trim())
+    .map((part) => (part ?? "").trim())
     .filter(Boolean)
     .join(", ");
 }
