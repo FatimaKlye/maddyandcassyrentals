@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "render:pdf-samples": "tsx scripts/renderCustomerDocumentSamples.ts",
+    "migrate:inventory": "tsx scripts/migrateFirebaseInventory.ts",
     "test:payments": "tsx --test scripts/testPayments.ts",
     "test:otp": "tsx --test scripts/testEmailOtp.ts",
     "verify": "npm run lint && tsc --noEmit && npm run test:payments && npm run test:otp && npm run build"
