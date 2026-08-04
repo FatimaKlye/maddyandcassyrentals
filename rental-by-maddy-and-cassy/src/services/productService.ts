@@ -5,22 +5,68 @@ import type { Product, ProductReview } from "@/types/product";
 
 type ProductRow = Tables<"products"> & {
   product_images: Tables<"product_images">[] | null;
-  product_availability_summary: Tables<"product_availability_summary"> | null;
-  reviews: Pick<Tables<"reviews">, "id" | "user_id" | "rating" | "comment" | "status" | "created_at">[] | null;
+  categories: Pick<Tables<"categories">, "name"> | null;
+  brands: Pick<Tables<"brands">, "name"> | null;
 };
 
 const PRODUCT_SELECT = `
   *,
   product_images(*),
-  product_availability_summary(*),
-  reviews(id, user_id, rating, comment, status, created_at)
+  categories(name),
+  brands(name)
 `;
 
-function mapProduct(
+/**
+ * Customers can't SELECT inventory_units/unit_reservations directly (admin-only
+ * RLS), so live unit counts come from the get_product_availability() RPC — the
+ * same SECURITY DEFINER function the booking flow uses — scoped to "today" as a
+ * point-in-time snapshot for catalog display.
+ */
+async function fetchAvailabilitySnapshot(
+  supabase: SupabaseClient<Database>,
+  productId: string,
+): Promise<{ totalUnits: number; availableUnits: number }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("get_product_availability", {
+    p_product_id: productId,
+    p_start_date: today,
+    p_end_date: today,
+  });
+  if (error) throw new Error(error.message);
+  const row = data?.[0];
+  return { totalUnits: row?.total_units ?? 0, availableUnits: row?.available_units ?? 0 };
+}
+
+/** Reviews are keyed off booking_items now, not products directly, so they're
+ * fetched via the get_product_reviews() RPC (already filtered to approved). */
+async function fetchApprovedReviews(
+  supabase: SupabaseClient<Database>,
+  productId: string,
+): Promise<ProductReview[]> {
+  const { data, error } = await supabase.rpc("get_product_reviews", {
+    p_product_id: productId,
+    p_limit: 100,
+    p_offset: 0,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((review) => ({
+    id: review.review_id,
+    author: "Verified renter",
+    rating: review.rating,
+    comment: review.comment ?? "",
+    date: review.created_at,
+  }));
+}
+
+async function mapProduct(
   supabase: SupabaseClient<Database>,
   row: ProductRow,
-): Product {
-  const approvedReviews = (row.reviews ?? []).filter((review) => review.status === "approved");
+): Promise<Product> {
+  const [{ totalUnits, availableUnits }, reviews] = await Promise.all([
+    fetchAvailabilitySnapshot(supabase, row.id),
+    fetchApprovedReviews(supabase, row.id),
+  ]);
+
   const images = (row.product_images ?? [])
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -33,19 +79,10 @@ function mapProduct(
       isPrimary: image.is_primary,
     }));
 
-  const reviews: ProductReview[] = approvedReviews.map((review) => ({
-    id: review.id,
-    author: "Verified renter",
-    rating: review.rating,
-    comment: review.comment ?? "",
-    date: review.created_at,
-  }));
-
-  const rating = approvedReviews.length
-    ? approvedReviews.reduce((sum, review) => sum + review.rating, 0) / approvedReviews.length
+  const rating = reviews.length
+    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
     : 0;
 
-  const summary = row.product_availability_summary;
   const specifications = (row.specifications as Record<string, string>) ?? {};
   const included = specifications.included
     ? specifications.included.split(",").map((item) => item.trim()).filter(Boolean)
@@ -55,8 +92,8 @@ function mapProduct(
     id: row.id,
     slug: row.slug,
     name: row.name,
-    brand: row.brand ?? undefined,
-    category: row.category,
+    brand: row.brands?.name ?? undefined,
+    category: row.categories?.name ?? "",
     shortDescription: row.short_description ?? undefined,
     description: row.description ?? undefined,
     dailyRate: row.daily_rate,
@@ -66,13 +103,13 @@ function mapProduct(
     isFeatured: row.is_featured,
     specifications,
     images,
-    totalUnits: summary?.total_units ?? 0,
-    availableUnits: summary?.available_units ?? 0,
-    reservedUnits: summary?.reserved_units ?? 0,
-    rentedUnits: summary?.rented_units ?? 0,
-    maintenanceUnits: summary?.maintenance_units ?? 0,
+    totalUnits,
+    availableUnits,
+    reservedUnits: Math.max(totalUnits - availableUnits, 0),
+    rentedUnits: 0,
+    maintenanceUnits: 0,
     rating,
-    reviewCount: approvedReviews.length,
+    reviewCount: reviews.length,
     reviews,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -94,7 +131,7 @@ export async function getActiveProducts(): Promise<Product[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return ((data ?? []) as unknown as ProductRow[]).map((row) => mapProduct(supabase, row));
+  return Promise.all(((data ?? []) as unknown as ProductRow[]).map((row) => mapProduct(supabase, row)));
 }
 
 /** Accepts either the product UUID or its slug (catalog links use slugs). */
@@ -109,7 +146,7 @@ export async function getProductById(idOrSlug: string): Promise<Product | null> 
     .maybeSingle();
 
   if (error || !data) return null;
-  return mapProduct(supabase, data as unknown as ProductRow);
+  return await mapProduct(supabase, data as unknown as ProductRow);
 }
 
 /** Admin catalog list — pass a session-bound client so RLS reveals non-active products too. */
@@ -122,7 +159,7 @@ export async function getAllProductsForAdmin(
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return ((data ?? []) as unknown as ProductRow[]).map((row) => mapProduct(supabase, row));
+  return Promise.all(((data ?? []) as unknown as ProductRow[]).map((row) => mapProduct(supabase, row)));
 }
 
 export interface CatalogEditorInput {

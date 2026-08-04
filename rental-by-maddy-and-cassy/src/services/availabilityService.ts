@@ -1,4 +1,4 @@
-import { eachDayOfInterval, formatISO } from "date-fns";
+import { formatISO } from "date-fns";
 import { createPublicClient } from "@/src/lib/supabase/public";
 
 export const MAX_RENTAL_DAYS = 30;
@@ -7,51 +7,36 @@ export function toDateKey(date: Date): string {
   return formatISO(date, { representation: "date" });
 }
 
+/** How far ahead the reservation calendar pre-fetches fully-booked days. */
+const CALENDAR_WINDOW_DAYS = 180;
+
 /**
- * Date keys ("YYYY-MM-DD") on which every unit of a product is already
- * held by a 'reserving' or 'booked' calendar entry. This is a public,
- * non-atomic read (product_availability_summary + availability_calendar_entries
- * are both readable by anon/authenticated for active products) used only to
- * grey out the reservation calendar — the real guard is the
+ * Date keys ("YYYY-MM-DD"), within the next CALENDAR_WINDOW_DAYS, on which
+ * every active unit of a product is already held by a tentative/confirmed/
+ * in_use reservation. Backed by the public.get_product_availability_calendar()
+ * RPC — customers can't SELECT inventory_units/unit_reservations directly, so
+ * this SECURITY DEFINER function is the only public source for calendar
+ * greying. This is a non-atomic, UX-only read — the real guard is the
  * public.create_booking() RPC, which re-checks conflicts with row locks at
  * submission time.
  */
 export async function getFullyBookedDateKeys(productId: string): Promise<Set<string>> {
   const supabase = createPublicClient();
+  const today = new Date();
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + CALENDAR_WINDOW_DAYS);
 
-  const [{ data: summary }, { data: entries, error }] = await Promise.all([
-    supabase
-      .from("product_availability_summary")
-      .select("total_units")
-      .eq("product_id", productId)
-      .maybeSingle(),
-    supabase
-      .from("availability_calendar_entries")
-      .select("start_date, end_date")
-      .eq("product_id", productId)
-      .in("status", ["reserving", "booked"]),
-  ]);
+  const { data, error } = await supabase.rpc("get_product_availability_calendar", {
+    p_product_id: productId,
+    p_start_date: toDateKey(today),
+    p_end_date: toDateKey(windowEnd),
+  });
 
   if (error) throw new Error(error.message);
 
-  const totalUnits = summary?.total_units ?? 0;
-  if (totalUnits <= 0) return new Set();
-
-  const countByDate = new Map<string, number>();
-  for (const entry of entries ?? []) {
-    const days = eachDayOfInterval({
-      start: new Date(`${entry.start_date}T00:00:00`),
-      end: new Date(`${entry.end_date}T00:00:00`),
-    });
-    for (const day of days) {
-      const key = toDateKey(day);
-      countByDate.set(key, (countByDate.get(key) ?? 0) + 1);
-    }
-  }
-
   const fullyBooked = new Set<string>();
-  for (const [key, count] of countByDate) {
-    if (count >= totalUnits) fullyBooked.add(key);
+  for (const row of data ?? []) {
+    if (row.total_units > 0 && row.available_units <= 0) fullyBooked.add(row.day);
   }
   return fullyBooked;
 }
@@ -61,7 +46,13 @@ export async function isRangeAvailable(
   startDate: Date,
   endDate: Date,
 ): Promise<boolean> {
-  const fullyBooked = await getFullyBookedDateKeys(productId);
-  const days = eachDayOfInterval({ start: startDate, end: endDate });
-  return days.every((day) => !fullyBooked.has(toDateKey(day)));
+  const supabase = createPublicClient();
+  const { data, error } = await supabase.rpc("get_product_availability", {
+    p_product_id: productId,
+    p_start_date: toDateKey(startDate),
+    p_end_date: toDateKey(endDate),
+  });
+
+  if (error) throw new Error(error.message);
+  return (data?.[0]?.available_units ?? 0) > 0;
 }

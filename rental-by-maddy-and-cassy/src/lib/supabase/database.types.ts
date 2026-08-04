@@ -14,39 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
-      admins: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          firebase_uid: string | null
-          is_active: boolean
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          firebase_uid?: string | null
-          is_active?: boolean
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          firebase_uid?: string | null
-          is_active?: boolean
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       agreement_acknowledgements: {
         Row: {
           acknowledged: boolean
           acknowledged_at: string | null
           acknowledgement_key: string
-          agreement_id: string
+          agreement_version_id: string
           created_at: string
           id: string
           updated_at: string
@@ -56,7 +29,7 @@ export type Database = {
           acknowledged?: boolean
           acknowledged_at?: string | null
           acknowledgement_key: string
-          agreement_id: string
+          agreement_version_id: string
           created_at?: string
           id?: string
           updated_at?: string
@@ -66,7 +39,7 @@ export type Database = {
           acknowledged?: boolean
           acknowledged_at?: string | null
           acknowledgement_key?: string
-          agreement_id?: string
+          agreement_version_id?: string
           created_at?: string
           id?: string
           updated_at?: string
@@ -74,57 +47,140 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "agreement_acknowledgements_agreement_id_fkey"
-            columns: ["agreement_id"]
+            foreignKeyName: "agreement_acknowledgements_agreement_version_id_fkey"
+            columns: ["agreement_version_id"]
             isOneToOne: false
-            referencedRelation: "booking_agreements"
+            referencedRelation: "agreement_versions"
             referencedColumns: ["id"]
           },
         ]
       }
       agreement_signatures: {
         Row: {
-          agreement_id: string
-          firebase_id: string | null
+          agreement_version_id: string
           id: string
           ip_address: unknown
           signature_data: Json
           signature_path: string | null
           signed_at: string
           signer_name: string
-          signer_role: string
+          signer_role: Database["public"]["Enums"]["signer_role"]
           signer_user_id: string | null
           user_agent: string | null
         }
         Insert: {
-          agreement_id: string
-          firebase_id?: string | null
+          agreement_version_id: string
           id?: string
           ip_address?: unknown
           signature_data?: Json
           signature_path?: string | null
           signed_at?: string
           signer_name: string
-          signer_role: string
+          signer_role: Database["public"]["Enums"]["signer_role"]
           signer_user_id?: string | null
           user_agent?: string | null
         }
         Update: {
-          agreement_id?: string
-          firebase_id?: string | null
+          agreement_version_id?: string
           id?: string
           ip_address?: unknown
           signature_data?: Json
           signature_path?: string | null
           signed_at?: string
           signer_name?: string
-          signer_role?: string
+          signer_role?: Database["public"]["Enums"]["signer_role"]
           signer_user_id?: string | null
           user_agent?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "agreement_signatures_agreement_id_fkey"
+            foreignKeyName: "agreement_signatures_agreement_version_id_fkey"
+            columns: ["agreement_version_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_templates: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          template_code: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          template_code: string
+          title: string
+          version_number: number
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          template_code?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: []
+      }
+      agreement_versions: {
+        Row: {
+          agreement_id: string
+          agreement_snapshot: Json
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          final_document_path: string | null
+          generated_at: string | null
+          generated_document_path: string | null
+          id: string
+          status: Database["public"]["Enums"]["agreement_status"]
+          superseded_at: string | null
+          version_number: number
+        }
+        Insert: {
+          agreement_id: string
+          agreement_snapshot: Json
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          final_document_path?: string | null
+          generated_at?: string | null
+          generated_document_path?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["agreement_status"]
+          superseded_at?: string | null
+          version_number: number
+        }
+        Update: {
+          agreement_id?: string
+          agreement_snapshot?: Json
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          final_document_path?: string | null
+          generated_at?: string | null
+          generated_document_path?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["agreement_status"]
+          superseded_at?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_versions_agreement_id_fkey"
             columns: ["agreement_id"]
             isOneToOne: false
             referencedRelation: "booking_agreements"
@@ -183,124 +239,11 @@ export type Database = {
             foreignKeyName: "audit_logs_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      availability_calendar_entries: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          end_date: string
-          firebase_id: string | null
-          id: string
-          inventory_unit_id: string | null
-          product_id: string
-          public_note: string | null
-          start_date: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          end_date: string
-          firebase_id?: string | null
-          id?: string
-          inventory_unit_id?: string | null
-          product_id: string
-          public_note?: string | null
-          start_date: string
-          status: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          end_date?: string
-          firebase_id?: string | null
-          id?: string
-          inventory_unit_id?: string | null
-          product_id?: string
-          public_note?: string | null
-          start_date?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "availability_calendar_entries_inventory_unit_id_fkey"
-            columns: ["inventory_unit_id"]
-            isOneToOne: false
-            referencedRelation: "inventory_units"
-            referencedColumns: ["id"]
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
           },
           {
-            foreignKeyName: "availability_calendar_entries_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      booking_agreement_versions: {
-        Row: {
-          agreement_id: string
-          agreement_snapshot: Json
-          agreement_version: string | null
-          archived_at: string
-          archived_reason: string | null
-          booking_id: string
-          completed_at: string | null
-          final_document_path: string | null
-          generated_at: string | null
-          generated_document_path: string | null
-          id: string
-          status: string
-          version_number: number
-        }
-        Insert: {
-          agreement_id: string
-          agreement_snapshot?: Json
-          agreement_version?: string | null
-          archived_at?: string
-          archived_reason?: string | null
-          booking_id: string
-          completed_at?: string | null
-          final_document_path?: string | null
-          generated_at?: string | null
-          generated_document_path?: string | null
-          id?: string
-          status: string
-          version_number: number
-        }
-        Update: {
-          agreement_id?: string
-          agreement_snapshot?: Json
-          agreement_version?: string | null
-          archived_at?: string
-          archived_reason?: string | null
-          booking_id?: string
-          completed_at?: string | null
-          final_document_path?: string | null
-          generated_at?: string | null
-          generated_document_path?: string | null
-          id?: string
-          status?: string
-          version_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "booking_agreement_versions_agreement_id_fkey"
-            columns: ["agreement_id"]
-            isOneToOne: false
-            referencedRelation: "booking_agreements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "booking_agreement_versions_booking_id_fkey"
+            foreignKeyName: "audit_logs_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
@@ -310,57 +253,46 @@ export type Database = {
       }
       booking_agreements: {
         Row: {
-          agreement_snapshot: Json
-          agreement_version: string | null
           booking_id: string
           completed_at: string | null
           created_at: string
           created_by: string | null
-          final_document_path: string | null
-          firebase_id: string | null
-          generated_at: string | null
-          generated_document_path: string | null
           id: string
-          status: string
+          rejected_at: string | null
+          status: Database["public"]["Enums"]["agreement_status"]
+          template_id: string | null
           updated_at: string
-          updated_by: string | null
-          version_number: number
         }
         Insert: {
-          agreement_snapshot?: Json
-          agreement_version?: string | null
           booking_id: string
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
-          final_document_path?: string | null
-          firebase_id?: string | null
-          generated_at?: string | null
-          generated_document_path?: string | null
           id?: string
-          status?: string
+          rejected_at?: string | null
+          status?: Database["public"]["Enums"]["agreement_status"]
+          template_id?: string | null
           updated_at?: string
-          updated_by?: string | null
-          version_number?: number
         }
         Update: {
-          agreement_snapshot?: Json
-          agreement_version?: string | null
           booking_id?: string
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
-          final_document_path?: string | null
-          firebase_id?: string | null
-          generated_at?: string | null
-          generated_document_path?: string | null
           id?: string
-          status?: string
+          rejected_at?: string | null
+          status?: Database["public"]["Enums"]["agreement_status"]
+          template_id?: string | null
           updated_at?: string
-          updated_by?: string | null
-          version_number?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "booking_agreements_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
           {
             foreignKeyName: "booking_agreements_booking_id_fkey"
             columns: ["booking_id"]
@@ -368,72 +300,11 @@ export type Database = {
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      booking_documents: {
-        Row: {
-          booking_id: string
-          created_at: string
-          document_type: string
-          file_size_bytes: number | null
-          firebase_id: string | null
-          id: string
-          mime_type: string | null
-          original_filename: string | null
-          requirement_key: string | null
-          review_notes: string | null
-          review_status: string
-          reviewed_at: string | null
-          reviewed_by: string | null
-          storage_bucket: string
-          storage_path: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          booking_id: string
-          created_at?: string
-          document_type: string
-          file_size_bytes?: number | null
-          firebase_id?: string | null
-          id?: string
-          mime_type?: string | null
-          original_filename?: string | null
-          requirement_key?: string | null
-          review_notes?: string | null
-          review_status?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          storage_bucket: string
-          storage_path: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          booking_id?: string
-          created_at?: string
-          document_type?: string
-          file_size_bytes?: number | null
-          firebase_id?: string | null
-          id?: string
-          mime_type?: string | null
-          original_filename?: string | null
-          requirement_key?: string | null
-          review_notes?: string | null
-          review_status?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          storage_bucket?: string
-          storage_path?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "booking_documents_booking_id_fkey"
-            columns: ["booking_id"]
+            foreignKeyName: "booking_agreements_template_id_fkey"
+            columns: ["template_id"]
             isOneToOne: false
-            referencedRelation: "bookings"
+            referencedRelation: "agreement_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -444,7 +315,6 @@ export type Database = {
           booking_id: string
           created_at: string
           full_name: string
-          id: string
           phone_number: string
           relationship: string
           updated_at: string
@@ -454,7 +324,6 @@ export type Database = {
           booking_id: string
           created_at?: string
           full_name: string
-          id?: string
           phone_number: string
           relationship: string
           updated_at?: string
@@ -464,7 +333,6 @@ export type Database = {
           booking_id?: string
           created_at?: string
           full_name?: string
-          id?: string
           phone_number?: string
           relationship?: string
           updated_at?: string
@@ -474,90 +342,220 @@ export type Database = {
             foreignKeyName: "booking_emergency_contacts_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: true
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "booking_emergency_contacts_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
         ]
       }
-      booking_invoices: {
+      booking_fulfillments: {
         Row: {
-          amount_paid: number
-          balance_due: number
+          address_line_1: string | null
+          address_line_2: string | null
+          barangay: string | null
           booking_id: string
+          city_municipality: string | null
+          completed_at: string | null
+          contact_number: string | null
+          country_code: string
           created_at: string
-          created_by: string | null
-          currency_code: string
-          delivery_fee: number
-          deposit_amount: number
-          discount_amount: number
-          document_path: string | null
-          due_at: string | null
-          firebase_id: string | null
-          id: string
-          invoice_number: string | null
-          issued_at: string | null
-          status: string
-          subtotal: number
-          total_amount: number
+          delivery_fee_snapshot: number
+          delivery_notes: string | null
+          method: Database["public"]["Enums"]["fulfillment_method"]
+          postal_code: string | null
+          province: string | null
+          recipient_name: string | null
+          scheduled_at: string | null
           updated_at: string
-          void_reason: string | null
-          voided_at: string | null
-          voided_by: string | null
         }
         Insert: {
-          amount_paid?: number
-          balance_due?: number
+          address_line_1?: string | null
+          address_line_2?: string | null
+          barangay?: string | null
           booking_id: string
+          city_municipality?: string | null
+          completed_at?: string | null
+          contact_number?: string | null
+          country_code?: string
           created_at?: string
-          created_by?: string | null
-          currency_code?: string
-          delivery_fee?: number
-          deposit_amount?: number
-          discount_amount?: number
-          document_path?: string | null
-          due_at?: string | null
-          firebase_id?: string | null
-          id?: string
-          invoice_number?: string | null
-          issued_at?: string | null
-          status?: string
-          subtotal?: number
-          total_amount?: number
+          delivery_fee_snapshot?: number
+          delivery_notes?: string | null
+          method: Database["public"]["Enums"]["fulfillment_method"]
+          postal_code?: string | null
+          province?: string | null
+          recipient_name?: string | null
+          scheduled_at?: string | null
           updated_at?: string
-          void_reason?: string | null
-          voided_at?: string | null
-          voided_by?: string | null
         }
         Update: {
-          amount_paid?: number
-          balance_due?: number
+          address_line_1?: string | null
+          address_line_2?: string | null
+          barangay?: string | null
           booking_id?: string
+          city_municipality?: string | null
+          completed_at?: string | null
+          contact_number?: string | null
+          country_code?: string
           created_at?: string
-          created_by?: string | null
-          currency_code?: string
-          delivery_fee?: number
-          deposit_amount?: number
-          discount_amount?: number
-          document_path?: string | null
-          due_at?: string | null
-          firebase_id?: string | null
-          id?: string
-          invoice_number?: string | null
-          issued_at?: string | null
-          status?: string
-          subtotal?: number
-          total_amount?: number
+          delivery_fee_snapshot?: number
+          delivery_notes?: string | null
+          method?: Database["public"]["Enums"]["fulfillment_method"]
+          postal_code?: string | null
+          province?: string | null
+          recipient_name?: string | null
+          scheduled_at?: string | null
           updated_at?: string
-          void_reason?: string | null
-          voided_at?: string | null
-          voided_by?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "booking_invoices_booking_id_fkey"
+            foreignKeyName: "booking_fulfillments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "booking_fulfillments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_items: {
+        Row: {
+          booking_id: string
+          created_at: string
+          daily_rate_snapshot: number
+          deposit_per_unit_snapshot: number
+          id: string
+          product_id: string
+          product_name_snapshot: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          daily_rate_snapshot: number
+          deposit_per_unit_snapshot?: number
+          id?: string
+          product_id: string
+          product_name_snapshot: string
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          daily_rate_snapshot?: number
+          deposit_per_unit_snapshot?: number
+          id?: string
+          product_id?: string
+          product_name_snapshot?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_items_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "booking_items_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_payment_submissions: {
+        Row: {
+          booking_id: string
+          created_at: string
+          declared_amount: number
+          external_reference: string | null
+          id: string
+          payment_method: string | null
+          proof_document_id: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          stage: Database["public"]["Enums"]["payment_stage"]
+          status: Database["public"]["Enums"]["payment_submission_status"]
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          declared_amount: number
+          external_reference?: string | null
+          id?: string
+          payment_method?: string | null
+          proof_document_id?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          stage: Database["public"]["Enums"]["payment_stage"]
+          status?: Database["public"]["Enums"]["payment_submission_status"]
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          declared_amount?: number
+          external_reference?: string | null
+          id?: string
+          payment_method?: string | null
+          proof_document_id?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          stage?: Database["public"]["Enums"]["payment_stage"]
+          status?: Database["public"]["Enums"]["payment_submission_status"]
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_payment_submissions_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "booking_payment_submissions_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_payment_submissions_proof_document_id_fkey"
+            columns: ["proof_document_id"]
+            isOneToOne: false
+            referencedRelation: "customer_documents"
             referencedColumns: ["id"]
           },
         ]
@@ -567,48 +565,43 @@ export type Database = {
           amount: number
           booking_id: string
           created_at: string
-          document_path: string | null
-          firebase_id: string | null
+          document_path: string
           id: string
-          is_reissue: boolean
           issued_at: string
           issued_by: string | null
-          payment_record_id: string | null
-          receipt_number: string | null
-          reissue_reason: string | null
-          reissued_from_id: string | null
+          payment_submission_id: string | null
+          receipt_number: string
         }
         Insert: {
           amount: number
           booking_id: string
           created_at?: string
-          document_path?: string | null
-          firebase_id?: string | null
+          document_path: string
           id?: string
-          is_reissue?: boolean
           issued_at?: string
           issued_by?: string | null
-          payment_record_id?: string | null
-          receipt_number?: string | null
-          reissue_reason?: string | null
-          reissued_from_id?: string | null
+          payment_submission_id?: string | null
+          receipt_number: string
         }
         Update: {
           amount?: number
           booking_id?: string
           created_at?: string
-          document_path?: string | null
-          firebase_id?: string | null
+          document_path?: string
           id?: string
-          is_reissue?: boolean
           issued_at?: string
           issued_by?: string | null
-          payment_record_id?: string | null
-          receipt_number?: string | null
-          reissue_reason?: string | null
-          reissued_from_id?: string | null
+          payment_submission_id?: string | null
+          receipt_number?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "booking_receipts_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
           {
             foreignKeyName: "booking_receipts_booking_id_fkey"
             columns: ["booking_id"]
@@ -617,17 +610,131 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "booking_receipts_payment_record_id_fkey"
-            columns: ["payment_record_id"]
+            foreignKeyName: "booking_receipts_payment_submission_id_fkey"
+            columns: ["payment_submission_id"]
             isOneToOne: false
-            referencedRelation: "payment_records"
+            referencedRelation: "booking_payment_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_requirement_submissions: {
+        Row: {
+          attempt_number: number
+          booking_requirement_id: string
+          customer_document_id: string
+          id: string
+          review_notes: string | null
+          review_status: Database["public"]["Enums"]["review_decision"]
+          reviewed_at: string | null
+          reviewed_by: string | null
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_number?: number
+          booking_requirement_id: string
+          customer_document_id: string
+          id?: string
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_decision"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_number?: number
+          booking_requirement_id?: string
+          customer_document_id?: string
+          id?: string
+          review_notes?: string | null
+          review_status?: Database["public"]["Enums"]["review_decision"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_requirement_submissions_booking_requirement_id_fkey"
+            columns: ["booking_requirement_id"]
+            isOneToOne: false
+            referencedRelation: "booking_requirements"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "booking_receipts_reissued_from_id_fkey"
-            columns: ["reissued_from_id"]
+            foreignKeyName: "booking_requirement_submissions_customer_document_id_fkey"
+            columns: ["customer_document_id"]
             isOneToOne: false
-            referencedRelation: "booking_receipts"
+            referencedRelation: "customer_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_requirements: {
+        Row: {
+          booking_id: string
+          created_at: string
+          document_type_snapshot: string
+          id: string
+          is_required: boolean
+          requirement_definition_id: string | null
+          requirement_key_snapshot: string
+          requirement_name_snapshot: string
+          status: Database["public"]["Enums"]["requirement_status"]
+          updated_at: string
+          waived_by: string | null
+          waiver_reason: string | null
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          document_type_snapshot: string
+          id?: string
+          is_required?: boolean
+          requirement_definition_id?: string | null
+          requirement_key_snapshot: string
+          requirement_name_snapshot: string
+          status?: Database["public"]["Enums"]["requirement_status"]
+          updated_at?: string
+          waived_by?: string | null
+          waiver_reason?: string | null
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          document_type_snapshot?: string
+          id?: string
+          is_required?: boolean
+          requirement_definition_id?: string | null
+          requirement_key_snapshot?: string
+          requirement_name_snapshot?: string
+          status?: Database["public"]["Enums"]["requirement_status"]
+          updated_at?: string
+          waived_by?: string | null
+          waiver_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_requirements_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "booking_requirements_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_requirements_requirement_definition_id_fkey"
+            columns: ["requirement_definition_id"]
+            isOneToOne: false
+            referencedRelation: "requirement_definitions"
             referencedColumns: ["id"]
           },
         ]
@@ -637,33 +744,37 @@ export type Database = {
           booking_id: string
           changed_by: string | null
           created_at: string
-          firebase_id: string | null
-          from_status: string | null
+          from_status: Database["public"]["Enums"]["booking_status"] | null
           id: string
           note: string | null
-          to_status: string
+          to_status: Database["public"]["Enums"]["booking_status"]
         }
         Insert: {
           booking_id: string
           changed_by?: string | null
           created_at?: string
-          firebase_id?: string | null
-          from_status?: string | null
+          from_status?: Database["public"]["Enums"]["booking_status"] | null
           id?: string
           note?: string | null
-          to_status: string
+          to_status: Database["public"]["Enums"]["booking_status"]
         }
         Update: {
           booking_id?: string
           changed_by?: string | null
           created_at?: string
-          firebase_id?: string | null
-          from_status?: string | null
+          from_status?: Database["public"]["Enums"]["booking_status"] | null
           id?: string
           note?: string | null
-          to_status?: string
+          to_status?: Database["public"]["Enums"]["booking_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "booking_status_history_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
           {
             foreignKeyName: "booking_status_history_booking_id_fkey"
             columns: ["booking_id"]
@@ -676,160 +787,219 @@ export type Database = {
       bookings: {
         Row: {
           admin_notes: string | null
-          agreement_status: string
           approved_at: string | null
           booking_reference: string
           cancelled_at: string | null
           confirmed_at: string | null
           created_at: string
+          currency_code: string
+          customer_id: string
           customer_notes: string | null
-          customer_snapshot: Json
-          daily_rate: number
-          delivery_fee: number
-          firebase_id: string | null
-          fulfillment_method: string
           id: string
-          inventory_unit_id: string | null
-          location: string | null
-          product_id: string
-          product_snapshot: Json
-          refundable_deposit: number
+          ready_for_release_at: string | null
+          rejected_at: string | null
           released_at: string | null
-          rental_days: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status: string
+          rental_period: unknown
           returned_at: string | null
-          status: string
-          total_amount: number
+          status: Database["public"]["Enums"]["booking_status"]
           updated_at: string
-          user_id: string
         }
         Insert: {
           admin_notes?: string | null
-          agreement_status?: string
           approved_at?: string | null
           booking_reference?: string
           cancelled_at?: string | null
           confirmed_at?: string | null
           created_at?: string
+          currency_code?: string
+          customer_id: string
           customer_notes?: string | null
-          customer_snapshot?: Json
-          daily_rate: number
-          delivery_fee?: number
-          firebase_id?: string | null
-          fulfillment_method: string
           id?: string
-          inventory_unit_id?: string | null
-          location?: string | null
-          product_id: string
-          product_snapshot?: Json
-          refundable_deposit?: number
+          ready_for_release_at?: string | null
+          rejected_at?: string | null
           released_at?: string | null
-          rental_days?: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status?: string
+          rental_period: unknown
           returned_at?: string | null
-          status?: string
-          total_amount: number
+          status?: Database["public"]["Enums"]["booking_status"]
           updated_at?: string
-          user_id: string
         }
         Update: {
           admin_notes?: string | null
-          agreement_status?: string
           approved_at?: string | null
           booking_reference?: string
           cancelled_at?: string | null
           confirmed_at?: string | null
           created_at?: string
+          currency_code?: string
+          customer_id?: string
           customer_notes?: string | null
-          customer_snapshot?: Json
-          daily_rate?: number
-          delivery_fee?: number
-          firebase_id?: string | null
-          fulfillment_method?: string
           id?: string
-          inventory_unit_id?: string | null
-          location?: string | null
-          product_id?: string
-          product_snapshot?: Json
-          refundable_deposit?: number
+          ready_for_release_at?: string | null
+          rejected_at?: string | null
           released_at?: string | null
-          rental_days?: number | null
-          rental_end_date?: string
-          rental_start_date?: string
-          rental_subtotal?: number
-          requirements_status?: string
+          rental_period?: unknown
           returned_at?: string | null
-          status?: string
-          total_amount?: number
+          status?: Database["public"]["Enums"]["booking_status"]
           updated_at?: string
-          user_id?: string
+        }
+        Relationships: []
+      }
+      brands: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      customer_documents: {
+        Row: {
+          created_at: string
+          document_type: string
+          expires_at: string | null
+          file_size_bytes: number | null
+          id: string
+          issued_at: string | null
+          mime_type: string | null
+          original_filename: string | null
+          owner_user_id: string
+          status: Database["public"]["Enums"]["document_status"]
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          expires_at?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          issued_at?: string | null
+          mime_type?: string | null
+          original_filename?: string | null
+          owner_user_id: string
+          status?: Database["public"]["Enums"]["document_status"]
+          storage_bucket: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          expires_at?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          issued_at?: string | null
+          mime_type?: string | null
+          original_filename?: string | null
+          owner_user_id?: string
+          status?: Database["public"]["Enums"]["document_status"]
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      document_review_events: {
+        Row: {
+          created_at: string
+          from_status: Database["public"]["Enums"]["review_decision"] | null
+          id: string
+          notes: string | null
+          reviewed_by: string | null
+          submission_id: string
+          to_status: Database["public"]["Enums"]["review_decision"]
+        }
+        Insert: {
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["review_decision"] | null
+          id?: string
+          notes?: string | null
+          reviewed_by?: string | null
+          submission_id: string
+          to_status: Database["public"]["Enums"]["review_decision"]
+        }
+        Update: {
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["review_decision"] | null
+          id?: string
+          notes?: string | null
+          reviewed_by?: string | null
+          submission_id?: string
+          to_status?: Database["public"]["Enums"]["review_decision"]
         }
         Relationships: [
           {
-            foreignKeyName: "bookings_inventory_product_fk"
-            columns: ["inventory_unit_id", "product_id"]
+            foreignKeyName: "document_review_events_submission_id_fkey"
+            columns: ["submission_id"]
             isOneToOne: false
-            referencedRelation: "inventory_units"
-            referencedColumns: ["id", "product_id"]
-          },
-          {
-            foreignKeyName: "bookings_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "booking_requirement_submissions"
             referencedColumns: ["id"]
           },
         ]
-      }
-      email_verification_challenges: {
-        Row: {
-          attempts: number
-          code_hash: string
-          created_at: string
-          email: string
-          expires_at: string
-          last_sent_at: string
-          status: string
-          user_id: string
-        }
-        Insert: {
-          attempts?: number
-          code_hash: string
-          created_at?: string
-          email: string
-          expires_at: string
-          last_sent_at?: string
-          status?: string
-          user_id: string
-        }
-        Update: {
-          attempts?: number
-          code_hash?: string
-          created_at?: string
-          email?: string
-          expires_at?: string
-          last_sent_at?: string
-          status?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       inventory_units: {
         Row: {
           acquired_at: string | null
           condition_notes: string | null
           created_at: string
-          firebase_id: string | null
           id: string
+          lifecycle_status: Database["public"]["Enums"]["unit_lifecycle_status"]
           product_id: string
+          retired_at: string | null
           serial_number: string | null
-          status: string
           unit_code: string
           updated_at: string
         }
@@ -837,11 +1007,11 @@ export type Database = {
           acquired_at?: string | null
           condition_notes?: string | null
           created_at?: string
-          firebase_id?: string | null
           id?: string
+          lifecycle_status?: Database["public"]["Enums"]["unit_lifecycle_status"]
           product_id: string
+          retired_at?: string | null
           serial_number?: string | null
-          status?: string
           unit_code: string
           updated_at?: string
         }
@@ -849,11 +1019,11 @@ export type Database = {
           acquired_at?: string | null
           condition_notes?: string | null
           created_at?: string
-          firebase_id?: string | null
           id?: string
+          lifecycle_status?: Database["public"]["Enums"]["unit_lifecycle_status"]
           product_id?: string
+          retired_at?: string | null
           serial_number?: string | null
-          status?: string
           unit_code?: string
           updated_at?: string
         }
@@ -867,60 +1037,18 @@ export type Database = {
           },
         ]
       }
-      invoice_line_items: {
-        Row: {
-          created_at: string
-          description: string
-          id: string
-          invoice_id: string
-          line_total: number
-          quantity: number
-          sort_order: number
-          unit_price: number
-        }
-        Insert: {
-          created_at?: string
-          description: string
-          id?: string
-          invoice_id: string
-          line_total: number
-          quantity?: number
-          sort_order?: number
-          unit_price: number
-        }
-        Update: {
-          created_at?: string
-          description?: string
-          id?: string
-          invoice_id?: string
-          line_total?: number
-          quantity?: number
-          sort_order?: number
-          unit_price?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_line_items_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "booking_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       notifications: {
         Row: {
           action_url: string | null
           booking_id: string | null
           created_at: string
           expires_at: string | null
-          firebase_id: string | null
           id: string
           is_read: boolean
           message: string
+          notification_type: string
           read_at: string | null
           title: string
-          type: string
           user_id: string
         }
         Insert: {
@@ -928,13 +1056,12 @@ export type Database = {
           booking_id?: string | null
           created_at?: string
           expires_at?: string | null
-          firebase_id?: string | null
           id?: string
           is_read?: boolean
           message: string
+          notification_type: string
           read_at?: string | null
           title: string
-          type: string
           user_id: string
         }
         Update: {
@@ -942,16 +1069,22 @@ export type Database = {
           booking_id?: string | null
           created_at?: string
           expires_at?: string | null
-          firebase_id?: string | null
           id?: string
           is_read?: boolean
           message?: string
+          notification_type?: string
           read_at?: string | null
           title?: string
-          type?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "booking_totals"
+            referencedColumns: ["booking_id"]
+          },
           {
             foreignKeyName: "notifications_booking_id_fkey"
             columns: ["booking_id"]
@@ -961,277 +1094,35 @@ export type Database = {
           },
         ]
       }
-      payment_event_logs: {
-        Row: {
-          actor_user_id: string | null
-          created_at: string
-          details: Json
-          event_type: string
-          firebase_id: string | null
-          from_status: string | null
-          id: string
-          is_manual_correction: boolean
-          payment_record_id: string
-          provider_event_id: string | null
-          to_status: string | null
-        }
-        Insert: {
-          actor_user_id?: string | null
-          created_at?: string
-          details?: Json
-          event_type: string
-          firebase_id?: string | null
-          from_status?: string | null
-          id?: string
-          is_manual_correction?: boolean
-          payment_record_id: string
-          provider_event_id?: string | null
-          to_status?: string | null
-        }
-        Update: {
-          actor_user_id?: string | null
-          created_at?: string
-          details?: Json
-          event_type?: string
-          firebase_id?: string | null
-          from_status?: string | null
-          id?: string
-          is_manual_correction?: boolean
-          payment_record_id?: string
-          provider_event_id?: string | null
-          to_status?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payment_event_logs_payment_record_id_fkey"
-            columns: ["payment_record_id"]
-            isOneToOne: false
-            referencedRelation: "payment_records"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      payment_records: {
-        Row: {
-          amount: number
-          booking_id: string
-          completed_at: string | null
-          created_at: string
-          currency_code: string
-          external_reference: string | null
-          failure_code: string | null
-          failure_message: string | null
-          firebase_id: string | null
-          id: string
-          idempotency_key: string | null
-          payment_kind: string
-          payment_method: string | null
-          payment_type: string
-          paymongo_checkout_session_id: string | null
-          paymongo_payment_id: string | null
-          paymongo_payment_intent_id: string | null
-          paymongo_source_id: string | null
-          proof_storage_path: string | null
-          provider_metadata: Json
-          provider_status: string | null
-          refund_amount: number
-          refund_status: string
-          rejection_reason: string | null
-          status: string
-          submitted_at: string
-          updated_at: string
-          user_id: string
-          verified_at: string | null
-          verified_by: string | null
-        }
-        Insert: {
-          amount: number
-          booking_id: string
-          completed_at?: string | null
-          created_at?: string
-          currency_code?: string
-          external_reference?: string | null
-          failure_code?: string | null
-          failure_message?: string | null
-          firebase_id?: string | null
-          id?: string
-          idempotency_key?: string | null
-          payment_kind?: string
-          payment_method?: string | null
-          payment_type?: string
-          paymongo_checkout_session_id?: string | null
-          paymongo_payment_id?: string | null
-          paymongo_payment_intent_id?: string | null
-          paymongo_source_id?: string | null
-          proof_storage_path?: string | null
-          provider_metadata?: Json
-          provider_status?: string | null
-          refund_amount?: number
-          refund_status?: string
-          rejection_reason?: string | null
-          status?: string
-          submitted_at?: string
-          updated_at?: string
-          user_id: string
-          verified_at?: string | null
-          verified_by?: string | null
-        }
-        Update: {
-          amount?: number
-          booking_id?: string
-          completed_at?: string | null
-          created_at?: string
-          currency_code?: string
-          external_reference?: string | null
-          failure_code?: string | null
-          failure_message?: string | null
-          firebase_id?: string | null
-          id?: string
-          idempotency_key?: string | null
-          payment_kind?: string
-          payment_method?: string | null
-          payment_type?: string
-          paymongo_checkout_session_id?: string | null
-          paymongo_payment_id?: string | null
-          paymongo_payment_intent_id?: string | null
-          paymongo_source_id?: string | null
-          proof_storage_path?: string | null
-          provider_metadata?: Json
-          provider_status?: string | null
-          refund_amount?: number
-          refund_status?: string
-          rejection_reason?: string | null
-          status?: string
-          submitted_at?: string
-          updated_at?: string
-          user_id?: string
-          verified_at?: string | null
-          verified_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payment_records_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      paymongo_webhook_events: {
-        Row: {
-          error_message: string | null
-          event_type: string
-          id: string
-          payload: Json
-          payment_record_id: string | null
-          processed_at: string | null
-          processing_status: string
-          provider_event_id: string
-          received_at: string
-          signature_valid: boolean
-        }
-        Insert: {
-          error_message?: string | null
-          event_type: string
-          id?: string
-          payload: Json
-          payment_record_id?: string | null
-          processed_at?: string | null
-          processing_status?: string
-          provider_event_id: string
-          received_at?: string
-          signature_valid?: boolean
-        }
-        Update: {
-          error_message?: string | null
-          event_type?: string
-          id?: string
-          payload?: Json
-          payment_record_id?: string | null
-          processed_at?: string | null
-          processing_status?: string
-          provider_event_id?: string
-          received_at?: string
-          signature_valid?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "paymongo_webhook_events_payment_record_id_fkey"
-            columns: ["payment_record_id"]
-            isOneToOne: false
-            referencedRelation: "payment_records"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_availability_summary: {
-        Row: {
-          available_units: number
-          maintenance_units: number
-          product_id: string
-          rented_units: number
-          reserved_units: number
-          total_units: number
-          updated_at: string
-        }
-        Insert: {
-          available_units?: number
-          maintenance_units?: number
-          product_id: string
-          rented_units?: number
-          reserved_units?: number
-          total_units?: number
-          updated_at?: string
-        }
-        Update: {
-          available_units?: number
-          maintenance_units?: number
-          product_id?: string
-          rented_units?: number
-          reserved_units?: number
-          total_units?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_availability_summary_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: true
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       product_images: {
         Row: {
           alt_text: string | null
           created_at: string
-          firebase_id: string | null
           id: string
           is_primary: boolean
           product_id: string
           sort_order: number
+          storage_bucket: string
           storage_path: string
         }
         Insert: {
           alt_text?: string | null
           created_at?: string
-          firebase_id?: string | null
           id?: string
           is_primary?: boolean
           product_id: string
           sort_order?: number
+          storage_bucket?: string
           storage_path: string
         }
         Update: {
           alt_text?: string | null
           created_at?: string
-          firebase_id?: string | null
           id?: string
           is_primary?: boolean
           product_id?: string
           sort_order?: number
+          storage_bucket?: string
           storage_path?: string
         }
         Relationships: [
@@ -1244,15 +1135,53 @@ export type Database = {
           },
         ]
       }
+      product_requirements: {
+        Row: {
+          created_at: string
+          is_required: boolean
+          product_id: string
+          requirement_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          is_required?: boolean
+          product_id: string
+          requirement_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          is_required?: boolean
+          product_id?: string
+          requirement_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_requirements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_requirements_requirement_id_fkey"
+            columns: ["requirement_id"]
+            isOneToOne: false
+            referencedRelation: "requirement_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
-          brand: string | null
-          category: string
+          brand_id: string | null
+          category_id: string
           created_at: string
           created_by: string | null
           daily_rate: number
           description: string | null
-          firebase_id: string | null
           id: string
           is_featured: boolean
           name: string
@@ -1260,18 +1189,17 @@ export type Database = {
           short_description: string | null
           slug: string
           specifications: Json
-          status: string
+          status: Database["public"]["Enums"]["product_status"]
           updated_at: string
           updated_by: string | null
         }
         Insert: {
-          brand?: string | null
-          category: string
+          brand_id?: string | null
+          category_id: string
           created_at?: string
           created_by?: string | null
           daily_rate: number
           description?: string | null
-          firebase_id?: string | null
           id?: string
           is_featured?: boolean
           name: string
@@ -1279,18 +1207,17 @@ export type Database = {
           short_description?: string | null
           slug: string
           specifications?: Json
-          status?: string
+          status?: Database["public"]["Enums"]["product_status"]
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
-          brand?: string | null
-          category?: string
+          brand_id?: string | null
+          category_id?: string
           created_at?: string
           created_by?: string | null
           daily_rate?: number
           description?: string | null
-          firebase_id?: string | null
           id?: string
           is_featured?: boolean
           name?: string
@@ -1298,59 +1225,122 @@ export type Database = {
           short_description?: string | null
           slug?: string
           specifications?: Json
-          status?: string
+          status?: Database["public"]["Enums"]["product_status"]
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_addresses: {
+        Row: {
+          address_line_1: string
+          address_line_2: string | null
+          barangay: string | null
+          city_municipality: string
+          contact_number: string | null
+          country_code: string
+          created_at: string
+          delivery_notes: string | null
+          id: string
+          is_default: boolean
+          label: string | null
+          postal_code: string | null
+          province: string
+          recipient_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_line_1: string
+          address_line_2?: string | null
+          barangay?: string | null
+          city_municipality: string
+          contact_number?: string | null
+          country_code?: string
+          created_at?: string
+          delivery_notes?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          postal_code?: string | null
+          province: string
+          recipient_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_line_1?: string
+          address_line_2?: string | null
+          barangay?: string | null
+          city_municipality?: string
+          contact_number?: string | null
+          country_code?: string
+          created_at?: string
+          delivery_notes?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          postal_code?: string | null
+          province?: string
+          recipient_name?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
       profiles: {
         Row: {
-          account_status: string
+          account_status: Database["public"]["Enums"]["account_status"]
+          contact_email: string | null
           created_at: string
           display_name: string
-          display_role: string
-          email: string
-          facebook_link: string | null
-          firebase_uid: string | null
+          facebook_url: string | null
           first_name: string | null
-          full_address: string | null
           id: string
-          instagram_link: string | null
+          instagram_url: string | null
           last_name: string | null
           phone_number: string | null
           photo_path: string | null
           updated_at: string
         }
         Insert: {
-          account_status?: string
+          account_status?: Database["public"]["Enums"]["account_status"]
+          contact_email?: string | null
           created_at?: string
           display_name: string
-          display_role?: string
-          email: string
-          facebook_link?: string | null
-          firebase_uid?: string | null
+          facebook_url?: string | null
           first_name?: string | null
-          full_address?: string | null
           id: string
-          instagram_link?: string | null
+          instagram_url?: string | null
           last_name?: string | null
           phone_number?: string | null
           photo_path?: string | null
           updated_at?: string
         }
         Update: {
-          account_status?: string
+          account_status?: Database["public"]["Enums"]["account_status"]
+          contact_email?: string | null
           created_at?: string
           display_name?: string
-          display_role?: string
-          email?: string
-          facebook_link?: string | null
-          firebase_uid?: string | null
+          facebook_url?: string | null
           first_name?: string | null
-          full_address?: string | null
           id?: string
-          instagram_link?: string | null
+          instagram_url?: string | null
           last_name?: string | null
           phone_number?: string | null
           photo_path?: string | null
@@ -1391,182 +1381,179 @@ export type Database = {
         }
         Relationships: []
       }
-      requirement_document_reviews: {
+      requirement_definitions: {
         Row: {
-          booking_document_id: string
           created_at: string
-          firebase_id: string | null
+          created_by: string | null
+          description: string | null
+          document_type: string
           id: string
-          notes: string | null
-          reviewed_at: string
-          reviewed_by: string | null
-          status: string
+          is_active: boolean
+          name: string
+          requirement_key: string
+          updated_at: string
         }
         Insert: {
-          booking_document_id: string
           created_at?: string
-          firebase_id?: string | null
+          created_by?: string | null
+          description?: string | null
+          document_type: string
           id?: string
-          notes?: string | null
-          reviewed_at?: string
-          reviewed_by?: string | null
-          status: string
+          is_active?: boolean
+          name: string
+          requirement_key: string
+          updated_at?: string
         }
         Update: {
-          booking_document_id?: string
           created_at?: string
-          firebase_id?: string | null
+          created_by?: string | null
+          description?: string | null
+          document_type?: string
           id?: string
-          notes?: string | null
-          reviewed_at?: string
-          reviewed_by?: string | null
-          status?: string
+          is_active?: boolean
+          name?: string
+          requirement_key?: string
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "requirement_document_reviews_booking_document_id_fkey"
-            columns: ["booking_document_id"]
-            isOneToOne: false
-            referencedRelation: "booking_documents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       reviews: {
         Row: {
-          booking_id: string
+          booking_item_id: string
           comment: string | null
           created_at: string
-          firebase_id: string | null
           id: string
-          product_id: string
+          moderated_at: string | null
+          moderated_by: string | null
           rating: number
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
+          status: Database["public"]["Enums"]["review_decision"]
           updated_at: string
-          user_id: string
         }
         Insert: {
-          booking_id: string
+          booking_item_id: string
           comment?: string | null
           created_at?: string
-          firebase_id?: string | null
           id?: string
-          product_id: string
+          moderated_at?: string | null
+          moderated_by?: string | null
           rating: number
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["review_decision"]
           updated_at?: string
-          user_id: string
         }
         Update: {
-          booking_id?: string
+          booking_item_id?: string
           comment?: string | null
           created_at?: string
-          firebase_id?: string | null
           id?: string
-          product_id?: string
+          moderated_at?: string | null
+          moderated_by?: string | null
           rating?: number
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["review_decision"]
           updated_at?: string
-          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "reviews_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
+            foreignKeyName: "reviews_booking_item_id_fkey"
+            columns: ["booking_item_id"]
+            isOneToOne: true
+            referencedRelation: "booking_items"
             referencedColumns: ["id"]
           },
         ]
       }
-      website_content: {
+      unit_reservations: {
         Row: {
-          content: Json
-          content_key: string
+          booking_item_id: string | null
           created_at: string
-          firebase_id: string | null
+          created_by: string | null
           id: string
-          is_published: boolean
-          section: string
+          internal_note: string | null
+          inventory_unit_id: string
+          kind: Database["public"]["Enums"]["unit_reservation_kind"]
+          reserved_period: unknown
+          status: Database["public"]["Enums"]["unit_reservation_status"]
           updated_at: string
-          updated_by: string | null
         }
         Insert: {
-          content?: Json
-          content_key: string
+          booking_item_id?: string | null
           created_at?: string
-          firebase_id?: string | null
+          created_by?: string | null
           id?: string
-          is_published?: boolean
-          section: string
+          internal_note?: string | null
+          inventory_unit_id: string
+          kind: Database["public"]["Enums"]["unit_reservation_kind"]
+          reserved_period: unknown
+          status?: Database["public"]["Enums"]["unit_reservation_status"]
           updated_at?: string
-          updated_by?: string | null
         }
         Update: {
-          content?: Json
-          content_key?: string
+          booking_item_id?: string | null
           created_at?: string
-          firebase_id?: string | null
+          created_by?: string | null
           id?: string
-          is_published?: boolean
-          section?: string
+          internal_note?: string | null
+          inventory_unit_id?: string
+          kind?: Database["public"]["Enums"]["unit_reservation_kind"]
+          reserved_period?: unknown
+          status?: Database["public"]["Enums"]["unit_reservation_status"]
           updated_at?: string
-          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_reservations_booking_item_id_fkey"
+            columns: ["booking_item_id"]
+            isOneToOne: false
+            referencedRelation: "booking_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_reservations_inventory_unit_id_fkey"
+            columns: ["inventory_unit_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      booking_totals: {
+        Row: {
+          booking_id: string | null
+          delivery_fee: number | null
+          deposit_total: number | null
+          rental_days: number | null
+          rental_subtotal: number | null
+          total_amount: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_set_booking_status: {
         Args: { p_booking_id: string; p_new_status: string; p_note?: string }
-        Returns: {
-          admin_notes: string | null
-          agreement_status: string
-          approved_at: string | null
-          booking_reference: string
-          cancelled_at: string | null
-          confirmed_at: string | null
-          created_at: string
-          customer_notes: string | null
-          customer_snapshot: Json
-          daily_rate: number
-          delivery_fee: number
-          firebase_id: string | null
-          fulfillment_method: string
-          id: string
-          inventory_unit_id: string | null
-          location: string | null
-          product_id: string
-          product_snapshot: Json
-          refundable_deposit: number
-          released_at: string | null
-          rental_days: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status: string
-          returned_at: string | null
-          status: string
-          total_amount: number
-          updated_at: string
-          user_id: string
-        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1576,38 +1563,7 @@ export type Database = {
       }
       cancel_own_booking: {
         Args: { p_booking_id: string; p_note?: string }
-        Returns: {
-          admin_notes: string | null
-          agreement_status: string
-          approved_at: string | null
-          booking_reference: string
-          cancelled_at: string | null
-          confirmed_at: string | null
-          created_at: string
-          customer_notes: string | null
-          customer_snapshot: Json
-          daily_rate: number
-          delivery_fee: number
-          firebase_id: string | null
-          fulfillment_method: string
-          id: string
-          inventory_unit_id: string | null
-          location: string | null
-          product_id: string
-          product_snapshot: Json
-          refundable_deposit: number
-          released_at: string | null
-          rental_days: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status: string
-          returned_at: string | null
-          status: string
-          total_amount: number
-          updated_at: string
-          user_id: string
-        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1617,38 +1573,7 @@ export type Database = {
       }
       confirm_booking: {
         Args: { p_booking_id: string; p_note?: string }
-        Returns: {
-          admin_notes: string | null
-          agreement_status: string
-          approved_at: string | null
-          booking_reference: string
-          cancelled_at: string | null
-          confirmed_at: string | null
-          created_at: string
-          customer_notes: string | null
-          customer_snapshot: Json
-          daily_rate: number
-          delivery_fee: number
-          firebase_id: string | null
-          fulfillment_method: string
-          id: string
-          inventory_unit_id: string | null
-          location: string | null
-          product_id: string
-          product_snapshot: Json
-          refundable_deposit: number
-          released_at: string | null
-          rental_days: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status: string
-          returned_at: string | null
-          status: string
-          total_amount: number
-          updated_at: string
-          user_id: string
-        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1670,44 +1595,39 @@ export type Database = {
           p_rental_end_date: string
           p_rental_start_date: string
         }
-        Returns: {
-          admin_notes: string | null
-          agreement_status: string
-          approved_at: string | null
-          booking_reference: string
-          cancelled_at: string | null
-          confirmed_at: string | null
-          created_at: string
-          customer_notes: string | null
-          customer_snapshot: Json
-          daily_rate: number
-          delivery_fee: number
-          firebase_id: string | null
-          fulfillment_method: string
-          id: string
-          inventory_unit_id: string | null
-          location: string | null
-          product_id: string
-          product_snapshot: Json
-          refundable_deposit: number
-          released_at: string | null
-          rental_days: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status: string
-          returned_at: string | null
-          status: string
-          total_amount: number
-          updated_at: string
-          user_id: string
-        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
         SetofOptions: {
           from: "*"
           to: "bookings"
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_product_availability: {
+        Args: { p_end_date: string; p_product_id: string; p_start_date: string }
+        Returns: {
+          available_units: number
+          product_id: string
+          total_units: number
+          unavailable_units: number
+        }[]
+      }
+      get_product_availability_calendar: {
+        Args: { p_end_date: string; p_product_id: string; p_start_date: string }
+        Returns: {
+          available_units: number
+          day: string
+          total_units: number
+        }[]
+      }
+      get_product_reviews: {
+        Args: { p_limit?: number; p_offset?: number; p_product_id: string }
+        Returns: {
+          comment: string
+          created_at: string
+          rating: number
+          review_id: string
+        }[]
       }
       is_active_admin: { Args: never; Returns: boolean }
       log_audit_event: {
@@ -1724,38 +1644,7 @@ export type Database = {
       }
       system_confirm_booking: {
         Args: { p_booking_id: string; p_note?: string }
-        Returns: {
-          admin_notes: string | null
-          agreement_status: string
-          approved_at: string | null
-          booking_reference: string
-          cancelled_at: string | null
-          confirmed_at: string | null
-          created_at: string
-          customer_notes: string | null
-          customer_snapshot: Json
-          daily_rate: number
-          delivery_fee: number
-          firebase_id: string | null
-          fulfillment_method: string
-          id: string
-          inventory_unit_id: string | null
-          location: string | null
-          product_id: string
-          product_snapshot: Json
-          refundable_deposit: number
-          released_at: string | null
-          rental_days: number | null
-          rental_end_date: string
-          rental_start_date: string
-          rental_subtotal: number
-          requirements_status: string
-          returned_at: string | null
-          status: string
-          total_amount: number
-          updated_at: string
-          user_id: string
-        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
         SetofOptions: {
           from: "*"
           to: "bookings"
@@ -1765,7 +1654,52 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      account_status: "active" | "suspended"
+      agreement_status:
+        | "draft"
+        | "awaiting_customer_signature"
+        | "awaiting_business_signature"
+        | "completed"
+        | "rejected"
+        | "superseded"
+      app_role: "customer" | "admin"
+      booking_status:
+        | "draft"
+        | "pending"
+        | "approved"
+        | "confirmed"
+        | "ready_for_release"
+        | "released"
+        | "returned"
+        | "cancelled"
+        | "rejected"
+      content_status: "draft" | "published" | "archived"
+      document_status: "active" | "replaced" | "expired" | "deleted"
+      fulfillment_method: "pickup" | "delivery"
+      payment_stage: "down_payment" | "balance" | "other"
+      payment_submission_status:
+        | "submitted"
+        | "under_review"
+        | "verified"
+        | "rejected"
+        | "void"
+      product_status: "draft" | "active" | "inactive" | "archived"
+      requirement_status:
+        | "pending_submission"
+        | "pending_review"
+        | "approved"
+        | "rejected"
+        | "waived"
+      review_decision: "pending" | "approved" | "rejected"
+      signer_role: "customer" | "business"
+      unit_lifecycle_status: "active" | "maintenance" | "retired"
+      unit_reservation_kind: "booking" | "maintenance" | "admin_block"
+      unit_reservation_status:
+        | "tentative"
+        | "confirmed"
+        | "in_use"
+        | "completed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1892,6 +1826,58 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      account_status: ["active", "suspended"],
+      agreement_status: [
+        "draft",
+        "awaiting_customer_signature",
+        "awaiting_business_signature",
+        "completed",
+        "rejected",
+        "superseded",
+      ],
+      app_role: ["customer", "admin"],
+      booking_status: [
+        "draft",
+        "pending",
+        "approved",
+        "confirmed",
+        "ready_for_release",
+        "released",
+        "returned",
+        "cancelled",
+        "rejected",
+      ],
+      content_status: ["draft", "published", "archived"],
+      document_status: ["active", "replaced", "expired", "deleted"],
+      fulfillment_method: ["pickup", "delivery"],
+      payment_stage: ["down_payment", "balance", "other"],
+      payment_submission_status: [
+        "submitted",
+        "under_review",
+        "verified",
+        "rejected",
+        "void",
+      ],
+      product_status: ["draft", "active", "inactive", "archived"],
+      requirement_status: [
+        "pending_submission",
+        "pending_review",
+        "approved",
+        "rejected",
+        "waived",
+      ],
+      review_decision: ["pending", "approved", "rejected"],
+      signer_role: ["customer", "business"],
+      unit_lifecycle_status: ["active", "maintenance", "retired"],
+      unit_reservation_kind: ["booking", "maintenance", "admin_block"],
+      unit_reservation_status: [
+        "tentative",
+        "confirmed",
+        "in_use",
+        "completed",
+        "cancelled",
+      ],
+    },
   },
 } as const

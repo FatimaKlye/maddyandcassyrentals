@@ -96,88 +96,97 @@ export async function submitBookingWithDateGuard(
   return {
     bookingId: booking.id,
     bookingRef: booking.booking_reference,
-    assignedUnitId: booking.inventory_unit_id,
+    // Which physical unit was claimed lives in unit_reservations now, which
+    // customers can't read directly (admin-only RLS) — no longer exposed here.
+    assignedUnitId: null,
   };
 }
 
-function mapSummary(row: Tables<"product_availability_summary">): UnitCounts {
+async function fetchUnitCounts(
+  supabase: SupabaseClient<Database>,
+  productId: string,
+): Promise<UnitCounts> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("get_product_availability", {
+    p_product_id: productId,
+    p_start_date: today,
+    p_end_date: today,
+  });
+  if (error) throw new Error(error.message);
+  const row = data?.[0];
+  const totalUnits = row?.total_units ?? 0;
+  const availableUnits = row?.available_units ?? 0;
   return {
-    totalUnits: row.total_units,
-    availableUnits: row.available_units,
-    reservedUnits: row.reserved_units,
-    rentedUnits: row.rented_units,
+    totalUnits,
+    availableUnits,
+    reservedUnits: Math.max(totalUnits - availableUnits, 0),
+    rentedUnits: 0,
   };
 }
 
+const INVENTORY_POLL_INTERVAL_MS = 30_000;
+
+/**
+ * Customers can't SELECT inventory_units/unit_reservations directly (admin-only
+ * RLS), so there's no table left to run postgres_changes realtime against.
+ * This polls the same get_product_availability() RPC the catalog/booking flow
+ * already uses instead of a live subscription.
+ */
 export function subscribeToInventory(
   supabase: SupabaseClient<Database>,
   productId: string,
   callback: (units: UnitCounts | null) => void,
 ): () => void {
-  supabase
-    .from("product_availability_summary")
-    .select("*")
-    .eq("product_id", productId)
-    .maybeSingle()
-    .then(({ data }) => callback(data ? mapSummary(data) : null));
+  let cancelled = false;
 
-  const channel = supabase
-    .channel(`inventory-${productId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "product_availability_summary",
-        filter: `product_id=eq.${productId}`,
-      },
-      (payload) => {
-        const row = (payload.new ?? payload.old) as
-          | Tables<"product_availability_summary">
-          | undefined;
-        callback(row ? mapSummary(row) : null);
-      },
-    )
-    .subscribe();
+  async function refresh() {
+    try {
+      const units = await fetchUnitCounts(supabase, productId);
+      if (!cancelled) callback(units);
+    } catch {
+      if (!cancelled) callback(null);
+    }
+  }
+
+  refresh();
+  const intervalId = setInterval(refresh, INVENTORY_POLL_INTERVAL_MS);
 
   return () => {
-    supabase.removeChannel(channel);
+    cancelled = true;
+    clearInterval(intervalId);
   };
 }
 
 export function subscribeToAllInventory(
   supabase: SupabaseClient<Database>,
+  productIds: string[],
   callback: (unitsByProductId: Map<string, UnitCounts>) => void,
 ): () => void {
-  const state = new Map<string, UnitCounts>();
+  let cancelled = false;
 
-  supabase
-    .from("product_availability_summary")
-    .select("*")
-    .then(({ data }) => {
-      for (const row of data ?? []) {
-        state.set(row.product_id, mapSummary(row));
-      }
-      callback(new Map(state));
-    });
+  async function refresh() {
+    const entries = await Promise.all(
+      productIds.map(async (productId) => {
+        try {
+          return [productId, await fetchUnitCounts(supabase, productId)] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    if (cancelled) return;
+    const state = new Map<string, UnitCounts>();
+    for (const entry of entries) {
+      if (entry) state.set(entry[0], entry[1]);
+    }
+    callback(state);
+  }
 
-  const channel = supabase
-    .channel("inventory-all")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "product_availability_summary" },
-      (payload) => {
-        const row = (payload.new ?? payload.old) as
-          | Tables<"product_availability_summary">
-          | undefined;
-        if (!row) return;
-        state.set(row.product_id, mapSummary(row));
-        callback(new Map(state));
-      },
-    )
-    .subscribe();
+  refresh();
+  const intervalId = productIds.length > 0 ? setInterval(refresh, INVENTORY_POLL_INTERVAL_MS) : null;
 
   return () => {
-    supabase.removeChannel(channel);
+    cancelled = true;
+    if (intervalId) clearInterval(intervalId);
   };
 }
