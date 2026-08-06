@@ -6,6 +6,8 @@ import { createClient } from "@/src/lib/supabase/client";
 export interface SendEmailOtpOptions {
   /** Creates a new account for this email if one does not already exist. */
   shouldCreateUser?: boolean;
+  /** Optional redirect target for confirmation links / OTP emails. */
+  emailRedirectTo?: string;
 }
 
 /**
@@ -21,9 +23,20 @@ export async function sendEmailOtp(
   const supabase = createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: options.shouldCreateUser ?? false },
+    options: {
+      shouldCreateUser: options.shouldCreateUser ?? false,
+      emailRedirectTo: options.emailRedirectTo,
+    },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const normalized = error.message.toLowerCase();
+    if (!options.shouldCreateUser && normalized.includes("signups not allowed for otp")) {
+      throw new Error(
+        "No customer account was found for that email. Please create an account first.",
+      );
+    }
+    throw new Error(error.message);
+  }
 }
 
 export async function verifyEmailOtp(email: string, token: string): Promise<User> {

@@ -41,13 +41,18 @@ export default function SignUpForm() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await sendEmailOtp(values.email, { shouldCreateUser: true });
+      await sendEmailOtp(values.email, {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/verify-email?flow=sign-up`,
+      });
       router.replace(
         `/verify-email?email=${encodeURIComponent(values.email)}&redirect=${encodeURIComponent(redirectTo)}&flow=sign-up`,
       );
-    } catch {
+    } catch (error) {
       setFormError(
-        "We couldn't send a code to that email. Check the address and try again.",
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't send a code to that email. Check the address and try again.",
       );
       setSubmitting(false);
     }

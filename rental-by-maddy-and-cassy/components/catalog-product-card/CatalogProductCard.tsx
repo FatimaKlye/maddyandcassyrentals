@@ -25,7 +25,7 @@ export default function CatalogProductCard({
   ctaLabel = "Reserve Now",
 }: CatalogProductCardProps) {
   const detailsHref = `/catalog/${product.id}`;
-  const fullyBooked = isFullyBooked(units.availableUnits);
+  const fullyBooked = isFullyBooked(units.totalUnits);
 
   return (
     <article className={styles.card}>
@@ -74,6 +74,7 @@ export default function CatalogProductCard({
         <AvailabilityBadge
           totalUnits={units.totalUnits}
           availableUnits={units.availableUnits}
+          mode="summary"
           className={styles.availabilityBadge}
         />
 

@@ -1,7 +1,7 @@
 import {
-  getAvailabilityLabel,
   getAvailabilityLevel,
   getFullyBookedMessage,
+  getAvailabilitySummaryText,
   getUnitsAvailableText,
   getUnitsInUseText,
 } from "@/lib/availability";
@@ -11,6 +11,7 @@ interface AvailabilityBadgeProps {
   totalUnits: number;
   availableUnits: number;
   variant?: "compact" | "detailed";
+  mode?: "live" | "summary";
   className?: string;
 }
 
@@ -24,17 +25,22 @@ export default function AvailabilityBadge({
   totalUnits,
   availableUnits,
   variant = "compact",
+  mode = "live",
   className,
 }: AvailabilityBadgeProps) {
-  const level = getAvailabilityLevel(availableUnits, totalUnits);
-  const label = getAvailabilityLabel(level);
+  const effectiveAvailableUnits = mode === "summary" ? totalUnits : availableUnits;
+  const level = getAvailabilityLevel(effectiveAvailableUnits, totalUnits);
   const levelClass = styles[LEVEL_CLASS[level]];
+  const headlineText =
+    mode === "summary"
+      ? getAvailabilitySummaryText(totalUnits, totalUnits)
+      : getAvailabilitySummaryText(availableUnits, totalUnits);
 
   if (variant === "compact") {
     return (
       <span className={`${styles.pill} ${levelClass} ${className ?? ""}`}>
         <span className={styles.dot} aria-hidden="true" />
-        {getUnitsAvailableText(availableUnits)}
+        {headlineText}
       </span>
     );
   }
@@ -43,7 +49,7 @@ export default function AvailabilityBadge({
     <div className={`${styles.detailed} ${className ?? ""}`}>
       <span className={`${styles.pill} ${levelClass}`}>
         <span className={styles.dot} aria-hidden="true" />
-        {label}
+        {headlineText}
       </span>
       <p className={styles.detailLine}>{getUnitsAvailableText(availableUnits)}</p>
       <p className={styles.detailLine}>{getUnitsInUseText(totalUnits, availableUnits)}</p>

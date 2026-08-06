@@ -14,6 +14,10 @@ import SimilarProducts from "@/components/similar-products/SimilarProducts";
 import RentalDurationSelector from "@/components/rental-duration-selector/RentalDurationSelector";
 import QuickEstimate from "@/components/quick-estimate/QuickEstimate";
 import { useInventoryMap } from "@/hooks/useInventory";
+import {
+  createUnitCountsFromAvailability,
+  useProductAvailability,
+} from "@/hooks/useProductAvailability";
 import styles from "./details.module.css";
 
 interface ProductDetailsClientProps {
@@ -26,15 +30,9 @@ export default function ProductDetailsClient({
   similarProducts,
 }: ProductDetailsClientProps) {
   const [estimateDays, setEstimateDays] = useState(1);
+  const currentAvailability = useProductAvailability(product.id, product.totalUnits);
 
-  const defaultsById: Record<string, UnitCounts> = {
-    [product.id]: {
-      totalUnits: product.totalUnits,
-      availableUnits: product.availableUnits,
-      reservedUnits: product.reservedUnits,
-      rentedUnits: product.rentedUnits,
-    },
-  };
+  const defaultsById: Record<string, UnitCounts> = {};
   for (const item of similarProducts) {
     defaultsById[item.id] = {
       totalUnits: item.totalUnits,
@@ -45,12 +43,7 @@ export default function ProductDetailsClient({
   }
 
   const unitsByProductId = useInventoryMap(defaultsById);
-  const units = unitsByProductId.get(product.id) ?? {
-    totalUnits: product.totalUnits,
-    availableUnits: product.availableUnits,
-    reservedUnits: product.reservedUnits,
-    rentedUnits: product.rentedUnits,
-  };
+  const units = createUnitCountsFromAvailability(product.totalUnits, currentAvailability.availableUnits);
 
   const images = product.images.length ? product.images.map((image) => image.url) : [product.image];
 

@@ -15,6 +15,7 @@ import {
 import DateRangePicker from "@/components/date-range-picker/DateRangePicker";
 import AvailabilityBadge from "@/components/availability-badge/AvailabilityBadge";
 import Spinner from "@/components/ui/Spinner";
+import { useProductAvailability } from "@/hooks/useProductAvailability";
 import formStyles from "@/components/ui/Form.module.css";
 import styles from "./StepRentalDetails.module.css";
 
@@ -39,6 +40,7 @@ export default function StepRentalDetails({
   const [loadingCalendar, setLoadingCalendar] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const availability = useProductAvailability(product.id, units.totalUnits, draft.startDate, draft.endDate);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +167,10 @@ export default function StepRentalDetails({
               maxRentalDays={MAX_RENTAL_DAYS}
             />
           )}
+
+          <p className={styles.availabilityStatus} role="status">
+            {availability.isChecking ? "Checking availability for selected dates..." : availability.statusText}
+          </p>
 
           {dayCount > 0 ? (
             <p className={styles.dayCount}>

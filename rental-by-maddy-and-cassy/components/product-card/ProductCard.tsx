@@ -26,6 +26,7 @@ export default function ProductCard({ product, className }: ProductCardProps) {
         <AvailabilityBadge
           totalUnits={product.totalUnits}
           availableUnits={product.availableUnits}
+          mode="summary"
           className={styles.badge}
         />
       </div>

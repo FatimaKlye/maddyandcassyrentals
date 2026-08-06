@@ -80,6 +80,13 @@
   color: var(--color-primary);
 }
 
+.availabilityStatus {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
 .fulfillmentColumn {
   display: flex;
   flex-direction: column;

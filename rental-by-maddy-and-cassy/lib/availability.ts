@@ -28,12 +28,25 @@ export function getAvailabilityLabel(level: AvailabilityLevel): string {
   }
 }
 
+export function getUnitCountText(units: number): string {
+  return `${units} unit${units === 1 ? "" : "s"}`;
+}
+
+export function getAvailabilitySummaryText(
+  availableUnits: number,
+  totalUnits: number,
+): string {
+  if (availableUnits <= 0) return "Fully Booked";
+  if (availableUnits >= totalUnits) return `${getUnitCountText(totalUnits)} total`;
+  return `${getUnitCountText(availableUnits)} available of ${getUnitCountText(totalUnits)} total`;
+}
+
 export function isFullyBooked(availableUnits: number): boolean {
   return availableUnits <= 0;
 }
 
 export function getUnitsAvailableText(availableUnits: number): string {
-  return `${availableUnits} unit${availableUnits === 1 ? "" : "s"} available`;
+  return `${getUnitCountText(availableUnits)} available`;
 }
 
 export function getUnitsInUseText(totalUnits: number, availableUnits: number): string {

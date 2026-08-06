@@ -15,7 +15,7 @@ interface ReserveActionProps {
 export default function ReserveAction({ product, units }: ReserveActionProps) {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const fullyBooked = isFullyBooked(units.availableUnits);
+  const fullyBooked = isFullyBooked(units.totalUnits);
 
   function handleReserve() {
     const reservePath = `/catalog/${product.id}/reserve`;
