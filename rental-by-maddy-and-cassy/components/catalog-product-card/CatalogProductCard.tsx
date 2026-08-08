@@ -25,7 +25,7 @@ export default function CatalogProductCard({
   ctaLabel = "Reserve Now",
 }: CatalogProductCardProps) {
   const detailsHref = `/catalog/${product.id}`;
-  const fullyBooked = isFullyBooked(units.totalUnits);
+  const fullyBooked = isFullyBooked(units.availableUnits);
 
   return (
     <article className={styles.card}>
@@ -62,19 +62,25 @@ export default function CatalogProductCard({
           <h3 className={styles.name}>{product.name}</h3>
         </Link>
         <p className={styles.brand}>{product.brand}</p>
+        {Object.keys(product.specs).length > 0 ? (
+          <p className={styles.specSummary}>{Object.values(product.specs).join(" · ")}</p>
+        ) : null}
         <p className={styles.price}>
           {product.currency}
           {product.pricePerDay.toLocaleString()}
           <span className={styles.perDay}>/day</span>
         </p>
-        <p className={styles.rating}>
-          {product.rating.toFixed(1)} ★ <span className={styles.reviewCount}>({product.reviewCount})</span>
-        </p>
+        {product.reviewCount > 0 ? (
+          <p className={styles.rating}>
+            {product.rating.toFixed(1)} ★{" "}
+            <span className={styles.reviewCount}>({product.reviewCount})</span>
+          </p>
+        ) : null}
 
         <AvailabilityBadge
           totalUnits={units.totalUnits}
           availableUnits={units.availableUnits}
-          mode="summary"
+          mode="live"
           className={styles.availabilityBadge}
         />
 

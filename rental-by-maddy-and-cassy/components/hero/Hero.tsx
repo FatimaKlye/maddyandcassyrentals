@@ -7,6 +7,7 @@ import styles from "./Hero.module.css";
 
 export default async function Hero() {
   const products = await getActiveProducts();
+  const categoryCount = new Set(products.map((product) => product.category).filter(Boolean)).size;
 
   return (
     <section id="top" className={styles.hero} aria-label="Introduction">
@@ -39,7 +40,7 @@ export default async function Hero() {
             </a>
           </div>
 
-          <Stats />
+          <Stats itemCount={products.length} categoryCount={categoryCount} />
         </div>
 
         <ProductShowcase products={products.slice(0, 2)} />

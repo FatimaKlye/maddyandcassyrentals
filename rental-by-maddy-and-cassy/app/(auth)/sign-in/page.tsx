@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Link from "next/link";
 import Navbar from "@/components/navbar/Navbar";
 import SignInForm from "./SignInForm";
 import styles from "../auth.module.css";
@@ -14,9 +15,25 @@ export default function SignInPage() {
     <div>
       <Navbar />
       <main className={styles.main}>
-        <Suspense fallback={null}>
-          <SignInForm />
-        </Suspense>
+        <div className={styles.authLayout}>
+          <section className={styles.authIntro} aria-labelledby="customer-access-heading">
+            <p className={styles.introEyebrow}>CUSTOMER ACCOUNT</p>
+            <h1 id="customer-access-heading">Your rentals, all in one place.</h1>
+            <p>
+              Sign in securely to continue a reservation, submit requirements,
+              and follow every booking update from one clear dashboard.
+            </p>
+            <ul className={styles.authBenefits}>
+              <li>Track reservations and booking status</li>
+              <li>Access payment history, receipts, and invoices</li>
+              <li>Return to saved booking steps without starting over</li>
+            </ul>
+            <Link href="/catalog" className={styles.introLink}>Browse the catalog first →</Link>
+          </section>
+          <Suspense fallback={null}>
+            <SignInForm />
+          </Suspense>
+        </div>
       </main>
     </div>
   );

@@ -1,10 +1,10 @@
 .main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 5rem;
+  padding: 1.35rem 1.5rem 4rem;
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  gap: 1.35rem;
 }
 
 .backLink {
@@ -24,8 +24,8 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 480px) 1fr;
-  gap: 2.5rem;
+  grid-template-columns: minmax(0, 440px) 1fr;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
   align-items: start;
 }
 
@@ -38,6 +38,38 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.specificationPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0.55rem 0 0;
+}
+
+.specificationPill {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.48rem 0.72rem;
+  border: 1px solid var(--color-dusty-rose);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-blush) 45%, white);
+}
+
+.specificationPill dt {
+  color: var(--color-charcoal);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.specificationPill dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .category {
@@ -70,7 +102,7 @@
 }
 
 .description {
-  margin: 1rem 0 0;
+  margin: 0.65rem 0 0;
   color: var(--color-charcoal);
   line-height: 1.7;
   font-size: 0.98rem;
@@ -78,14 +110,16 @@
 }
 
 .infoCards {
-  margin-top: 1.4rem;
+  margin-top: 0.85rem;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.9rem;
 }
 
 .infoCard {
-  padding: 1rem 1.1rem;
+  min-height: 82px;
+  justify-content: center;
+  padding: 0.8rem 0.9rem;
   border-radius: 16px;
   background: var(--color-white);
   border: 1px solid var(--color-light-gray);
@@ -105,7 +139,7 @@
 
 .infoCardValue {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--color-primary);
 }
@@ -117,21 +151,98 @@
   margin-left: 0.2rem;
 }
 
-.actionsRow {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.4rem;
+.detailsSplit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.8rem;
 }
 
 .reserveCard {
-  margin-top: 1.2rem;
-  padding: 1.5rem;
+  padding: 1rem 1.1rem;
   border-radius: 20px;
   background: var(--color-blush);
   border: 1px solid var(--color-dusty-rose);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.65rem;
+}
+
+.includedCard {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--color-light-gray);
+  border-radius: 20px;
+  background: var(--color-white);
+  box-shadow: 0 10px 28px rgba(36, 36, 36, 0.04);
+}
+
+.panelHeadingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.panelHeadingRow h2 {
+  margin: 0.12rem 0 0;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+}
+
+.panelHeadingRow > span {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: var(--color-background-soft);
+  color: var(--color-charcoal);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.panelEyebrow {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.includedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.48rem 0.7rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.includedGrid li {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.4rem;
+  color: var(--color-charcoal);
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.includedGrid li > span {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-blush);
+  color: var(--color-primary);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.favoriteRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: -0.2rem;
 }
 
 .reserveHeading {
@@ -139,6 +250,13 @@
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.reserveCopy {
+  margin: 0;
+  color: var(--color-charcoal);
+  font-size: 0.84rem;
+  line-height: 1.55;
 }
 
 .estimateNote {
@@ -157,6 +275,12 @@
   }
 
   .infoCards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .includedGrid {
     grid-template-columns: 1fr;
   }
 }

@@ -16,9 +16,8 @@ interface CatalogFiltersProps {
   availableOnly: boolean;
   onAvailableOnlyChange: (value: boolean) => void;
   resultCount: number;
+  categories: CategoryFilter[];
 }
-
-const CATEGORIES: CategoryFilter[] = ["All", "Phones", "Cameras"];
 
 export default function CatalogFilters({
   search,
@@ -30,11 +29,12 @@ export default function CatalogFilters({
   availableOnly,
   onAvailableOnlyChange,
   resultCount,
+  categories,
 }: CatalogFiltersProps) {
   return (
     <div className={styles.filters}>
       <div className={styles.categoryRow} role="tablist" aria-label="Filter by category">
-        {CATEGORIES.map((item) => (
+        {categories.map((item) => (
           <button
             key={item}
             type="button"

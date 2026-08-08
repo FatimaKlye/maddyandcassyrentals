@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
 import { useAuth } from "@/hooks/useAuth";
@@ -236,9 +237,66 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
 
   return (
     <div className={styles.wrapper}>
+      <header className={styles.reserveHeader}>
+        <div>
+          <p className={styles.eyebrow}>GUIDED RESERVATION</p>
+          <h1>Reserve {product.name}</h1>
+          <p>
+            Complete one focused step at a time. Your progress, payment,
+            documents, and agreement stay connected to this booking.
+          </p>
+        </div>
+        <div className={styles.headerRate}>
+          <span>Daily rate</span>
+          <strong>{product.currency}{product.pricePerDay.toLocaleString()}</strong>
+          <small>per rental day</small>
+        </div>
+      </header>
+
       <ReservationStepper steps={STEP_LABELS} currentStep={step} />
 
-      <div className={styles.card}>
+      <div className={styles.flowLayout}>
+        <aside className={styles.bookingSummary} aria-label="Selected rental summary">
+          <p className={styles.summaryEyebrow}>YOUR SELECTED RENTAL</p>
+          <h2>{product.name}</h2>
+          {Object.keys(product.specs).length > 0 ? (
+            <dl className={styles.summarySpecs}>
+              {Object.entries(product.specs).map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          <dl className={styles.summaryFacts}>
+            <div>
+              <dt>Current availability</dt>
+              <dd>{units.availableUnits} of {units.totalUnits} units</dd>
+            </div>
+            <div>
+              <dt>Included with rental</dt>
+              <dd>{product.included.length ? `${product.included.length} items` : "See item details"}</dd>
+            </div>
+            <div>
+              <dt>Current step</dt>
+              <dd>{step} of {STEP_LABELS.length}</dd>
+            </div>
+          </dl>
+          <Link href={`/catalog/${product.id}`} className={styles.detailsLink}>
+            Review item details
+          </Link>
+          <div className={styles.secureNote}>
+            <strong>Secure booking flow</strong>
+            <span>Payment is completed through PayMongo before document submission.</span>
+          </div>
+        </aside>
+
+        <div className={styles.card}>
+          <div className={styles.cardTopline}>
+            <span>Step {step} of {STEP_LABELS.length}</span>
+            <strong>{STEP_LABELS[step - 1]}</strong>
+          </div>
         {step === 1 ? (
           <StepCustomerInfo
             uid={user!.id}
@@ -307,6 +365,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
             isDemo={isDemoPayment}
           />
         ) : null}
+        </div>
       </div>
     </div>
   );

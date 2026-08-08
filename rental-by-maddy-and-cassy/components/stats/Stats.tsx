@@ -5,16 +5,21 @@ interface Stat {
   label: string;
 }
 
-const stats: Stat[] = [
-  { value: "20+", label: "Rental Items" },
-  { value: "1,000+", label: "Rentals" },
-  { value: "4.9★", label: "Rating" },
-  { value: "24/7", label: "Support" },
-];
+interface StatsProps {
+  itemCount: number;
+  categoryCount: number;
+}
 
-export default function Stats() {
+export default function Stats({ itemCount, categoryCount }: StatsProps) {
+  const stats: Stat[] = [
+    { value: String(itemCount), label: "Catalog Listings" },
+    { value: String(categoryCount), label: "Gear Categories" },
+    { value: "50%", label: "Reservation Option" },
+    { value: "6", label: "Clear Booking Steps" },
+  ];
+
   return (
-    <dl className={styles.stats} aria-label="Business statistics">
+    <dl className={styles.stats} aria-label="Rental catalog facts">
       {stats.map((stat) => (
         <div key={stat.label} className={styles.stat}>
           <dt className={styles.value}>{stat.value}</dt>

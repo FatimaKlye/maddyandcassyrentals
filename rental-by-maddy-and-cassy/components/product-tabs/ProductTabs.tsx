@@ -14,41 +14,31 @@ interface ProductTabsProps {
 
 type TabId = "specifications" | "included" | "reviews";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "specifications", label: "Specifications" },
-  { id: "included", label: "What's Included" },
-  { id: "reviews", label: "Reviews" },
-];
+export default function ProductTabs({ specs, included, reviews, rating, reviewCount }: ProductTabsProps) {
+  const tabs: { id: TabId; label: string }[] = [];
+  if (Object.keys(specs).length > 0) tabs.push({ id: "specifications", label: "Specifications" });
+  if (included.length > 0) tabs.push({ id: "included", label: "What’s Included" });
+  if (reviews.length > 0) tabs.push({ id: "reviews", label: "Reviews" });
 
-export default function ProductTabs({
-  specs,
-  included,
-  reviews,
-  rating,
-  reviewCount,
-}: ProductTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("specifications");
+  const [activeTab, setActiveTab] = useState<TabId | null>(() => tabs[0]?.id ?? null);
+
+  if (!activeTab || tabs.length === 0) return null;
 
   function handleKeyDown(event: KeyboardEvent) {
-    const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
+    const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      setActiveTab(TABS[(currentIndex + 1) % TABS.length].id);
+      setActiveTab(tabs[(currentIndex + 1) % tabs.length].id);
     } else if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setActiveTab(TABS[(currentIndex - 1 + TABS.length) % TABS.length].id);
+      setActiveTab(tabs[(currentIndex - 1 + tabs.length) % tabs.length].id);
     }
   }
 
   return (
     <div className={styles.card}>
-      <div
-        className={styles.tabList}
-        role="tablist"
-        aria-label="Product information"
-        onKeyDown={handleKeyDown}
-      >
-        {TABS.map((tab) => (
+      <div className={styles.tabList} role="tablist" aria-label="Product information" onKeyDown={handleKeyDown}>
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -65,60 +55,42 @@ export default function ProductTabs({
         ))}
       </div>
 
-      <div
-        role="tabpanel"
-        id="panel-specifications"
-        aria-labelledby="tab-specifications"
-        hidden={activeTab !== "specifications"}
-        className={styles.panel}
-      >
-        <dl className={styles.specGrid}>
-          {Object.entries(specs).map(([key, value]) => (
-            <div key={key} className={styles.specRow}>
-              <dt className={styles.specKey}>{key}</dt>
-              <dd className={styles.specValue}>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div
-        role="tabpanel"
-        id="panel-included"
-        aria-labelledby="tab-included"
-        hidden={activeTab !== "included"}
-        className={styles.panel}
-      >
-        <ul className={styles.includedList}>
-          {included.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div
-        role="tabpanel"
-        id="panel-reviews"
-        aria-labelledby="tab-reviews"
-        hidden={activeTab !== "reviews"}
-        className={styles.panel}
-      >
-        <p className={styles.reviewSummary}>
-          <strong>{rating.toFixed(1)}</strong> average rating from {reviewCount} reviews
-        </p>
-        <ul className={styles.reviewList}>
-          {reviews.map((review) => (
-            <li key={review.id} className={styles.reviewItem}>
-              <div className={styles.reviewHeader}>
-                <span className={styles.reviewAuthor}>{review.author}</span>
-                <span className={styles.reviewRating}>{review.rating.toFixed(1)} ★</span>
+      {Object.keys(specs).length > 0 ? (
+        <div role="tabpanel" id="panel-specifications" aria-labelledby="tab-specifications" hidden={activeTab !== "specifications"} className={styles.panel}>
+          <dl className={styles.specGrid}>
+            {Object.entries(specs).map(([key, value]) => (
+              <div key={key} className={styles.specRow}>
+                <dt className={styles.specKey}>{key}</dt>
+                <dd className={styles.specValue}>{value}</dd>
               </div>
-              <p className={styles.reviewComment}>{review.comment}</p>
-              <span className={styles.reviewDate}>{review.date}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+
+      {included.length > 0 ? (
+        <div role="tabpanel" id="panel-included" aria-labelledby="tab-included" hidden={activeTab !== "included"} className={styles.panel}>
+          <ul className={styles.includedList}>{included.map((item) => <li key={item}>{item}</li>)}</ul>
+        </div>
+      ) : null}
+
+      {reviews.length > 0 ? (
+        <div role="tabpanel" id="panel-reviews" aria-labelledby="tab-reviews" hidden={activeTab !== "reviews"} className={styles.panel}>
+          <p className={styles.reviewSummary}><strong>{rating.toFixed(1)}</strong> average rating from {reviewCount} reviews</p>
+          <ul className={styles.reviewList}>
+            {reviews.map((review) => (
+              <li key={review.id} className={styles.reviewItem}>
+                <div className={styles.reviewHeader}>
+                  <span className={styles.reviewAuthor}>{review.author}</span>
+                  <span className={styles.reviewRating}>{review.rating.toFixed(1)} ★</span>
+                </div>
+                <p className={styles.reviewComment}>{review.comment}</p>
+                <span className={styles.reviewDate}>{review.date}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

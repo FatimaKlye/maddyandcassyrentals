@@ -31,7 +31,17 @@ function writeFavorites(favorites: string[]) {
 
 function subscribe(callback: () => void) {
   listeners.add(callback);
-  return () => listeners.delete(callback);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) {
+      cachedRaw = null;
+      callback();
+    }
+  };
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    listeners.delete(callback);
+    window.removeEventListener("storage", handleStorage);
+  };
 }
 
 function getServerSnapshot(): string[] {
@@ -54,5 +64,24 @@ export function useFavorites() {
     [favorites]
   );
 
-  return { favorites, toggleFavorite, isFavorite };
+  const clearFavorites = useCallback(() => {
+    writeFavorites([]);
+  }, []);
+
+  const removeStaleFavorites = useCallback((activeProductIds: string[]) => {
+    const activeIds = new Set(activeProductIds);
+    const current = readFavorites();
+    const validFavorites = current.filter((id) => activeIds.has(id));
+    if (validFavorites.length !== current.length) {
+      writeFavorites(validFavorites);
+    }
+  }, []);
+
+  return {
+    favorites,
+    toggleFavorite,
+    isFavorite,
+    clearFavorites,
+    removeStaleFavorites,
+  };
 }

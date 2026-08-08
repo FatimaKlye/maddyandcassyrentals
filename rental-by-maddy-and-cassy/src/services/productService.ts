@@ -84,8 +84,9 @@ async function mapProduct(
     : 0;
 
   const specifications = (row.specifications as Record<string, string>) ?? {};
-  const included = specifications.included
-    ? specifications.included.split(",").map((item) => item.trim()).filter(Boolean)
+  const { included: includedText, ...displaySpecifications } = specifications;
+  const included = includedText
+    ? includedText.split(",").map((item) => item.trim()).filter(Boolean)
     : [];
 
   return {
@@ -117,7 +118,7 @@ async function mapProduct(
     image: images[0]?.url || "/images/product-placeholder.png",
     included,
     badge: row.is_featured ? "Featured" : undefined,
-    specs: specifications,
+    specs: displaySpecifications,
     isActive: row.status === "active",
   };
 }

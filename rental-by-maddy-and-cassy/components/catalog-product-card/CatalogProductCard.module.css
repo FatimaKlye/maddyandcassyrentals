@@ -93,6 +93,17 @@
   color: var(--color-charcoal);
 }
 
+.specSummary {
+  align-self: flex-start;
+  margin: 0.15rem 0 0;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  background: var(--color-background-soft);
+  color: var(--color-primary-hover);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .rating {
   margin: 0.1rem 0 0;
   font-size: 0.82rem;

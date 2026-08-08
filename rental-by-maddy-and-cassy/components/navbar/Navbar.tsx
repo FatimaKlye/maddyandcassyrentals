@@ -5,12 +5,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useFavorites } from "@/hooks/useFavorites";
 import { logout } from "@/src/services/authService";
 import styles from "./Navbar.module.css";
 
 const primaryLinks = [
   { href: "/", label: "Home" },
   { href: "/catalog", label: "Browse" },
+  { href: "/favorites", label: "Favorites" },
   { href: "/#about", label: "About" },
   { href: "/contact", label: "Contact" },
 ];
@@ -37,6 +39,7 @@ function getServerHashSnapshot() {
 
 export default function Navbar() {
   const { user, profile, isAdmin } = useAuth();
+  const { favorites } = useFavorites();
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -60,6 +63,7 @@ export default function Navbar() {
     if (href === "/") return pathname === "/" && hash !== "#about";
     if (href === "/#about") return pathname === "/" && hash === "#about";
     if (href === "/catalog") return pathname.startsWith("/catalog");
+    if (href === "/favorites") return pathname === "/favorites";
     return pathname === href;
   }
 
@@ -81,7 +85,7 @@ export default function Navbar() {
         </Link>
 
         <nav className={styles.links} aria-label="Primary navigation">
-          {primaryLinks.slice(0, 2).map((item) => {
+          {primaryLinks.slice(0, 3).map((item) => {
             const active = isPrimaryLinkActive(item.href);
             return (
               <Link
@@ -91,6 +95,9 @@ export default function Navbar() {
                 aria-current={active ? "page" : undefined}
               >
                 {item.label}
+                {item.href === "/favorites" && favorites.length > 0 ? (
+                  <span className={styles.favoriteCount}>{favorites.length}</span>
+                ) : null}
               </Link>
             );
           })}
@@ -120,7 +127,7 @@ export default function Navbar() {
             </div>
           </details>
 
-          {primaryLinks.slice(2).map((item) => {
+          {primaryLinks.slice(3).map((item) => {
             const active = isPrimaryLinkActive(item.href);
             return (
               <Link
@@ -204,6 +211,9 @@ export default function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   {item.label}
+                  {item.href === "/favorites" && favorites.length > 0 ? (
+                    <span className={styles.favoriteCount}>{favorites.length}</span>
+                  ) : null}
                 </Link>
               );
             })}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
 import CatalogFilters, {
@@ -17,6 +18,10 @@ interface CatalogViewProps {
 }
 
 export default function CatalogView({ products }: CatalogViewProps) {
+  const categories = useMemo(
+    () => ["All", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean)))],
+    [products]
+  );
   const DEFAULTS_BY_PRODUCT_ID: Record<string, UnitCounts> = Object.fromEntries(
     products.map((product) => [
       product.id,
@@ -46,7 +51,8 @@ export default function CatalogView({ products }: CatalogViewProps) {
         !query ||
         product.name.toLowerCase().includes(query) ||
         (product.brand ?? "").toLowerCase().includes(query);
-      const matchesAvailability = !availableOnly || (units?.totalUnits ?? product.totalUnits) > 0;
+      const matchesAvailability =
+        !availableOnly || (units?.availableUnits ?? product.availableUnits) > 0;
       return matchesCategory && matchesSearch && matchesAvailability;
     });
 
@@ -65,12 +71,15 @@ export default function CatalogView({ products }: CatalogViewProps) {
   return (
     <section className={styles.catalog}>
       <div className={styles.header}>
-        <p className={styles.eyebrow}>RENTAL ITEM CATALOG</p>
-        <h1 className={styles.heading}>Browse Our Gear</h1>
-        <p className={styles.subheading}>
-          Premium iPhones and cameras available for daily rental. Find your
-          perfect gear below.
-        </p>
+        <div>
+          <p className={styles.eyebrow}>RENTAL ITEM CATALOG</p>
+          <h1 className={styles.heading}>Browse Our Gear</h1>
+          <p className={styles.subheading}>
+            Explore all {products.length} active listings, compare daily rates,
+            and check current unit availability before reserving.
+          </p>
+        </div>
+        <Link href="/favorites" className={styles.favoritesLink}>View favorites</Link>
       </div>
 
       <CatalogFilters
@@ -83,6 +92,7 @@ export default function CatalogView({ products }: CatalogViewProps) {
         availableOnly={availableOnly}
         onAvailableOnlyChange={setAvailableOnly}
         resultCount={filteredProducts.length}
+        categories={categories}
       />
 
       {filteredProducts.length > 0 ? (
