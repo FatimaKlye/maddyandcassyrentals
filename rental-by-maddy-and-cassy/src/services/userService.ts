@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/src/lib/supabase/client";
-import type { Tables } from "@/src/lib/supabase/database.types";
+import type { Database, Tables } from "@/src/lib/supabase/database.types";
 import type { UserProfile } from "@/src/types/database";
 
 function mapProfile(row: Tables<"profiles">): UserProfile {
@@ -12,6 +12,8 @@ function mapProfile(row: Tables<"profiles">): UserProfile {
     lastName: row.last_name ?? undefined,
     displayName: row.display_name,
     phoneNumber: row.phone_number ?? undefined,
+    birthDate: row.birth_date ?? undefined,
+    birthDateVerifiedAt: row.birth_date_verified_at ?? undefined,
     fullAddress: row.full_address ?? undefined,
     facebookLink: row.facebook_url ?? undefined,
     instagramLink: row.instagram_url ?? undefined,
@@ -39,19 +41,23 @@ export async function updateUserProfile(
   updates: Partial<
     Pick<
       UserProfile,
-      "displayName" | "phoneNumber" | "fullAddress" | "facebookLink" | "instagramLink"
+      "email" | "displayName" | "phoneNumber" | "birthDate" | "fullAddress" | "facebookLink" | "instagramLink"
     >
   >,
 ): Promise<void> {
+  const payload: Database["public"]["Tables"]["profiles"]["Update"] = {
+    contact_email: updates.email,
+    display_name: updates.displayName,
+    phone_number: updates.phoneNumber,
+    full_address: updates.fullAddress,
+    facebook_url: updates.facebookLink,
+    instagram_url: updates.instagramLink,
+  };
+  if (updates.birthDate !== undefined) payload.birth_date = updates.birthDate || null;
+
   const { error } = await createClient()
     .from("profiles")
-    .update({
-      display_name: updates.displayName,
-      phone_number: updates.phoneNumber,
-      full_address: updates.fullAddress,
-      facebook_url: updates.facebookLink,
-      instagram_url: updates.instagramLink,
-    })
+    .update(payload)
     .eq("id", uid);
 
   if (error) throw new Error(error.message);

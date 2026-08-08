@@ -18,7 +18,19 @@ const sections: GuideSection[] = [
   {
     title: "Is a security deposit required?",
     paragraphs: [
-      "Yes. A refundable ₱1,000 security deposit is required. It is returned after the unit is returned in good condition and passes inspection. The deposit should be paid before or during pickup.",
+      "A non-refundable security deposit may apply. Its exact amount is shown on the product page and included in the final checkout amount before you continue to PayMongo.",
+    ],
+  },
+  {
+    title: "How does the birthday month discount work?",
+    paragraphs: [
+      "Add your birth date to the booking details. When any selected rental date falls within your birth month, ₱100 is deducted from the rental fee. The birth date must match one of the valid IDs submitted for verification.",
+    ],
+  },
+  {
+    title: "How does the loyalty reward work?",
+    paragraphs: [
+      "Every returned booking under the same customer account counts as one completed rental. After ten completed rentals, ₱200 is automatically applied to the next booking—the 11th rental. No loyalty card is required, and progress is shown under My Bookings.",
     ],
   },
   {
@@ -30,7 +42,7 @@ const sections: GuideSection[] = [
   {
     title: "What happens if I return the item late?",
     paragraphs: [
-      "Late returns incur a ₱100 per hour fee. If the delay affects another renter's booking, an additional full-day charge or loss of the security deposit may apply. Notify the team immediately when a delay is expected.",
+      "Late returns incur a ₱100 per hour fee. If the delay affects another renter's booking, an additional full-day charge may apply. Notify the team immediately when a delay is expected.",
     ],
   },
   {

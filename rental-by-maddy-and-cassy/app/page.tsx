@@ -1,7 +1,11 @@
 import Link from "next/link";
 import Navbar from "@/components/navbar/Navbar";
 import Hero from "@/components/hero/Hero";
+import FeaturedProducts from "@/components/storefront/FeaturedProducts";
+import { getActiveProducts } from "@/src/services/productService";
 import styles from "./page.module.css";
+
+export const revalidate = 60;
 
 const rentalGuides = [
   {
@@ -35,12 +39,114 @@ const bookingSteps = [
   ["06", "Receive confirmation", "Follow the confirmed booking, receipt, payment history, and invoice in your account."],
 ] as const;
 
-export default function Home() {
+const categoryDescriptions: Record<string, string> = {
+  Cameras: "Compact cameras and creator-ready gear for trips, concerts, and special events.",
+  iPhones: "Premium iPhones for content, travel, celebrations, and everyday memories.",
+};
+
+export default async function Home() {
+  const products = await getActiveProducts();
+  const categories = Array.from(
+    products.reduce((counts, product) => {
+      if (product.category) counts.set(product.category, (counts.get(product.category) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>()),
+  );
+  const featuredCandidates = [
+    ...products.filter((product) => product.isFeatured),
+    ...categories
+      .map(([category]) => products.find((product) => product.category === category))
+      .filter((product) => product !== undefined),
+    ...products,
+  ];
+  const featuredProducts = featuredCandidates
+    .filter((product, index, candidates) =>
+      candidates.findIndex((candidate) => candidate.id === product.id) === index,
+    )
+    .slice(0, 4);
+
   return (
     <div className={styles.page}>
       <Navbar />
       <main>
-        <Hero />
+        <Hero products={products} />
+
+        <section className={styles.discovery} aria-labelledby="category-heading">
+          <div className={styles.sectionTopline}>
+            <div>
+              <p className={styles.eyebrow}>SHOP BY CATEGORY</p>
+              <h2 id="category-heading" className={styles.heading}>Start with the gear that fits your plans.</h2>
+              <p className={styles.description}>
+                Browse the live catalog by category. Every count below comes directly from the
+                active rental inventory.
+              </p>
+            </div>
+            <Link href="/catalog" className={styles.textLink}>View all {products.length} listings</Link>
+          </div>
+
+          <div className={styles.categoryGrid}>
+            {categories.map(([category, count], index) => (
+              <Link
+                key={category}
+                href={{ pathname: "/catalog", query: { category } }}
+                className={styles.categoryCard}
+              >
+                <span className={styles.categoryIndex}>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <h3>{category}</h3>
+                  <p>{categoryDescriptions[category] ?? `Explore available ${category.toLowerCase()} for daily rental.`}</p>
+                </div>
+                <strong>{count} {count === 1 ? "listing" : "listings"} <span aria-hidden="true">→</span></strong>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <FeaturedProducts products={featuredProducts} totalProductCount={products.length} />
+
+        <section className={styles.perksSection} aria-labelledby="perks-heading">
+          <div className={styles.perksIntro}>
+            <p className={styles.eyebrow}>SPECIAL DISCOUNTS &amp; PERKS</p>
+            <h2 id="perks-heading" className={styles.heading}>A little extra for your moments and milestones.</h2>
+            <p className={styles.description}>
+              Birthday savings and loyalty rewards are tracked directly in the booking system,
+              with clear eligibility shown before you continue to payment.
+            </p>
+          </div>
+
+          <div className={styles.perksGrid}>
+            <article className={styles.perkCard}>
+              <div className={styles.perkTopline}>
+                <span>01</span>
+                <strong>Birthday Month Discount</strong>
+              </div>
+              <p className={styles.perkAmount}>₱100 <span>off</span></p>
+              <p>
+                Rent during your birth month and receive ₱100 off the rental fee.
+                Add your birth date once and present a valid ID showing the same date.
+              </p>
+              <small>Eligible birthday savings are applied at checkout and verified from your submitted ID.</small>
+            </article>
+
+            <article className={`${styles.perkCard} ${styles.loyaltyCard}`}>
+              <div className={styles.perkTopline}>
+                <span>02</span>
+                <strong>Loyalty Reward Program</strong>
+              </div>
+              <p className={styles.perkAmount}>₱200 <span>off</span></p>
+              <p>
+                No loyalty card needed. Every returned rental under the same customer account
+                counts, and ₱200 is automatically applied to your 11th rental.
+              </p>
+              <small>Track your completed rentals and reward progress anytime from My Bookings.</small>
+            </article>
+          </div>
+
+          <div className={styles.perksFooter}>
+            <span>1 completed rental = 1 loyalty count, regardless of the number of units in that booking.</span>
+            <Link href="/sign-up">Create an account to track progress</Link>
+          </div>
+        </section>
 
         <section id="about" className={styles.about} aria-labelledby="about-heading">
           <div className={styles.aboutIntro}>

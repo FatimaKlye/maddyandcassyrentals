@@ -48,9 +48,14 @@ export async function createBookingReservation(
   const startDate = draft.startDate!;
   const endDate = draft.endDate!;
   const fulfillmentMethod = draft.fulfillmentMethod!;
+  const rentalDays = getDayCount(startDate, endDate);
+  const discountAmount = Math.round(
+    product.dailyRate * rentalDays * draft.quantity * (product.discountPercent / 100) * 100,
+  ) / 100;
 
   const result = await submitBookingWithDateGuard(supabase, {
     productId: product.id,
+    quantity: draft.quantity,
     rentalStartDate: toDateKey(startDate),
     rentalEndDate: toDateKey(endDate),
     fulfillmentMethod,
@@ -59,14 +64,15 @@ export async function createBookingReservation(
     location: fulfillmentMethod === "delivery" ? draft.customerLocation.trim() : undefined,
     cityMunicipality: fulfillmentMethod === "delivery" ? draft.cityMunicipality.trim() : undefined,
     province: fulfillmentMethod === "delivery" ? draft.province.trim() : undefined,
+    discountAmount,
     productSnapshot: {
       name: product.name,
       brand: product.brand ?? "",
       category: product.category,
       image: product.images[0]?.url || "/images/product-placeholder.png",
-      pricePerDay: product.dailyRate,
+      pricePerDay: product.pricePerDay,
       currency: product.currency,
-      included: [],
+      included: product.included,
     },
     customerSnapshot: {
       fullName: customerInfo.fullName.trim(),
@@ -114,7 +120,11 @@ function dataUrlToBlob(dataUrl: string): Blob {
 }
 
 export async function submitBookingDocuments(bookingId: string, draft: ReservationDraft): Promise<void> {
-  validateReservationDetails(draft);
+  // The reservation was already validated and persisted before checkout.
+  // After PayMongo redirects back, the client rebuilds the draft from that
+  // authoritative booking. Do not revalidate rental/address fields here:
+  // legacy bookings may not have every newer structured address field, and
+  // document submission only owns the requirements and agreement data below.
   const { requirements } = draft;
   if (
     !requirements.idOneFile ||

@@ -14,11 +14,21 @@ const sections: GuideSection[] = [
     number: "02",
     title: "Security Deposit",
     paragraphs: [
-      "A refundable ₱1,000 security deposit is required for phones and cameras. It is returned after the unit and all included accessories have been inspected and cleared.",
+      "A non-refundable security deposit may apply. The exact amount is shown on the product page and in the checkout summary before payment.",
     ],
   },
   {
     number: "03",
+    title: "Special Discounts & Loyalty Perks",
+    bullets: [
+      "A ₱100 birthday discount applies when the selected rental period overlaps the renter's birth month and the saved birth date matches a submitted valid ID.",
+      "One returned booking equals one loyalty count, regardless of the number of units in that booking.",
+      "The loyalty program is tracked under the same customer account. ₱200 is automatically applied to the booking made after ten completed rentals—the renter's 11th rental.",
+      "Discounts cannot reduce the rental-fee portion below zero and do not reduce applicable deposits or courier charges.",
+    ],
+  },
+  {
+    number: "04",
     title: "Pickup & Return Schedule",
     bullets: [
       "Pickup is by appointment between 9:00 AM and 7:00 PM.",
@@ -28,35 +38,35 @@ const sections: GuideSection[] = [
     ],
   },
   {
-    number: "04",
+    number: "05",
     title: "Handling & Use of Equipment",
     paragraphs: [
       "Treat every rented unit with care. Use only the included chargers, cables, and accessories, and follow the handling guidance provided during release.",
     ],
   },
   {
-    number: "05",
+    number: "06",
     title: "Damage, Loss, or Theft",
     paragraphs: [
       "Damage, water exposure, or missing parts and accessories will be charged accordingly. In the event of loss or theft, the renter is responsible for the applicable full replacement cost.",
     ],
   },
   {
-    number: "06",
+    number: "07",
     title: "Item Condition",
     paragraphs: [
       "Units are sanitized, reset, and tested before release. Inspect the unit at pickup or immediately upon delivery and report any issue at once.",
     ],
   },
   {
-    number: "07",
+    number: "08",
     title: "Inspection & Checklist",
     paragraphs: [
       "Every unit is inspected at release and return. All listed inclusions and accessories must be returned in the same condition.",
     ],
   },
   {
-    number: "08",
+    number: "09",
     title: "Verification & Requirements",
     bullets: [
       "Two valid government-issued or accepted school IDs and a selfie holding an ID",
@@ -66,7 +76,7 @@ const sections: GuideSection[] = [
     ],
   },
   {
-    number: "09",
+    number: "10",
     title: "Cancellation & Refund Policy",
     bullets: [
       "Down payments are non-refundable because the unit is exclusively reserved.",
@@ -91,7 +101,7 @@ export default function TermsPage() {
         introduction="These policies apply to booking requests, verification, equipment handover, proper use, and return of every rental unit."
         sections={sections}
         layout="stack"
-        notice="Payment and deposit arrangements are completed directly with the rental team. No payment is collected through this website."
+        notice="Online reservation payments and applicable non-refundable deposits are processed through PayMongo. Courier delivery costs are arranged separately with the rental team."
       />
     </div>
   );

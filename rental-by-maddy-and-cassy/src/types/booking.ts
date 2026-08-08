@@ -53,6 +53,7 @@ export interface Booking {
   customerId: string;
   productId: string;
   inventoryUnitId: string | null;
+  quantity: number;
   status: BookingStatus;
   fulfillmentMethod: FulfillmentMethod;
   startDate: string;
@@ -61,9 +62,18 @@ export interface Booking {
   dailyRate: number;
   refundableDeposit: number;
   rentalSubtotal: number;
+  specialDiscountAmount: number;
+  birthdayDiscountAmount: number;
+  birthdayDiscountStatus: "not_eligible" | "pending_verification" | "verified" | "rejected";
+  loyaltyCompletedRentalsSnapshot: number;
+  loyaltyDiscountAmount: number;
+  loyaltyDiscountStatus: "not_eligible" | "applied" | "voided";
+  birthDateSnapshot?: string;
   deliveryFee: number;
   totalAmount: number;
   location?: string;
+  cityMunicipality?: string;
+  province?: string;
   customerNotes?: string;
   adminNotes?: string;
   productSnapshot: BookingProductSnapshot;
@@ -140,6 +150,7 @@ export interface RequirementDocumentReview {
 export interface AgreementSnapshot {
   customerName: string;
   productName: string;
+  quantity?: number;
   startDate: string;
   endDate: string;
   dayCount: number;

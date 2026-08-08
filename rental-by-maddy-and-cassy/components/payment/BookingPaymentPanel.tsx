@@ -73,10 +73,23 @@ export default function BookingPaymentPanel({
 
       <div className={styles.amountRow}>
         <span>
-          {paymentStatus === "paid" ? "Total paid" : paymentStatus === "partially_paid" ? "Remaining balance" : "Rental total"}
+          {paymentStatus === "paid" ? "Total paid" : paymentStatus === "partially_paid" ? "Remaining balance" : "Booking total"}
         </span>
         <strong>{money(paymentStatus === "partially_paid" ? balanceDue : totalAmount)}</strong>
       </div>
+
+      <dl className={styles.breakdown}>
+        <div><dt>Rental subtotal</dt><dd>{money(booking.rentalSubtotal)}</dd></div>
+        {booking.birthdayDiscountAmount > 0 ? (
+          <div><dt>Birthday month perk</dt><dd>-{money(booking.birthdayDiscountAmount)}</dd></div>
+        ) : null}
+        {booking.loyaltyDiscountAmount > 0 ? (
+          <div><dt>11th-rental loyalty reward</dt><dd>-{money(booking.loyaltyDiscountAmount)}</dd></div>
+        ) : null}
+        <div><dt>Non-refundable deposit</dt><dd>{money(booking.refundableDeposit)}</dd></div>
+        {booking.deliveryFee > 0 ? <div><dt>Delivery fee</dt><dd>{money(booking.deliveryFee)}</dd></div> : null}
+        <div><dt>Online fees</dt><dd>Free</dd></div>
+      </dl>
 
       {paymentStatus === "paid" ? (
         <p className={styles.message}>

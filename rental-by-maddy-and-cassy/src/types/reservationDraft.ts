@@ -22,6 +22,8 @@ export interface CustomerInfoDraft {
   fullName: string;
   email: string;
   phone: string;
+  /** ISO date (YYYY-MM-DD), used for the optional birthday-month perk. */
+  birthDate: string;
   streetBarangay: string;
   cityMunicipality: string;
   province: string;
@@ -47,6 +49,8 @@ export interface AgreementDraft {
 }
 
 export interface ReservationDraft {
+  /** Number of physical units of the selected product to reserve. */
+  quantity: number;
   startDate: Date | null;
   endDate: Date | null;
   fulfillmentMethod: FulfillmentMethod | null;
@@ -64,6 +68,7 @@ export interface ReservationDraft {
 
 export function createEmptyDraft(): ReservationDraft {
   return {
+    quantity: 1,
     startDate: null,
     endDate: null,
     fulfillmentMethod: null,
@@ -75,6 +80,7 @@ export function createEmptyDraft(): ReservationDraft {
       fullName: "",
       email: "",
       phone: "",
+      birthDate: "",
       streetBarangay: "",
       cityMunicipality: "",
       province: "",

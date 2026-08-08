@@ -21,7 +21,7 @@ const sections: GuideSection[] = [
     number: "STEP 03",
     title: "Save Your Slot",
     paragraphs: [
-      "A 50% down payment of the total rental fee secures an approved booking. It is deducted from the full rental amount and is non-refundable. The remaining rental balance is due on pickup or delivery day.",
+      "Review any catalog, birthday-month, or 11th-rental loyalty discounts shown in the checkout summary. A 50% down payment of the final booking total secures the reservation and is non-refundable, or you may pay the full amount online.",
     ],
   },
   {
@@ -59,7 +59,7 @@ export default function HowToBookPage() {
         title="How to Book"
         introduction="Follow these steps to request your unit, complete verification, and arrange pickup or delivery."
         sections={sections}
-        notice="Payments and deposits are coordinated directly with Rental by Maddy & Cassy. This website records booking requests and does not process online payments."
+        notice="Reservation payments and applicable non-refundable deposits are processed securely through PayMongo. Delivery courier costs are arranged separately."
       />
     </div>
   );
