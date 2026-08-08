@@ -154,6 +154,8 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
         endDate: new Date(booking.endDate),
         fulfillmentMethod: booking.fulfillmentMethod,
         customerLocation: booking.location ?? current.customerLocation,
+        cityMunicipality: booking.cityMunicipality ?? "",
+        province: booking.province ?? "",
         customerInfo: {
           ...current.customerInfo,
           ...booking.customerSnapshot,

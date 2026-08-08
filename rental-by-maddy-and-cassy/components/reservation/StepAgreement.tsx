@@ -111,6 +111,10 @@ export default function StepAgreement({
         </label>
         <input
           id="typedFullName"
+          name="agreementSignerName"
+          type="text"
+          autoComplete="name"
+          autoCapitalize="words"
           className={formStyles.input}
           value={agreement.typedFullName}
           onChange={(event) => onUpdate({ typedFullName: event.target.value })}
