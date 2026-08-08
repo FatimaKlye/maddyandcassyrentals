@@ -10,6 +10,21 @@ export interface SendEmailOtpOptions {
   emailRedirectTo?: string;
 }
 
+async function syncServerSession(accessToken: string, refreshToken: string): Promise<void> {
+  const response = await fetch("/api/auth/session", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accessToken, refreshToken }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "Your browser session could not be saved.",
+    );
+  }
+}
+
 /**
  * Sends a 6-digit one-time code to the given email via Supabase's native
  * email OTP delivery. Used for both customer sign-in (existing accounts
@@ -42,18 +57,20 @@ export async function sendEmailOtp(
 export async function verifyEmailOtp(email: string, token: string): Promise<User> {
   const supabase = createClient();
   const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
-  if (error || !data.user) {
+  if (error || !data.user || !data.session) {
     throw new Error(error?.message ?? "The verification code could not be confirmed.");
   }
+  await syncServerSession(data.session.access_token, data.session.refresh_token);
   return data.user;
 }
 
 export async function loginWithEmail(email: string, password: string): Promise<User> {
   const supabase = createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.user) {
+  if (error || !data.user || !data.session) {
     throw new Error(error?.message ?? "Could not sign in.");
   }
+  await syncServerSession(data.session.access_token, data.session.refresh_token);
   return data.user;
 }
 

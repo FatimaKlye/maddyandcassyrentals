@@ -43,7 +43,6 @@ export default function SignUpForm() {
     try {
       await sendEmailOtp(values.email, {
         shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/verify-email?flow=sign-up`,
       });
       router.replace(
         `/verify-email?email=${encodeURIComponent(values.email)}&redirect=${encodeURIComponent(redirectTo)}&flow=sign-up`,

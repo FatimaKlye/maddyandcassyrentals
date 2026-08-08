@@ -2,7 +2,7 @@
 
 import type { Product } from "@/types/product";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
-import { formatCustomerLocation, getDayCount } from "@/src/types/reservationDraft";
+import { formatCustomerAddress, formatCustomerLocation, getDayCount } from "@/src/types/reservationDraft";
 
 import BookingSummaryCard from "@/components/booking-summary/BookingSummaryCard";
 
@@ -131,7 +131,7 @@ export default function StepReview({
           <div>
             <dt>Address</dt>
             <dd>
-              {draft.customerInfo.address || "Not provided"}
+              {formatCustomerAddress(draft.customerInfo) || "Not provided"}
             </dd>
           </div>
         </dl>

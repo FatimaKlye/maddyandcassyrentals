@@ -51,9 +51,9 @@ export default function AvailabilityBadge({
         <span className={styles.dot} aria-hidden="true" />
         {headlineText}
       </span>
-      <p className={styles.detailLine}>{getUnitsAvailableText(availableUnits)}</p>
-      <p className={styles.detailLine}>{getUnitsInUseText(totalUnits, availableUnits)}</p>
-      {level === "full" ? (
+      {mode === "live" ? <p className={styles.detailLine}>{getUnitsAvailableText(availableUnits)}</p> : null}
+      {mode === "live" ? <p className={styles.detailLine}>{getUnitsInUseText(totalUnits, availableUnits)}</p> : null}
+      {mode === "live" && level === "full" ? (
         <p className={styles.fullyBookedMessage} role="status">
           {getFullyBookedMessage(totalUnits)
             .split("\n")

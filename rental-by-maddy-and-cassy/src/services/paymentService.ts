@@ -27,6 +27,29 @@ export async function createPaymentCheckout(
   return { checkoutUrl: body.checkoutUrl };
 }
 
+export async function reconcilePayment(
+  bookingId: string,
+): Promise<"verified" | "pending" | "failed" | "unpaid"> {
+  const response = await fetch("/api/payments/reconcile", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bookingId }),
+  });
+  const body = (await response.json().catch(() => null)) as
+    | { status?: unknown; error?: unknown }
+    | null;
+  if (
+    !response.ok ||
+    !["verified", "pending", "failed", "unpaid"].includes(String(body?.status))
+  ) {
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "The payment status could not be confirmed.",
+    );
+  }
+  return body!.status as "verified" | "pending" | "failed" | "unpaid";
+}
+
 export async function completeDemoPayment(
   sessionId: string,
   paymentMethod: string,

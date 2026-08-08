@@ -5,7 +5,10 @@ import { getBookingById } from "@/src/services/bookingService";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE = 8 * 1024 * 1024;
+// Vercel Functions accept request bodies up to 4.5 MB. Keep individual files
+// below that ceiling so multipart form-data overhead cannot make uploads fail
+// only after deployment.
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ID_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const SIGNATURE_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const UPLOAD_KINDS = {
@@ -68,7 +71,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       throw new RequestSecurityError("Choose a file to upload.", 400);
     }
     if (value.size > MAX_FILE_SIZE) {
-      throw new RequestSecurityError("Each file must be 8MB or smaller.", 400);
+      throw new RequestSecurityError("Each file must be 4MB or smaller.", 400);
     }
     const uploadKind = UPLOAD_KINDS[kind];
     const allowedTypes = uploadKind.signature ? SIGNATURE_CONTENT_TYPES : ID_CONTENT_TYPES;

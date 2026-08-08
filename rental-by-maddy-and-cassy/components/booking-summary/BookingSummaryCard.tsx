@@ -32,10 +32,12 @@ export default function BookingSummaryCard({
   customerLocation,
   statusSlot,
 }: BookingSummaryCardProps) {
+  const safeProductImage = productImage.trim() || "/images/product-placeholder.png";
+
   return (
     <div className={styles.card}>
       <div className={styles.imageWrapper}>
-        <Image src={productImage} alt={productName} fill sizes="72px" />
+        <Image src={safeProductImage} alt={productName} fill sizes="72px" />
       </div>
 
       <div className={styles.info}>

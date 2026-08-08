@@ -22,6 +22,10 @@ export interface CustomerInfoDraft {
   fullName: string;
   email: string;
   phone: string;
+  streetBarangay: string;
+  cityMunicipality: string;
+  province: string;
+  /** Composed address retained for booking/profile compatibility. */
   address: string;
   facebookLink: string;
   instagramLink: string;
@@ -71,6 +75,9 @@ export function createEmptyDraft(): ReservationDraft {
       fullName: "",
       email: "",
       phone: "",
+      streetBarangay: "",
+      cityMunicipality: "",
+      province: "",
       address: "",
       facebookLink: "",
       instagramLink: "",
@@ -101,6 +108,37 @@ export function createEmptyDraft(): ReservationDraft {
       signatureFile: null,
       typedFullName: "",
     },
+  };
+}
+
+export function formatCustomerAddress(
+  customerInfo: Pick<CustomerInfoDraft, "streetBarangay" | "cityMunicipality" | "province" | "address">,
+): string {
+  const structured = [
+    customerInfo.streetBarangay,
+    customerInfo.cityMunicipality,
+    customerInfo.province,
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+  return structured || customerInfo.address.trim();
+}
+
+export function parseCustomerAddress(address: string | null | undefined): Pick<
+  CustomerInfoDraft,
+  "streetBarangay" | "cityMunicipality" | "province" | "address"
+> {
+  const normalized = (address ?? "").trim();
+  const parts = normalized.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 3) {
+    return { streetBarangay: normalized, cityMunicipality: "", province: "", address: normalized };
+  }
+  return {
+    streetBarangay: parts.slice(0, -2).join(", "),
+    cityMunicipality: parts.at(-2) ?? "",
+    province: parts.at(-1) ?? "",
+    address: normalized,
   };
 }
 

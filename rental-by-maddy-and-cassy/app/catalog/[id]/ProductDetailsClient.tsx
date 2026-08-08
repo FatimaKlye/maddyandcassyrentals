@@ -93,6 +93,7 @@ export default function ProductDetailsClient({
                 totalUnits={units.totalUnits}
                 availableUnits={units.availableUnits}
                 variant="detailed"
+                mode="summary"
               />
             </div>
             <div className={styles.infoCard}>

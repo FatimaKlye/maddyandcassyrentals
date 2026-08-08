@@ -52,7 +52,7 @@ export default function CatalogView({ products }: CatalogViewProps) {
         product.name.toLowerCase().includes(query) ||
         (product.brand ?? "").toLowerCase().includes(query);
       const matchesAvailability =
-        !availableOnly || (units?.availableUnits ?? product.availableUnits) > 0;
+        !availableOnly || (units?.totalUnits ?? product.totalUnits) > 0;
       return matchesCategory && matchesSearch && matchesAvailability;
     });
 

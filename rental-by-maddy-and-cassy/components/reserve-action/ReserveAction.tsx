@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
-import { getFullyBookedMessage, isFullyBooked } from "@/lib/availability";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./ReserveAction.module.css";
 
@@ -15,7 +14,7 @@ interface ReserveActionProps {
 export default function ReserveAction({ product, units }: ReserveActionProps) {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const fullyBooked = isFullyBooked(units.totalUnits);
+  const unavailable = units.totalUnits <= 0;
 
   function handleReserve() {
     const reservePath = `/catalog/${product.id}/reserve`;
@@ -31,24 +30,15 @@ export default function ReserveAction({ product, units }: ReserveActionProps) {
       <button
         type="button"
         className={styles.reserveButton}
-        disabled={fullyBooked || loading}
+        disabled={unavailable || loading}
         onClick={handleReserve}
       >
-        {fullyBooked ? "Fully Booked" : "Reserve Now"}
+        {unavailable ? "Unavailable" : "Reserve Now"}
       </button>
 
-      {fullyBooked ? (
+      {unavailable ? (
         <p className={styles.error} role="status">
-          <strong>FULLY BOOKED</strong>
-          <br />
-          {getFullyBookedMessage(units.totalUnits)
-            .split("\n")
-            .map((line) => (
-              <span key={line}>
-                {line}
-                <br />
-              </span>
-            ))}
+          This item does not currently have an active rental unit.
         </p>
       ) : (
         <p className={styles.hint}>

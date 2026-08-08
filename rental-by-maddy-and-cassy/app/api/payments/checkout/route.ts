@@ -102,7 +102,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       .limit(1)
       .maybeSingle();
 
-    if (reusable?.external_reference && reusable.provider_metadata) {
+    const reusableAgeMs = reusable ? Date.now() - new Date(reusable.created_at).getTime() : Infinity;
+    if (reusable?.external_reference && reusable.provider_metadata && reusableAgeMs < 15 * 60_000) {
       const meta = reusable.provider_metadata as Record<string, unknown>;
       if (typeof meta.checkoutUrl === "string") {
         return NextResponse.json({
@@ -116,7 +117,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const paymentSubmissionId = crypto.randomUUID();
     const referenceNumber = `${booking.bookingRef}-${paymentSubmissionId.slice(0, 8)}`;
-    const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || new URL(request.url).origin;
+    const requestOrigin = new URL(request.url).origin;
+    const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+    // During local testing, always return to the exact host the customer used
+    // (localhost, 127.0.0.1, or a LAN hostname) so browser sessions are not
+    // lost by crossing origins. Production uses the configured public URL.
+    const appOrigin = process.env.NODE_ENV === "production" && configuredOrigin
+      ? configuredOrigin
+      : requestOrigin;
     const returnPath = safeReturnPath(body?.returnPath, `/account/bookings/${bookingId}`);
     const returnUrl = `${appOrigin}${returnPath}`;
     const returnSeparator = returnUrl.includes("?") ? "&" : "?";

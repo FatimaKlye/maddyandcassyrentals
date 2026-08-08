@@ -92,7 +92,7 @@ function primaryProductImageUrl(
     return a.sort_order - b.sort_order;
   });
   const first = sorted[0];
-  if (!first) return "";
+  if (!first) return "/images/product-placeholder.png";
   return supabase.storage.from("product-images").getPublicUrl(first.storage_path).data.publicUrl;
 }
 

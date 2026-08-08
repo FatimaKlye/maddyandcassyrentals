@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Product } from "@/types/product";
 import type { UnitCounts } from "@/lib/availability";
-import { isFullyBooked } from "@/lib/availability";
 import HeartIcon from "@/components/icons/HeartIcon";
 import AvailabilityBadge from "@/components/availability-badge/AvailabilityBadge";
 import styles from "./CatalogProductCard.module.css";
@@ -25,7 +24,7 @@ export default function CatalogProductCard({
   ctaLabel = "Reserve Now",
 }: CatalogProductCardProps) {
   const detailsHref = `/catalog/${product.id}`;
-  const fullyBooked = isFullyBooked(units.availableUnits);
+  const unavailable = units.totalUnits <= 0;
 
   return (
     <article className={styles.card}>
@@ -80,7 +79,7 @@ export default function CatalogProductCard({
         <AvailabilityBadge
           totalUnits={units.totalUnits}
           availableUnits={units.availableUnits}
-          mode="live"
+          mode="summary"
           className={styles.availabilityBadge}
         />
 
@@ -90,13 +89,13 @@ export default function CatalogProductCard({
           </Link>
           <Link
             href={`${detailsHref}#reserve`}
-            className={`${styles.reserveButton} ${fullyBooked ? styles.reserveDisabled : ""}`}
-            aria-disabled={fullyBooked}
+            className={`${styles.reserveButton} ${unavailable ? styles.reserveDisabled : ""}`}
+            aria-disabled={unavailable}
             onClick={(event) => {
-              if (fullyBooked) event.preventDefault();
+              if (unavailable) event.preventDefault();
             }}
           >
-            {fullyBooked ? "Fully Booked" : ctaLabel}
+            {unavailable ? "Unavailable" : ctaLabel}
           </Link>
         </div>
       </div>
