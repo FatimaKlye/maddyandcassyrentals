@@ -11,6 +11,76 @@
   color: var(--color-text-primary);
 }
 
+.loyalty {
+  display: grid;
+  gap: 1rem;
+  padding: 1.35rem;
+  border: 1px solid var(--color-dusty-rose);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(242, 210, 207, 0.78), transparent 46%),
+    var(--color-white);
+  box-shadow: 0 12px 32px rgba(154, 89, 101, 0.08);
+}
+
+.loyaltyTopline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.loyaltyTopline p {
+  margin: 0 0 0.25rem;
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.loyaltyTopline h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.loyaltyTopline > strong {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: var(--color-blush);
+  color: var(--color-primary-hover);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.progressTrack {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-light-gray);
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-dusty-rose), var(--color-primary));
+  transition: width 240ms ease;
+}
+
+.loyaltyCopy {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--color-text-primary);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.loyaltyCopy small {
+  color: var(--color-charcoal);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
 .loading {
   display: flex;
   justify-content: center;
@@ -57,4 +127,11 @@
 
 .cardLink:hover {
   transform: translateY(-2px);
+}
+
+@media (max-width: 560px) {
+  .loyaltyTopline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

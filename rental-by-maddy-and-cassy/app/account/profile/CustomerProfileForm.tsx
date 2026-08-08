@@ -14,6 +14,7 @@ import PushNotificationButton from "@/components/push/PushNotificationButton";
 interface ProfileDraft {
   displayName: string;
   phoneNumber: string;
+  birthDate: string;
   fullAddress: string;
   facebookLink: string;
   instagramLink: string;
@@ -23,6 +24,7 @@ function draftFromProfile(profile: UserProfile): ProfileDraft {
   return {
     displayName: profile.displayName ?? "",
     phoneNumber: profile.phoneNumber ?? "",
+    birthDate: profile.birthDate ?? "",
     fullAddress: profile.fullAddress ?? "",
     facebookLink: profile.facebookLink ?? "",
     instagramLink: profile.instagramLink ?? "",
@@ -96,6 +98,11 @@ function CustomerProfileEditor({
       return;
     }
 
+    if (draft.birthDate && new Date(`${draft.birthDate}T00:00:00`) > new Date()) {
+      showToast("Birth date cannot be in the future.", "error");
+      return;
+    }
+
     if (!draft.fullAddress.trim()) {
       showToast("Full address is required.", "error");
       return;
@@ -116,6 +123,7 @@ function CustomerProfileEditor({
       await updateUserProfile(user.id, {
         displayName: draft.displayName.trim(),
         phoneNumber: draft.phoneNumber.trim(),
+        birthDate: draft.birthDate,
         fullAddress: draft.fullAddress.trim(),
         facebookLink: draft.facebookLink.trim(),
         instagramLink: draft.instagramLink.trim(),
@@ -175,18 +183,42 @@ function CustomerProfileEditor({
           </div>
         </div>
 
-        <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="profile-phone">
-            Phone number<span className={formStyles.required}>*</span>
-          </label>
-          <input
-            id="profile-phone"
-            className={formStyles.input}
-            value={draft.phoneNumber}
-            onChange={(event) => updateDraft("phoneNumber", event.target.value)}
-            autoComplete="tel"
-            required
-          />
+        <div className={formStyles.row}>
+          <div className={formStyles.field}>
+            <label className={formStyles.label} htmlFor="profile-phone">
+              Phone number<span className={formStyles.required}>*</span>
+            </label>
+            <input
+              id="profile-phone"
+              className={formStyles.input}
+              value={draft.phoneNumber}
+              onChange={(event) => updateDraft("phoneNumber", event.target.value)}
+              autoComplete="tel"
+              required
+            />
+          </div>
+
+          <div className={formStyles.field}>
+            <label className={formStyles.label} htmlFor="profile-birth-date">
+              Birth date <span className={styles.optional}>(birthday perk)</span>
+            </label>
+            <input
+              id="profile-birth-date"
+              type="date"
+              className={formStyles.input}
+              value={draft.birthDate}
+              onChange={(event) => updateDraft("birthDate", event.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              disabled={Boolean(profile.birthDate)}
+            />
+            <p className={styles.fieldNote}>
+              {profile.birthDateVerifiedAt
+                ? "Verified from your submitted ID. Birthday-month rentals receive ₱100 off."
+                : profile.birthDate
+                  ? "Saved for verification against your ID. Contact support if it needs correction."
+                  : "Add this once to check birthday-month eligibility. It must match your valid ID."}
+            </p>
+          </div>
         </div>
 
         <div className={formStyles.field}>

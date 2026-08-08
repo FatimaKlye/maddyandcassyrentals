@@ -6,6 +6,7 @@ import type {
   FulfillmentMethod,
   RequirementsStatus,
 } from "@/src/types/booking";
+import type { RewardProgress } from "@/src/lib/promotions";
 
 // public.bookings no longer carries product_snapshot / customer_snapshot /
 // rental_start_date / rental_end_date / requirements_status directly — a
@@ -131,6 +132,13 @@ function assembleBooking(
     dailyRate: item?.daily_rate_snapshot ?? 0,
     refundableDeposit: (item?.deposit_per_unit_snapshot ?? 0) * quantity,
     rentalSubtotal: totals?.rental_subtotal ?? 0,
+    specialDiscountAmount: totals?.special_discount_total ?? 0,
+    birthdayDiscountAmount: row.birthday_discount_amount,
+    birthdayDiscountStatus: row.birthday_discount_status as Booking["birthdayDiscountStatus"],
+    loyaltyCompletedRentalsSnapshot: row.loyalty_completed_rentals_snapshot,
+    loyaltyDiscountAmount: row.loyalty_discount_amount,
+    loyaltyDiscountStatus: row.loyalty_discount_status as Booking["loyaltyDiscountStatus"],
+    birthDateSnapshot: row.birth_date_snapshot ?? undefined,
     deliveryFee: totals?.delivery_fee ?? fulfillment?.delivery_fee_snapshot ?? 0,
     totalAmount: totals?.total_amount ?? 0,
     location: fulfillment?.address_line_1 ?? undefined,
@@ -232,6 +240,28 @@ export async function getBookingsForUser(
 
   if (error) throw new Error(error.message);
   return assembleBookings(supabase, (data ?? []) as unknown as JoinedBookingRow[]);
+}
+
+export async function getCustomerRewardProgress(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<RewardProgress> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("status, loyalty_discount_amount, booking_reference")
+    .eq("customer_id", userId);
+  if (error) throw new Error(error.message);
+
+  const rows = data ?? [];
+  const completedRentals = rows.filter((booking) => booking.status === "returned").length;
+  const rewardBooking = rows.find(
+    (booking) => booking.loyalty_discount_amount > 0 && booking.status !== "cancelled",
+  );
+  return {
+    completedRentals,
+    loyaltyRewardUsed: Boolean(rewardBooking),
+    activeRewardBookingRef: rewardBooking?.booking_reference,
+  };
 }
 
 /** Admin-only: RLS (bookings_admin_manage) reveals every booking to an active admin. */

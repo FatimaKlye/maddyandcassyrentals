@@ -23,10 +23,11 @@ import {
   submitBookingDocuments,
 } from "@/src/services/bookingSubmissionService";
 import { createPaymentCheckout, reconcilePayment } from "@/src/services/paymentService";
-import { getBookingById } from "@/src/services/bookingService";
+import { getBookingById, getCustomerRewardProgress } from "@/src/services/bookingService";
 import { startGuestCheckout } from "@/src/services/authService";
 import { useCart } from "@/hooks/useCart";
 import { calculateReservationPricing } from "@/src/lib/reservationPricing";
+import type { RewardProgress } from "@/src/lib/promotions";
 import styles from "./reserve.module.css";
 
 const STEP_LABELS = [
@@ -58,6 +59,10 @@ function ReserveFlowInner({ product, units, isGuest }: ReserveFlowClientProps & 
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [submittingDocuments, setSubmittingDocuments] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
+  const [rewardProgress, setRewardProgress] = useState<RewardProgress>({
+    completedRentals: 0,
+    loyaltyRewardUsed: false,
+  });
 
   useEffect(() => {
     if (prefilled || !user) return;
@@ -69,6 +74,7 @@ function ReserveFlowInner({ product, units, isGuest }: ReserveFlowClientProps & 
         fullName: isGuest ? "" : profile?.displayName ?? (user.user_metadata?.display_name as string | undefined) ?? "",
         email: isGuest ? "" : profile?.email ?? user.email ?? "",
         phone: profile?.phoneNumber ?? "",
+        birthDate: profile?.birthDate ?? "",
         ...parseCustomerAddress(profile?.fullAddress),
         facebookLink: profile?.facebookLink ?? "",
         instagramLink: profile?.instagramLink ?? "",
@@ -81,6 +87,21 @@ function ReserveFlowInner({ product, units, isGuest }: ReserveFlowClientProps & 
     }));
     setPrefilled(true);
   }, [user, profile, prefilled, isGuest]);
+
+  useEffect(() => {
+    if (!user || isGuest) return;
+    let cancelled = false;
+    void getCustomerRewardProgress(createClient(), user.id)
+      .then((progress) => {
+        if (!cancelled) setRewardProgress(progress);
+      })
+      .catch(() => {
+        if (!cancelled) setRewardProgress({ completedRentals: 0, loyaltyRewardUsed: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isGuest]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -278,7 +299,7 @@ function ReserveFlowInner({ product, units, isGuest }: ReserveFlowClientProps & 
     currency: product.currency,
     includedAccessories: product.included,
   } as const;
-  const pricing = calculateReservationPricing(product, draft);
+  const pricing = calculateReservationPricing(product, draft, rewardProgress);
 
   return (
     <div className={styles.wrapper}>
@@ -359,6 +380,8 @@ function ReserveFlowInner({ product, units, isGuest }: ReserveFlowClientProps & 
             }
             onContinue={() => goToStep(2)}
             isGuest={isGuest}
+            birthDateLocked={Boolean(profile?.birthDate)}
+            birthDateVerified={Boolean(profile?.birthDateVerifiedAt)}
           />
         ) : null}
 
@@ -377,6 +400,7 @@ function ReserveFlowInner({ product, units, isGuest }: ReserveFlowClientProps & 
           <StepPaymentSubmission
             product={product}
             draft={draft}
+            rewardProgress={rewardProgress}
             paymentState={paymentState}
             isDemoPayment={isDemoPayment}
             bookingNumber={bookingNumber ?? undefined}

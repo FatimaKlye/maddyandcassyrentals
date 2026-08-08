@@ -33,6 +33,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bo
       return errorResponse("Administrator notes are required for this action.", 400);
     }
 
+    if (targetStatus === "confirmed") {
+      const { data: discountCheck } = await supabase
+        .from("bookings")
+        .select("birthday_discount_amount, birthday_discount_status")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (
+        discountCheck &&
+        discountCheck.birthday_discount_amount > 0 &&
+        discountCheck.birthday_discount_status !== "verified"
+      ) {
+        return errorResponse(
+          "Verify the renter's birth date against an approved ID before confirming this birthday-discount booking.",
+          409,
+        );
+      }
+    }
+
     const { data, error } =
       targetStatus === "confirmed"
         ? await supabase.rpc("confirm_booking", { p_booking_id: bookingId, p_note: note || undefined })
