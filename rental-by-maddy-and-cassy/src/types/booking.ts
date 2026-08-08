@@ -64,6 +64,8 @@ export interface Booking {
   deliveryFee: number;
   totalAmount: number;
   location?: string;
+  cityMunicipality?: string;
+  province?: string;
   customerNotes?: string;
   adminNotes?: string;
   productSnapshot: BookingProductSnapshot;

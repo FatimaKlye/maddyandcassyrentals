@@ -133,6 +133,8 @@ function assembleBooking(
     deliveryFee: totals?.delivery_fee ?? fulfillment?.delivery_fee_snapshot ?? 0,
     totalAmount: totals?.total_amount ?? 0,
     location: fulfillment?.address_line_1 ?? undefined,
+    cityMunicipality: fulfillment?.city_municipality ?? undefined,
+    province: fulfillment?.province ?? undefined,
     customerNotes: row.customer_notes ?? undefined,
     adminNotes: row.admin_notes ?? undefined,
     productSnapshot: {
