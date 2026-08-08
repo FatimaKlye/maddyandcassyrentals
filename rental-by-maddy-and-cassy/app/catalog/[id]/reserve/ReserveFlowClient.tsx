@@ -17,12 +17,12 @@ import StepPaymentSubmission, {
 } from "@/components/reservation/StepPaymentSubmission";
 import StepBookingConfirmation from "@/components/reservation/StepBookingConfirmation";
 import { useToast } from "@/components/ui/ToastProvider";
-import { createEmptyDraft, formatCustomerLocation, getDayCount, type ReservationDraft } from "@/src/types/reservationDraft";
+import { createEmptyDraft, formatCustomerLocation, getDayCount, parseCustomerAddress, type ReservationDraft } from "@/src/types/reservationDraft";
 import {
   createBookingReservation,
   submitBookingDocuments,
 } from "@/src/services/bookingSubmissionService";
-import { createPaymentCheckout } from "@/src/services/paymentService";
+import { createPaymentCheckout, reconcilePayment } from "@/src/services/paymentService";
 import { getBookingById } from "@/src/services/bookingService";
 import styles from "./reserve.module.css";
 
@@ -65,7 +65,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
         fullName: profile?.displayName ?? (user.user_metadata?.display_name as string | undefined) ?? "",
         email: profile?.email ?? user.email ?? "",
         phone: profile?.phoneNumber ?? "",
-        address: profile?.fullAddress ?? "",
+        ...parseCustomerAddress(profile?.fullAddress),
         facebookLink: profile?.facebookLink ?? "",
         instagramLink: profile?.instagramLink ?? "",
       },
@@ -94,6 +94,26 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
     let attempts = 0;
 
     async function refreshBooking() {
+      let providerFailed = false;
+      if (returnedFromPayment) {
+        try {
+          const providerStatus = await reconcilePayment(activeBookingId);
+          if (providerStatus === "failed") {
+            providerFailed = true;
+            setCheckingPayment(false);
+            setPaymentError(
+              "PayMongo reports that this payment attempt failed. Please start a new secure checkout.",
+            );
+          }
+        } catch (error) {
+          if (!cancelled && attempts >= 14) {
+            setPaymentError(
+              error instanceof Error ? error.message : "The payment status could not be confirmed.",
+            );
+          }
+        }
+      }
+
       const booking = await getBookingById(supabase, activeBookingId);
       if (!booking || booking.customerId !== activeUser.id || booking.productId !== product.id || cancelled) {
         setPaymentError("This reservation could not be resumed.");
@@ -134,7 +154,11 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
         endDate: new Date(booking.endDate),
         fulfillmentMethod: booking.fulfillmentMethod,
         customerLocation: booking.location ?? current.customerLocation,
-        customerInfo: booking.customerSnapshot ?? current.customerInfo,
+        customerInfo: {
+          ...current.customerInfo,
+          ...booking.customerSnapshot,
+          ...parseCustomerAddress(booking.customerSnapshot.address),
+        },
       }));
       setStep(3);
 
@@ -144,7 +168,7 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
         return;
       }
 
-      if (returnedFromPayment && attempts < 15) {
+      if (returnedFromPayment && attempts < 15 && !providerFailed) {
         attempts += 1;
         setCheckingPayment(true);
         timer = setTimeout(refreshBooking, 2000);
@@ -271,8 +295,8 @@ function ReserveFlowInner({ product, units }: ReserveFlowClientProps) {
           ) : null}
           <dl className={styles.summaryFacts}>
             <div>
-              <dt>Current availability</dt>
-              <dd>{units.availableUnits} of {units.totalUnits} units</dd>
+              <dt>Rental inventory</dt>
+              <dd>{units.totalUnits} {units.totalUnits === 1 ? "unit" : "units"} total</dd>
             </div>
             <div>
               <dt>Included with rental</dt>

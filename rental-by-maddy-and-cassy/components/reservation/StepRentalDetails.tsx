@@ -18,6 +18,7 @@ import Spinner from "@/components/ui/Spinner";
 import { useProductAvailability } from "@/hooks/useProductAvailability";
 import formStyles from "@/components/ui/Form.module.css";
 import styles from "./StepRentalDetails.module.css";
+import { PHILIPPINE_PROVINCES } from "@/src/data/philippineLocations";
 
 interface StepRentalDetailsProps {
   product: Product;
@@ -147,6 +148,7 @@ export default function StepRentalDetails({
             totalUnits={units.totalUnits}
             availableUnits={units.availableUnits}
             variant="compact"
+            mode="summary"
           />
         </div>
       </div>
@@ -228,6 +230,7 @@ export default function StepRentalDetails({
                 </label>
                 <textarea
                   id="customerLocation"
+                  autoComplete="address-line1"
                   className={formStyles.textarea}
                   value={draft.customerLocation}
                   onChange={(event) => onUpdate({ customerLocation: event.target.value })}
@@ -243,6 +246,7 @@ export default function StepRentalDetails({
                   <input
                     id="cityMunicipality"
                     type="text"
+                    autoComplete="address-level2"
                     className={formStyles.input}
                     value={draft.cityMunicipality}
                     onChange={(event) => onUpdate({ cityMunicipality: event.target.value })}
@@ -254,14 +258,18 @@ export default function StepRentalDetails({
                   <label className={formStyles.label} htmlFor="province">
                     Province<span className={formStyles.required}>*</span>
                   </label>
-                  <input
+                  <select
                     id="province"
-                    type="text"
-                    className={formStyles.input}
+                    autoComplete="address-level1"
+                    className={formStyles.select}
                     value={draft.province}
                     onChange={(event) => onUpdate({ province: event.target.value })}
-                    placeholder="e.g. Metro Manila"
-                  />
+                  >
+                    <option value="">Select province</option>
+                    {PHILIPPINE_PROVINCES.map((province) => (
+                      <option key={province} value={province}>{province}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </>

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/src/lib/supabase/database.types";
 import type { Product } from "@/types/product";
 import type { ReservationDraft } from "@/src/types/reservationDraft";
-import { getDayCount } from "@/src/types/reservationDraft";
+import { formatCustomerAddress, getDayCount } from "@/src/types/reservationDraft";
 import { toDateKey } from "@/src/services/availabilityService";
 import { submitBookingWithDateGuard } from "@/src/services/inventoryService";
 
@@ -28,7 +28,9 @@ function validateReservationDetails(draft: ReservationDraft): void {
     !customerInfo.fullName.trim() ||
     !customerInfo.email.trim() ||
     !customerInfo.phone.trim() ||
-    !customerInfo.address.trim() ||
+    !customerInfo.streetBarangay.trim() ||
+    !customerInfo.cityMunicipality.trim() ||
+    !customerInfo.province.trim() ||
     !customerInfo.facebookLink.trim() ||
     !customerInfo.instagramLink.trim()
   ) {
@@ -70,7 +72,7 @@ export async function createBookingReservation(
       fullName: customerInfo.fullName.trim(),
       email: customerInfo.email.trim(),
       phone: customerInfo.phone.trim(),
-      address: customerInfo.address.trim(),
+      address: formatCustomerAddress(customerInfo),
       facebookLink: customerInfo.facebookLink.trim(),
       instagramLink: customerInfo.instagramLink.trim(),
     },

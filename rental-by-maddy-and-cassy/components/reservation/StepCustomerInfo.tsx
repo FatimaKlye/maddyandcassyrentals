@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { CustomerInfoDraft } from "@/src/types/reservationDraft";
+import { formatCustomerAddress, type CustomerInfoDraft } from "@/src/types/reservationDraft";
+import { PHILIPPINE_PROVINCES } from "@/src/data/philippineLocations";
 import { updateUserProfile } from "@/src/services/userService";
 import formStyles from "@/components/ui/Form.module.css";
 import styles from "./StepShared.module.css";
@@ -31,7 +32,9 @@ export default function StepCustomerInfo({
       nextErrors.email = "A valid email address is required.";
     }
     if (!customerInfo.phone.trim()) nextErrors.phone = "An active phone number is required.";
-    if (!customerInfo.address.trim()) nextErrors.address = "Your complete address is required.";
+    if (!customerInfo.streetBarangay.trim()) nextErrors.streetBarangay = "Street and barangay are required.";
+    if (!customerInfo.cityMunicipality.trim()) nextErrors.cityMunicipality = "City or municipality is required.";
+    if (!customerInfo.province.trim()) nextErrors.province = "Province is required.";
     if (!customerInfo.facebookLink.trim()) nextErrors.facebookLink = "Your Facebook profile link is required.";
     if (!customerInfo.instagramLink.trim()) nextErrors.instagramLink = "Your Instagram profile link is required.";
     setErrors(nextErrors);
@@ -46,7 +49,7 @@ export default function StepCustomerInfo({
       await updateUserProfile(uid, {
         displayName: customerInfo.fullName,
         phoneNumber: customerInfo.phone,
-        fullAddress: customerInfo.address,
+        fullAddress: formatCustomerAddress(customerInfo),
         facebookLink: customerInfo.facebookLink,
         instagramLink: customerInfo.instagramLink,
       });
@@ -93,32 +96,69 @@ export default function StepCustomerInfo({
         </div>
       </div>
 
+      <div className={formStyles.field}>
+        <label className={formStyles.label} htmlFor="phone">
+          Active phone number<span className={formStyles.required}>*</span>
+        </label>
+        <input
+          id="phone"
+          type="tel"
+          autoComplete="tel"
+          className={`${formStyles.input} ${errors.phone ? formStyles.inputError : ""}`}
+          value={customerInfo.phone}
+          onChange={(event) => onUpdate({ phone: event.target.value })}
+        />
+        {errors.phone ? <p className={formStyles.errorText}>{errors.phone}</p> : null}
+      </div>
+
+      <div className={formStyles.field}>
+        <label className={formStyles.label} htmlFor="streetBarangay">
+          Street / Barangay<span className={formStyles.required}>*</span>
+        </label>
+        <input
+          id="streetBarangay"
+          autoComplete="address-line1"
+          placeholder="House/unit number, street, subdivision, and barangay"
+          className={`${formStyles.input} ${errors.streetBarangay ? formStyles.inputError : ""}`}
+          value={customerInfo.streetBarangay}
+          onChange={(event) => onUpdate({ streetBarangay: event.target.value })}
+        />
+        {errors.streetBarangay ? <p className={formStyles.errorText}>{errors.streetBarangay}</p> : null}
+      </div>
+
       <div className={formStyles.row}>
         <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="phone">
-            Active phone number<span className={formStyles.required}>*</span>
+          <label className={formStyles.label} htmlFor="customerCityMunicipality">
+            City / Municipality<span className={formStyles.required}>*</span>
           </label>
           <input
-            id="phone"
-            type="tel"
-            className={`${formStyles.input} ${errors.phone ? formStyles.inputError : ""}`}
-            value={customerInfo.phone}
-            onChange={(event) => onUpdate({ phone: event.target.value })}
+            id="customerCityMunicipality"
+            autoComplete="address-level2"
+            placeholder="e.g. Manila"
+            className={`${formStyles.input} ${errors.cityMunicipality ? formStyles.inputError : ""}`}
+            value={customerInfo.cityMunicipality}
+            onChange={(event) => onUpdate({ cityMunicipality: event.target.value })}
           />
-          {errors.phone ? <p className={formStyles.errorText}>{errors.phone}</p> : null}
+          {errors.cityMunicipality ? <p className={formStyles.errorText}>{errors.cityMunicipality}</p> : null}
         </div>
 
         <div className={formStyles.field}>
-          <label className={formStyles.label} htmlFor="address">
-            Complete address<span className={formStyles.required}>*</span>
+          <label className={formStyles.label} htmlFor="customerProvince">
+            Province<span className={formStyles.required}>*</span>
           </label>
-          <input
-            id="address"
-            className={`${formStyles.input} ${errors.address ? formStyles.inputError : ""}`}
-            value={customerInfo.address}
-            onChange={(event) => onUpdate({ address: event.target.value })}
-          />
-          {errors.address ? <p className={formStyles.errorText}>{errors.address}</p> : null}
+          <select
+            id="customerProvince"
+            autoComplete="address-level1"
+            className={`${formStyles.select} ${errors.province ? formStyles.inputError : ""}`}
+            value={customerInfo.province}
+            onChange={(event) => onUpdate({ province: event.target.value })}
+          >
+            <option value="">Select province</option>
+            {PHILIPPINE_PROVINCES.map((province) => (
+              <option key={province} value={province}>{province}</option>
+            ))}
+          </select>
+          {errors.province ? <p className={formStyles.errorText}>{errors.province}</p> : null}
         </div>
       </div>
 

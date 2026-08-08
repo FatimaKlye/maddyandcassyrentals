@@ -61,6 +61,7 @@ export default function AdminSignInForm() {
       }
 
       router.replace(redirectTo);
+      router.refresh();
     } catch (error) {
       setFormError(
         error instanceof Error
