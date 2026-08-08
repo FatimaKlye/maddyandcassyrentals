@@ -60,16 +60,22 @@ export interface AuthenticatedRequestContext {
  */
 export async function requireUser(): Promise<AuthenticatedRequestContext> {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-  if (error || !user) {
+    if (error || !user) {
+      throw new RequestSecurityError("Your session is invalid or expired.", 401);
+    }
+
+    return { supabase, user };
+  } catch {
+    // Stale/invalid refresh-token cookies can throw from auth.getUser().
+    // Normalize that into a stable 401 for callers.
     throw new RequestSecurityError("Your session is invalid or expired.", 401);
   }
-
-  return { supabase, user };
 }
 
 export type AuthenticatedAdminContext = AuthenticatedRequestContext;
